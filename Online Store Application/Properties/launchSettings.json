@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "API": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:7076;http://localhost:5076"
+    },
+
+    "React-Frontend": {
+      "commandName": "Executable",
+      "executablePath": "cmd.exe",
+      "workingDirectory": "D:\\source\\Online Store Application\\onlinestore.frontend",
+      "commandLineArgs": "/c \"npm run dev\"",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:5173"
+    }
+  }
+}
