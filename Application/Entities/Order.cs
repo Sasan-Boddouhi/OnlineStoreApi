@@ -13,7 +13,7 @@ namespace Application.Entities
         public int OrderId { get; set; }
 
         [Required]
-        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+        public DateTime OrderDate { get; set; } = DateTime.Now;
 
         [Required]
         [Column(TypeName = "decimal(18,2)")]

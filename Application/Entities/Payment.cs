@@ -16,7 +16,7 @@ namespace Application.Entities
         public decimal Amount { get; set; }
 
         [Required]
-        public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
+        public DateTime PaymentDate { get; set; } = DateTime.Now;
 
         [Required]
         [MaxLength(50)]

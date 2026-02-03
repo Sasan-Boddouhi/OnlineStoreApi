@@ -21,7 +21,7 @@ namespace Application.Entities
         public required string InvoiceNumber { get; set; }
 
         [Required]
-        public DateTime InvoiceDate { get; set; } = DateTime.UtcNow;
+        public DateTime InvoiceDate { get; set; } = DateTime.Now;
 
         [Required]
         [Column(TypeName = "decimal(18,2)")]
