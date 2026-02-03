@@ -1,0 +1,12 @@
+# Visual Studio
+.vs/
+bin/
+obj/
+
+# Logs
+*.log
+
+# User-specific
+*.user
+*.suo
+Online Store Application/Logs/
