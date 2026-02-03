@@ -1,6 +1,9 @@
 ﻿using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Online_Store_Application.Controllers
 {
@@ -151,6 +154,21 @@ namespace Online_Store_Application.Controllers
                 _logger.LogError(ex, "DELETE /users/{Id} failed", id);
                 return StatusCode(500, "An error occurred while processing the request.");
             }
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            var userId = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            var user = await _userService.GetByIdWithRoleNameAsync(Int32.Parse(userId));
+            if (user == null)
+                return NotFound();
+
+            return Ok(user);
         }
     }
 }
