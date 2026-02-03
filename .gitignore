@@ -12,6 +12,19 @@ Logs/
 *.log
 Online Store Application/Logs/
 
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
 # OS
 Thumbs.db
 .DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Temporary / Environment
+*.tmp
+*.env
