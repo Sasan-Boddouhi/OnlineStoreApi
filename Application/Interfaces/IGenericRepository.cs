@@ -36,6 +36,8 @@ namespace Application.Interfaces
         Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate);
         Task<TEntity?> SingleOrDefaultAsync(Expression<Func<TEntity, bool>> predicate);
         Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate);
+        Task<IEnumerable<TEntity>> GetAsync(Expression<Func<TEntity, bool>>? filter = null, Func<IQueryable<TEntity>,
+            IOrderedQueryable<TEntity>>? orderBy = null, string includeProperties = "");
 
     }
 }

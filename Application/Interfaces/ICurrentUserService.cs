@@ -11,6 +11,7 @@ namespace Application.Interfaces
 
         int GetCurrentUserId();
         int? TryGetCurrentUserId();
+        Task<int> GetCurrentCustomerId();
         string GetCurrentUserName();
         string? GetCurrentUserRole();
     }
