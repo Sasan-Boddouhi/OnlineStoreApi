@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Application.Common.Specifications;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -9,35 +10,39 @@ namespace Application.Interfaces
 {
     public interface IGenericRepository<TEntity> where TEntity : class
     {
-        Task<IEnumerable<TEntity>> GetAllAsync();
-        Task<TEntity?> GetByIdAsync(object id);
-        Task<TEntity?> GetBySerachAsync(Expression<Func<TEntity, bool>> predicate);
-        Task AddAsync(TEntity entity);
-        Task AddRangeAsync(IEnumerable<TEntity> entities);
-        Task UpdateAsync(TEntity entity);
-        Task UpdateRangeAsync(IEnumerable<TEntity> entities);
-        Task DeleteAsync(TEntity entity);
-        Task DeleteAsync(object id);
-        Task DeleteRangeAsync(IEnumerable<TEntity> entities);
+        Task<IEnumerable<TEntity>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task<TEntity?> GetByIdAsync(object id, CancellationToken cancellationToken = default);
+        Task<TEntity?> GetBySerachAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+        Task AddAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+        Task UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task UpdateRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+        Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task DeleteAsync(object id, CancellationToken cancellationToken = default);
+        Task DeleteRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
 
 
-        Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate);
+        Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
         IQueryable<TEntity> Query();
         Task<(IEnumerable<TEntity> Items, int TotalCount)> GetPagedAsync(
               int pageNumber,
               int pageSize,
               Expression<Func<TEntity, bool>>? filter = null,
               Expression<Func<TEntity, object>>? orderBy = null,
-              bool ascending = true);
+              bool ascending = true,
+              CancellationToken cancellationToken = default);
 
-        Task<bool> ExistsAsync(object id);
-        Task<bool> ExistsAsync(Expression<Func<TEntity, bool>> predicate);
-        Task<int> CountAsync(Expression<Func<TEntity, bool>>? predicate = null);
-        Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate);
-        Task<TEntity?> SingleOrDefaultAsync(Expression<Func<TEntity, bool>> predicate);
-        Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate);
-        Task<IEnumerable<TEntity>> GetAsync(Expression<Func<TEntity, bool>>? filter = null, Func<IQueryable<TEntity>,
-            IOrderedQueryable<TEntity>>? orderBy = null, string includeProperties = "");
-
+        Task<bool> ExistsAsync(object id, CancellationToken cancellationToken = default);
+        Task<bool> ExistsAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+        Task<int> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default);
+        Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+        Task<TEntity?> SingleOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+        Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+        Task<TEntity?> GetBySpecificationAsync(
+                    ISpecification<TEntity> spec,
+                    CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<TEntity>> ListAsync(
+            ISpecification<TEntity> spec,
+            CancellationToken cancellationToken = default);
     }
 }

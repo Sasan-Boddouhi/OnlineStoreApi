@@ -9,7 +9,7 @@ namespace Application.Interfaces
 {
     public interface IUnitOfWork : IDisposable
     {
-
+        IGenericRepository<TEntity> Repository<TEntity>() where TEntity : class;
         IGenericRepository<Address> Address { get; }
         IGenericRepository<City> City { get; }
         IGenericRepository<Customer> Customer { get; }
@@ -30,12 +30,12 @@ namespace Application.Interfaces
         IGenericRepository<RefreshTokenEntity> RefreshToken { get; }
 
         // Save
-        Task<int> SaveChangesAsync();
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
         // Transaction
-        Task BeginTransactionAsync();
-        Task CommitTransactionAsync();
-        Task RollbackTransactionAsync();
+        Task BeginTransactionAsync(CancellationToken cancellationToken = default);
+        Task CommitTransactionAsync(CancellationToken cancellationToken = default);
+        Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
 
     }
 }
