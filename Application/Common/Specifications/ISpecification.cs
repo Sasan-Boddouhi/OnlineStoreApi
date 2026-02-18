@@ -7,12 +7,18 @@ using System.Threading.Tasks;
 
 namespace Application.Common.Specifications
 {
-    public interface ISpecification<T>
+    public interface ISpecification<TEntity>
     {
-        Expression<Func<T, bool>>? Criteria { get; }
-        List<Expression<Func<T, object>>> Includes { get; }
-        Expression<Func<T, object>>? OrderBy { get; }
-        Expression<Func<T, object>>? OrderByDescending { get; }
+        IReadOnlyList<Expression<Func<TEntity, object>>> Includes { get; }
+        Expression<Func<TEntity, bool>>? Criteria { get; }
+
+        Expression<Func<TEntity, object>>? OrderBy { get; }
+        Expression<Func<TEntity, object>>? OrderByDescending { get; }
+
+        int? Skip { get; }
+        int? Take { get; }
+
+        bool IsPagingEnabled { get; }
     }
 
 }
