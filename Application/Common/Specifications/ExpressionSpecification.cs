@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Application.Common.Specifications
 {
-    private class ExpressionSpecification<T> : BaseSpecification<T> where T : class
+    public class ExpressionSpecification<T> : BaseSpecification<T> where T : class
     {
         public ExpressionSpecification(Expression<Func<T, bool>> criteria)
         {
