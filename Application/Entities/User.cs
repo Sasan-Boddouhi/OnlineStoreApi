@@ -46,6 +46,12 @@ namespace Application.Entities
         // Navigation properties برای Customer و Employee
         public virtual Customer? Customer { get; set; }
         public virtual Employee? Employee { get; set; }
+
+        public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
+
+        public int FailedLoginAttempts { get; set; } = 0;
+
+        public DateTime? LockoutEnd { get; set; }
     }
 
     public enum UserType

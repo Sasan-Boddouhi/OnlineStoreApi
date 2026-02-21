@@ -20,6 +20,7 @@ namespace Application.Interfaces
 
         // Specification (Entity Result)
         Task<TEntity?> FirstOrDefaultAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
+        Task<TResult?> FirstOrDefaultAsync<TResult>(IProjectionSpecification<TEntity, TResult> spec, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<TEntity>> ListAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
         Task<int> CountAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
 
