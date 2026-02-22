@@ -12,32 +12,50 @@ namespace Application.Entities
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int OrderId { get; set; }
 
-        [Required]
-        public DateTime OrderDate { get; set; } = DateTime.Now;
+        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
-        [Required]
         [Column(TypeName = "decimal(18,2)")]
-        public decimal TotalAmount { get; set; }
+        public decimal TotalAmount { get; private set; }
 
-        [Required]
-        public OrderStatus Status { get; set; } = OrderStatus.Pending;
+        public OrderStatus Status { get; private set; } = OrderStatus.Pending;
 
-        [MaxLength(500)]
-        public string? Notes { get; set; }
+        // ===== Shipping Snapshot =====
+        [Required, MaxLength(200)]
+        public string ShippingFullName { get; set; } = null!;
 
-        [Required]
-        public bool IsActive { get; set; } = true;
+        [Required, MaxLength(500)]
+        public string ShippingAddress { get; set; } = null!;
 
-        public bool IsConfirmed { get; set; } = false;
+        [Required, MaxLength(20)]
+        public string ShippingPhoneNumber { get; set; } = null!;
 
-        // Navigation properties
+        public bool IsConfirmed { get; private set; }
+
+        public int CustomerId { get; set; }
+        public virtual Customer Customer { get; set; } = null!;
+
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
 
-        [Required]
-        public required int CustomerId { get; set; }
-        [ForeignKey("CustomerId")]
-        public virtual Customer Customer { get; set; } = null!;
         public virtual Invoice? Invoice { get; set; }
+
+        // ===== Domain Methods =====
+
+        public void AddItem(OrderItem item)
+        {
+            OrderItems.Add(item);
+            RecalculateTotal();
+        }
+
+        public void Confirm()
+        {
+            IsConfirmed = true;
+            Status = OrderStatus.Processing;
+        }
+
+        private void RecalculateTotal()
+        {
+            TotalAmount = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
+        }
     }
 
     public enum OrderStatus

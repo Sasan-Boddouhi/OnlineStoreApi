@@ -21,3 +21,4 @@ D:\source\SupermarketWebApp\Application\obj\Debug\net8.0\Application.dll
 D:\source\SupermarketWebApp\Application\obj\Debug\net8.0\refint\Application.dll
 D:\source\SupermarketWebApp\Application\obj\Debug\net8.0\Application.pdb
 D:\source\SupermarketWebApp\Application\obj\Debug\net8.0\ref\Application.dll
+D:\source\Online Store Application\Application\obj\Debug\net8.0\Application.csproj.AssemblyReference.cache

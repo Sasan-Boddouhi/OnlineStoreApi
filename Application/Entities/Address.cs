@@ -16,23 +16,15 @@ namespace Application.Entities
         public int AddressId { get; set; }
 
         [Required]
-        public required int UserId { get; set; }
-
-        [ForeignKey("UserId")]
-        public virtual User User { get; set; } = null!;
-
-        [Required]
         public required int CityId { get; set; }
 
         [ForeignKey("CityId")]
         public virtual City City { get; set; } = null!;
 
-        [Required]
-        [MaxLength(10)]
+        [Required, MaxLength(10)]
         public required string Plaque { get; set; }
 
-        [Required]
-        [MaxLength(20)]
+        [Required, MaxLength(20)]
         public required string Unit { get; set; }
 
         [Required, MaxLength(20)]
@@ -50,7 +42,5 @@ namespace Application.Entities
         public bool IsDefault { get; set; } = false;
 
         public virtual ICollection<Warehouse> Warehouses { get; set; } = new HashSet<Warehouse>();
-        public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();
-        public virtual ICollection<Invoice> Invoices { get; set; } = new HashSet<Invoice>();
     }
 }

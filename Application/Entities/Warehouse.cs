@@ -15,17 +15,15 @@ namespace Application.Entities
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int WarehouseId { get; set; }
 
-        [Required]
-        [MaxLength(150)]
-        public required string Name { get; set; }
-        [Required]
-        [MaxLength(250)]
-        public required string Location { get; set; }
+        [Required, MaxLength(150)]
+        public string Name { get; set; } = null!;
 
         [Required]
-        public required int AddressId { get; set; }
+        public int AddressId { get; set; }
+
         [ForeignKey("AddressId")]
         public virtual Address Address { get; set; } = null!;
+
         public virtual ICollection<Inventory> Inventories { get; set; } = new HashSet<Inventory>();
     }
 }
