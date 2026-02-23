@@ -21,9 +21,7 @@ namespace BusinessLogic.Profiles
                 .ForMember(dest => dest.AddressId, opt => opt.Ignore())
                 .ForMember(dest => dest.UserId, opt => opt.Ignore())
                 .ForMember(dest => dest.User, opt => opt.Ignore())
-                .ForMember(dest => dest.Warehouses, opt => opt.Ignore())
-                .ForMember(dest => dest.Orders, opt => opt.Ignore())
-                .ForMember(dest => dest.Invoices, opt => opt.Ignore());
+                .ForMember(dest => dest.Warehouses, opt => opt.Ignore());
 
             //CreateMap<UpdateAddressDto, Address>();
 

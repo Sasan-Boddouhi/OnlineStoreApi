@@ -1,5 +1,6 @@
 ﻿using Application.Entities;
 using Application.Exceptions;
+using Application.Helper;
 using Application.Interfaces;
 using Application.Interfaces.Security;
 using AutoMapper;
@@ -7,6 +8,7 @@ using BusinessLogic.DTOs.Auth;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Auth;
+using BusinessLogic.Specifications.Sessions;
 using BusinessLogic.Specifications.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -62,7 +64,7 @@ public sealed class AuthService : IAuthService
                 LastName = dto.LastName,
                 PhoneNumber = dto.PhoneNumber,
                 Email = dto.Email,
-                DateOfBirth = dto.DateOfBirth,
+                DateOfBirth = PersianDateHelper.ToGregorian(dto.DateOfBirth),
                 PasswordHash = _passwordHasher.Hash(dto.Password),
                 UserType = UserType.Customer,
                 IsActive = true
@@ -71,17 +73,34 @@ public sealed class AuthService : IAuthService
             await _unitOfWork.Repository<User>().AddAsync(user);
             await _unitOfWork.SaveChangesAsync();
 
+            var session = new UserSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.UserId,
+                DeviceId = dto.DeviceId ?? "Register",
+                DeviceName = dto.DeviceName,
+                IpAddress = dto.IpAddress,
+                UserAgent = dto.UserAgent,
+                CreatedAtUtc = DateTime.UtcNow,
+                LastActivityUtc = DateTime.UtcNow,
+                AbsoluteExpiryUtc = DateTime.UtcNow.Add(AbsoluteExpirationPeriod),
+                Status = UserSession.SessionStatus.Active
+            };
+
+            await _unitOfWork.Repository<UserSession>().AddAsync(session);
+            await _unitOfWork.SaveChangesAsync();
+
             await _unitOfWork.CommitTransactionAsync();
 
             // ایجاد خانواده جدید با زمان ایجاد هم‌اکنون
-            return await CreateAuthResultAsync(user.UserId, Guid.NewGuid(), DateTime.UtcNow);
+            return await CreateAuthResultAsync(user.UserId, session.Id, session.CreatedAtUtc);
         }
         catch
         {
             await _unitOfWork.RollbackTransactionAsync();
             throw;
         }
-    }
+    }   
 
     #endregion
 
@@ -136,10 +155,27 @@ public sealed class AuthService : IAuthService
 
             user.FailedLoginAttempts = 0;
             user.LockoutEnd = null;
+
+            var session = new UserSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.UserId,
+                DeviceId = dto.DeviceId,
+                DeviceName = dto.DeviceName,
+                IpAddress = dto.IpAddress,
+                UserAgent = dto.UserAgent,
+                CreatedAtUtc = DateTime.UtcNow,
+                LastActivityUtc = DateTime.UtcNow,
+                Status = UserSession.SessionStatus.Active
+            };
+            session.AbsoluteExpiryUtc = session.CreatedAtUtc.Add(AbsoluteExpirationPeriod);
+
+            await _unitOfWork.Repository<UserSession>().AddAsync(session);
             await _unitOfWork.SaveChangesAsync();
 
+
             _logger.LogInformation("User logged in successfully: {UserId}", user.UserId);
-            return await CreateAuthResultAsync(user.UserId, Guid.NewGuid(), DateTime.UtcNow);
+            return await CreateAuthResultAsync(user.UserId, session.Id, session.CreatedAtUtc);
         }
         catch (Exception ex)
         {
@@ -154,67 +190,69 @@ public sealed class AuthService : IAuthService
 
     public async Task<AuthResultDto?> RefreshTokenAsync(string refreshToken)
     {
-
         var identifier = ComputeSha256Hash(refreshToken);
 
         var spec = new RefreshTokenByIdentifierSpecification(identifier);
 
-        var tokenEntity = await _unitOfWork
+        var token = await _unitOfWork
             .Repository<RefreshTokenEntity>()
             .FirstOrDefaultAsync(spec);
 
-        if (tokenEntity is null)
-        {
-            _logger.LogWarning("Refresh token not found by identifier");
+        if (token is null)
             return null;
-        }
 
-        if (!_passwordHasher.Verify(refreshToken, tokenEntity.TokenHash))
-        {
-            _logger.LogWarning("Refresh token hash verification failed");
+        if (!_passwordHasher.Verify(refreshToken, token.TokenHash))
             return null;
-        }
 
-        if (tokenEntity.AbsoluteExpiry <= DateTime.UtcNow)
-        {
-            _logger.LogWarning("Absolute expiration reached for family {FamilyId}, user {UserId}",
-                tokenEntity.FamilyId, tokenEntity.UserId);
-            await RevokeTokenFamily(tokenEntity.FamilyId);
+        if (token.Session.Status != UserSession.SessionStatus.Active || token.Session.IsAbsoluteExpired())
             return null;
-        }
-
-        if (tokenEntity.IsRevoked || tokenEntity.ExpiryDate <= DateTime.UtcNow)
-        {
-            _logger.LogWarning("Token revoked or expired, revoking family {FamilyId}", tokenEntity.FamilyId);
-            await RevokeTokenFamily(tokenEntity.FamilyId);
-            return null;
-        }
 
         await _unitOfWork.BeginTransactionAsync();
+
         try
         {
-            tokenEntity.IsRevoked = true;
-            tokenEntity.RevokedAtUtc = DateTime.UtcNow;
+            // بارگذاری مجدد برای concurrency safe
+            var freshToken = await _unitOfWork
+                .Repository<RefreshTokenEntity>()
+                .GetByIdAsync(token.Id);
+
+            if (freshToken.Session.IsIdleExpired(TimeSpan.FromMinutes(30)))
+            {
+                freshToken.Session.Status = UserSession.SessionStatus.Expired;
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.RollbackTransactionAsync();
+                return null;
+            }
+
+            if (freshToken is null || freshToken.IsRevoked || freshToken.ExpiryDate <= DateTime.UtcNow)
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                return null;
+            }
+
+            // ری‌ووک توکن فعلی
+            freshToken.IsRevoked = true;
+            freshToken.RevokedAtUtc = DateTime.UtcNow;
+
+
+            freshToken.Session.LastActivityUtc = DateTime.UtcNow;
 
             await _unitOfWork.SaveChangesAsync();
 
-            var newAuthResult = await CreateAuthResultAsync(tokenEntity.UserId, tokenEntity.FamilyId, tokenEntity.FamilyCreatedAt);
+            // ایجاد AuthResult که خودش توکن جدید می‌سازد
+            var result = await CreateAuthResultAsync(
+                freshToken.UserId,
+                freshToken.SessionId,
+                freshToken.Session.CreatedAtUtc);
 
             await _unitOfWork.CommitTransactionAsync();
-            return newAuthResult;
+
+            return result;
         }
         catch (DbUpdateConcurrencyException)
         {
-            _logger.LogWarning("Concurrent refresh detected for token {Identifier}, revoking family {FamilyId}", identifier, tokenEntity.FamilyId);
             await _unitOfWork.RollbackTransactionAsync();
-            await RevokeTokenFamily(tokenEntity.FamilyId);
             return null;
-        }
-        catch (Exception ex)
-        {
-            await _unitOfWork.RollbackTransactionAsync();
-            _logger.LogError(ex, "Error during token refresh");
-            throw;
         }
     }
 
@@ -222,18 +260,42 @@ public sealed class AuthService : IAuthService
 
     #region Logout
 
-    public async Task LogoutAsync(int userId)
+    public async Task LogoutSessionAsync(Guid sessionId)
     {
-        var spec = new ActiveUserRefreshTokensSpecification(userId);
+        var session = await _unitOfWork
+            .Repository<UserSession>()
+            .GetByIdAsync(sessionId);
 
-        var tokens = await _unitOfWork
-            .Repository<RefreshTokenEntity>()
-            .ListAsync(spec);
+        if (session is null)
+            return;
 
-        foreach (var token in tokens)
+        await _unitOfWork.BeginTransactionAsync();
+
+        try
         {
-            token.IsRevoked = true;
-            token.RevokedAtUtc = DateTime.UtcNow;
+            session.Status = UserSession.SessionStatus.Revoked;
+            session.RevokedAtUtc = DateTime.UtcNow;
+
+            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.CommitTransactionAsync();
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            throw;
+        }
+    }
+
+    public async Task LogoutAllAsync(int userId)
+    {
+        var sessions = await _unitOfWork
+            .Repository<UserSession>()
+            .ListAsync(new ActiveUserSessionsSpecification(userId));
+
+        foreach (var session in sessions)
+        {
+            session.Status = UserSession.SessionStatus.Revoked;
+            session.RevokedAtUtc = DateTime.UtcNow;
         }
 
         await _unitOfWork.SaveChangesAsync();
@@ -243,11 +305,11 @@ public sealed class AuthService : IAuthService
 
     #region Core Auth Logic
 
-    private async Task<AuthResultDto> CreateAuthResultAsync(int userId, Guid familyId, DateTime familyCreatedAt)
+    private async Task<AuthResultDto> CreateAuthResultAsync(int userId, Guid SessionId, DateTime SessionCreatedAtUtc)
     {
         var (user, accessToken) = await GenerateAccessTokenAsync(userId);
 
-        var refreshToken = await CreateRefreshTokenAsync(userId, familyId, familyCreatedAt);
+        var refreshToken = await CreateRefreshTokenAsync(userId, SessionId, SessionCreatedAtUtc);
 
         return new AuthResultDto
         {
@@ -285,18 +347,20 @@ public sealed class AuthService : IAuthService
         return (user, accessToken);
     }
 
-    private async Task<string> CreateRefreshTokenAsync(int userId, Guid familyId, DateTime familyCreatedAt)
+    private async Task<string> CreateRefreshTokenAsync(
+        int userId,
+        Guid sessionId,
+        DateTime sessionCreatedAt)
     {
         var refreshToken = _jwtTokenService.GenerateRefreshToken();
 
         var entity = new RefreshTokenEntity
         {
             UserId = userId,
+            SessionId = sessionId,
             TokenHash = _passwordHasher.Hash(refreshToken),
             TokenIdentifier = ComputeSha256Hash(refreshToken),
-            FamilyId = familyId,
-            FamilyCreatedAt = familyCreatedAt,
-            AbsoluteExpiry = familyCreatedAt.Add(AbsoluteExpirationPeriod),
+            AbsoluteExpiry = sessionCreatedAt.Add(AbsoluteExpirationPeriod),
             ExpiryDate = DateTime.UtcNow.AddDays(7),
             CreatedAt = DateTime.UtcNow,
             IsRevoked = false
@@ -306,23 +370,6 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync();
 
         return refreshToken;
-    }
-
-    private async Task RevokeTokenFamily(Guid familyId)
-    {
-        var spec = new RefreshTokenFamilySpecification(familyId);
-
-        var tokens = await _unitOfWork
-            .Repository<RefreshTokenEntity>()
-            .ListAsync(spec);
-
-        foreach (var token in tokens)
-        {
-            token.IsRevoked = true;
-            token.RevokedAtUtc = DateTime.UtcNow;
-        }
-
-        await _unitOfWork.SaveChangesAsync();
     }
 
     private static string ComputeSha256Hash(string rawData)

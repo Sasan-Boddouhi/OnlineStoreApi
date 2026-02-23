@@ -13,6 +13,7 @@ namespace BusinessLogic.Services.Interfaces
         Task<AuthResultDto> RegisterAsync(RegisterDto dto);
         Task<AuthResultDto?> LoginAsync(LoginDto dto);
         Task<AuthResultDto?> RefreshTokenAsync(string refreshToken);
-        Task LogoutAsync(int userId);
+        Task LogoutSessionAsync(Guid sessionId);
+        Task LogoutAllAsync(int userId);
     }
 }

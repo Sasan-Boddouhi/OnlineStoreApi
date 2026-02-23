@@ -34,6 +34,7 @@ namespace DataLayer.Context
         public DbSet<Payment> Payment { get; set; }
         public DbSet<Logs> Logs { get; set; }
         public DbSet<RefreshTokenEntity> RefreshToken { get; set; }
+        public DbSet<UserSession> UserSession { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -66,6 +67,15 @@ namespace DataLayer.Context
                 .WithOne(c => c.User)
                 .HasForeignKey<Customer>(c => c.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.UserType)
+                .HasConversion<int>()
+                .IsRequired();
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
 
             // User : Employee (1:1)
             modelBuilder.Entity<User>()
@@ -148,13 +158,80 @@ namespace DataLayer.Context
                 .WithMany(et => et.Employees)
                 .HasForeignKey(e => e.EmployeeTypeId);
 
-            // RefreshToken
+            // ------------------- UserSession -------------------
+            modelBuilder.Entity<UserSession>(entity =>
+            {
+                entity.ToTable("UserSessions");
+
+                entity.HasKey(s => s.Id);
+
+                entity.HasOne(s => s.User)
+                    .WithMany(u => u.Sessions)
+                    .HasForeignKey(s => s.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(s => s.RefreshTokens)
+                    .WithOne(r => r.Session)
+                    .HasForeignKey(r => r.SessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.Property(s => s.DeviceId)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.Property(s => s.DeviceName)
+                    .HasMaxLength(200);
+
+                entity.Property(s => s.IpAddress)
+                    .HasMaxLength(45);
+
+                entity.Property(s => s.UserAgent)
+                    .HasMaxLength(500);
+
+                entity.Property(s => s.CreatedAtUtc)
+                    .IsRequired();
+
+                entity.Property(s => s.LastActivityUtc)
+                    .IsRequired();
+
+                entity.Property(s => s.AbsoluteExpiryUtc)
+                    .IsRequired();
+
+                entity.Property(s => s.Status)
+                    .HasConversion<int>()
+                    .IsRequired();
+
+                entity.Property(s => s.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+
+                entity.HasIndex(s => s.UserId);
+                entity.HasIndex(s => s.Status);
+                entity.HasIndex(s => s.AbsoluteExpiryUtc);
+                entity.HasIndex(s => new { s.UserId, s.Status });
+            });
+
             modelBuilder.Entity<RefreshTokenEntity>()
-                .Property(e => e.RowVersion)
-                .IsRowVersion();
+                .HasIndex(r => new { r.SessionId, r.IsRevoked });
+
+            // ------------------- RefreshToken -------------------
+
+            modelBuilder.Entity<RefreshTokenEntity>()
+                .HasIndex(r => r.TokenIdentifier)
+                .IsUnique();
 
             modelBuilder.Entity<RefreshTokenEntity>()
                 .HasIndex(r => r.AbsoluteExpiry);
+
+            modelBuilder.Entity<RefreshTokenEntity>()
+                .Property(r => r.RowVersion)
+                .IsRowVersion();
+
+            modelBuilder.Entity<RefreshTokenEntity>()
+                .HasOne(r => r.Session)
+                .WithMany(s => s.RefreshTokens)
+                .HasForeignKey(r => r.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

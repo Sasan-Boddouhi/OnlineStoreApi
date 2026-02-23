@@ -31,7 +31,7 @@ namespace BusinessLogic.Services.Implementations
             {
                 var city = _mapper.Map<City>(dto);
 
-                await _unitOfWork.City.AddAsync(city);
+                await _unitOfWork.Repository<City>().AddAsync(city);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("شهر با Id={Id} و Name={Name} ایجاد شد.", city.CityId, city.CityName);
@@ -48,14 +48,14 @@ namespace BusinessLogic.Services.Implementations
         {
             try
             {
-                var city = await _unitOfWork.City.GetByIdAsync(id);
+                var city = await _unitOfWork.Repository<City>().GetByIdAsync(id);
                 if (city == null)
                 {
                     _logger.LogWarning("Delete failed. City with Id={Id} not found.", id);
                     return false;
                 }
 
-                await _unitOfWork.City.DeleteAsync(city!);
+                await _unitOfWork.Repository<City>().DeleteAsync(city!);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("City deleted successfully. name={Name}", city.CityName);

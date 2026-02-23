@@ -1,12 +1,7 @@
-﻿using BusinessLogic.Services.Implementations;
-using BusinessLogic.Services.Interfaces;
+﻿using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BusinessLogic.Extensions
 {
@@ -16,20 +11,33 @@ namespace BusinessLogic.Extensions
         {
             services.AddHttpContextAccessor();
 
-            services.AddAutoMapper(typeof(ServiceCollectionExtensions).Assembly);
+            services.AddAutoMapper(Assembly.GetExecutingAssembly());
 
-            // ثبت تمام سرویس‌ها به صورت داینامیک
-            var serviceTypes = Assembly.GetExecutingAssembly().GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && t.Name.EndsWith("Service") && t.Name != "ServiceCollectionExtensions");
+            var serviceTypes = Assembly.GetExecutingAssembly()
+                .GetTypes()
+                .Where(t => t.IsClass &&
+                            !t.IsAbstract &&
+                            t.Name.EndsWith("Service") &&
+                            t.Name != nameof(ServiceCollectionExtensions));
 
             foreach (var serviceType in serviceTypes)
             {
-                var interfaceType = serviceType.GetInterfaces().FirstOrDefault(i => i.Name == $"I{serviceType.Name}");
+                var interfaceType = serviceType
+                    .GetInterfaces()
+                    .FirstOrDefault(i => i.Name == $"I{serviceType.Name}");
+
                 if (interfaceType != null)
-                {
                     services.AddScoped(interfaceType, serviceType);
-                }
             }
+
+            return services;
+        }
+
+        public static IServiceCollection AddFluentValidationServices(this IServiceCollection services)
+        {
+            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+
+            services.AddFluentValidationAutoValidation();
 
             return services;
         }

@@ -26,9 +26,7 @@ namespace Application.Entities
         [Required]
         public required UserType UserType { get; set; }
 
-        [Required]
-        [StringLength(10)]
-        public required string DateOfBirth { get; set; }
+        public DateTime DateOfBirth { get; set; }
 
         public bool IsActive { get; set; } = true;
 
@@ -38,6 +36,7 @@ namespace Application.Entities
         // Navigation properties برای اطلاعات کاربر
         public string? Email { get; set; }
         public virtual ICollection<Address> Addresses { get; set; } = new HashSet<Address>();
+        public ICollection<UserSession> Sessions { get; set; } = new List<UserSession>();
 
         [Required]
         [StringLength(11)]
@@ -52,6 +51,7 @@ namespace Application.Entities
         public int FailedLoginAttempts { get; set; } = 0;
 
         public DateTime? LockoutEnd { get; set; }
+
     }
 
     public enum UserType

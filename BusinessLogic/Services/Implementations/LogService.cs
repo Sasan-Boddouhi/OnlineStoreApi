@@ -12,6 +12,7 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Application.Interfaces;
 using Application.Entities;
+using BusinessLogic.Specifications.Log;
 
 namespace BusinessLogic.Services.Implementations
 {
@@ -25,34 +26,19 @@ namespace BusinessLogic.Services.Implementations
             _mapper = mapper;
         }
 
-        public async Task<PagedResult<LogEntryDto>> GetPagedAsync(LogFilterDto filter)
+        public async Task<PagedResult<LogEntryDto>> GetPagedAsync(LogFilterDto filter, CancellationToken cancellationToken = default)
         {
-            var query = _unitOfWork.Logs.Query();
+            var spec = new LogProjectionSpecification(filter);
 
-            if(!string.IsNullOrWhiteSpace(filter.Search))
-                query = query.Where(l => 
-                    l.Message.Contains(filter.Search) || 
-                    l.Exception != null && l.Exception.Contains(filter.Search));
+            var items = await _unitOfWork.Repository<Logs>()
+                .ListAsync(spec, cancellationToken);
 
-            if(!string.IsNullOrEmpty(filter.Level))
-                query = query.Where(l => l.Level == filter.Level);
-
-            if (filter.From.HasValue)
-                query = query.Where(l => l.TimeStamp >= filter.From.Value);
-
-            if (filter.To.HasValue)
-                query = query.Where(l => l.TimeStamp <= filter.To.Value);
-
-            query = filter.SortOrder == "asc"
-                ? query.OrderBy(l => l.TimeStamp)
-                :   query.OrderByDescending(l => l.TimeStamp);
-
-            var totalCount = await query.CountAsync();
-            var items = await query.Skip((filter.PageNumber - 1) * (filter.PageSize)).Take(filter.PageSize).ToListAsync();
+            var totalCount = await _unitOfWork.Repository<Logs>()
+                .CountAsync(spec.Criteria, cancellationToken);
 
             return new PagedResult<LogEntryDto>
             {
-                Items = _mapper.Map<IEnumerable<LogEntryDto>>(items),
+                Items = items,
                 TotalCount = totalCount,
                 PageNumber = filter.PageNumber,
                 PageSize = filter.PageSize
@@ -62,8 +48,7 @@ namespace BusinessLogic.Services.Implementations
         public async Task<LogEntryDto> CreateAsync(LogEntryDto dto)
         {
             var log = _mapper.Map<Logs>(dto);
-
-            await _unitOfWork.Logs.AddAsync(log);
+            await _unitOfWork.Repository<Logs>().AddAsync(log);
             await _unitOfWork.SaveChangesAsync();
 
             return _mapper.Map<LogEntryDto>(log);
@@ -71,10 +56,8 @@ namespace BusinessLogic.Services.Implementations
 
         public async Task<IEnumerable<LogEntryDto>> GetLatestAsync(int count = 100)
         {
-            var items = await _unitOfWork.Logs.Query()
-                .OrderByDescending(l => l.TimeStamp)
-                .Take(count)
-                .ToListAsync();
+            var spec = new LatestLogsSpecification(count);
+            var items = await _unitOfWork.Repository<Logs>().ListAsync(spec);
 
             return _mapper.Map<IEnumerable<LogEntryDto>>(items);
         }

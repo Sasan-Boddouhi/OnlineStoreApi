@@ -19,7 +19,9 @@ namespace Application.Entities
         public string TokenIdentifier { get; set; } = string.Empty;
 
         [Required]
-        public Guid FamilyId { get; set; } = Guid.NewGuid();
+        public Guid SessionId { get; set; } = Guid.NewGuid();
+
+        public UserSession Session { get; set; } = null!;
 
         [Required]
         public DateTime FamilyCreatedAt { get; set; }
