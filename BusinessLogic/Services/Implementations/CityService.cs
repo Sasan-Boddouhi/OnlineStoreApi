@@ -1,18 +1,16 @@
 ﻿using Application.Entities;
 using Application.Interfaces;
+using Application.Common.Specifications;
 using AutoMapper;
 using BusinessLogic.DTOs.City;
 using BusinessLogic.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Linq.Expressions;
+using BusinessLogic.Specifications.Cities;
 
 namespace BusinessLogic.Services.Implementations
 {
-    public class CityService : ICityService
+    public sealed class CityService : ICityService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
@@ -24,6 +22,8 @@ namespace BusinessLogic.Services.Implementations
             _mapper = mapper;
             _logger = logger;
         }
+
+        #region Create
 
         public async Task<CityDto> CreateAsync(CreateCityDto dto)
         {
@@ -44,6 +44,10 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Delete
+
         public async Task<bool> DeleteAsync(int id)
         {
             try
@@ -55,7 +59,7 @@ namespace BusinessLogic.Services.Implementations
                     return false;
                 }
 
-                await _unitOfWork.Repository<City>().DeleteAsync(city!);
+                _unitOfWork.Repository<City>().Delete(city);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("City deleted successfully. name={Name}", city.CityName);
@@ -68,18 +72,22 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Exists
+
         public async Task<bool> ExistsAsync(int id)
         {
             try
             {
-                var city = await _unitOfWork.City.GetByIdAsync(id);
-                if (city == null)
+                var exists = await _unitOfWork.Repository<City>().AnyAsync(c => c.CityId == id);
+                if (!exists)
                 {
                     _logger.LogWarning("City with Id={Id} not found.", id);
                     return false;
                 }
 
-                _logger.LogInformation("City found. Id={Id}, Name={Name}", city.CityId, city.CityName);
+                _logger.LogInformation("City found with Id={Id}.", id);
                 return true;
             }
             catch (Exception ex)
@@ -89,13 +97,16 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Get All
+
         public async Task<IEnumerable<CityDto>> GetAllAsync()
         {
             try
             {
-                var cities = await _unitOfWork.City.Query()
-                    .OrderBy(c => c.CityName)
-                    .ToListAsync();
+                var spec = new AllCitiesOrderedSpecification();
+                var cities = await _unitOfWork.Repository<City>().ListAsync(spec);
 
                 _logger.LogInformation("Retrieved {Count} cities.", cities.Count);
                 return _mapper.Map<IEnumerable<CityDto>>(cities);
@@ -107,14 +118,16 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Get All By ProvinceId
+
         public async Task<IEnumerable<CityDto>> GetAllByProvinceIdAsync(int provinceId)
         {
             try
             {
-                var cities = await _unitOfWork.City.Query()
-                    .Where(c => c.ProvinceId == provinceId)
-                    .OrderBy(c => c.CityName)
-                    .ToListAsync();
+                var spec = new CitiesByProvinceIdSpecification(provinceId);
+                var cities = await _unitOfWork.Repository<City>().ListAsync(spec);
 
                 _logger.LogInformation("Retrieved {Count} cities for ProvinceId={ProvinceId}", cities.Count, provinceId);
                 return _mapper.Map<IEnumerable<CityDto>>(cities);
@@ -126,13 +139,15 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Get By Id
+
         public async Task<CityDto?> GetByIdAsync(int id)
         {
             try
             {
-                var city = await _unitOfWork.City.Query()
-                    .Where(c => c.CityId == id)
-                    .FirstOrDefaultAsync();
+                var city = await _unitOfWork.Repository<City>().GetByIdAsync(id);
 
                 if (city == null)
                 {
@@ -150,11 +165,16 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Get By Name
+
         public async Task<CityDto?> GetByNameAsync(string name)
         {
             try
             {
-                var city = await _unitOfWork.City.FirstOrDefaultAsync(c => c.CityName == name);
+                var spec = new CityByNameSpecification(name);
+                var city = await _unitOfWork.Repository<City>().FirstOrDefaultAsync(spec);
 
                 if (city == null)
                 {
@@ -172,11 +192,23 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        private sealed class CityByNameSpecification : BaseSpecification<City>
+        {
+            public CityByNameSpecification(string name)
+            {
+                Criteria = c => c.CityName == name;
+            }
+        }
+
+        #endregion
+
+        #region Update
+
         public async Task<CityDto> UpdateAsync(UpdateCityDto dto)
         {
             try
             {
-                var city = await _unitOfWork.City.GetByIdAsync(dto.CityId);
+                var city = await _unitOfWork.Repository<City>().GetByIdAsync(dto.CityId);
                 if (city == null)
                 {
                     _logger.LogWarning("Update failed. City with Id={Id} not found.", dto.CityId);
@@ -185,7 +217,7 @@ namespace BusinessLogic.Services.Implementations
 
                 _mapper.Map(dto, city);
 
-                await _unitOfWork.City.UpdateAsync(city);
+                _unitOfWork.Repository<City>().Update(city);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("شهر با Id={Id} به‌روزرسانی شد.", city.CityId);
@@ -197,5 +229,7 @@ namespace BusinessLogic.Services.Implementations
                 throw;
             }
         }
+
+        #endregion
     }
 }

@@ -41,6 +41,11 @@ namespace Application.Entities
 
         public bool IsDefault { get; set; } = false;
 
+        public int UserId { get; set; }
+
+        [ForeignKey(nameof(UserId))]
+        public virtual User User { get; set; } = null!;
+
         public virtual ICollection<Warehouse> Warehouses { get; set; } = new HashSet<Warehouse>();
     }
 }
