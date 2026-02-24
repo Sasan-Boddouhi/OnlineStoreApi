@@ -175,17 +175,7 @@ public class DynamicSpecification<TEntity> : BaseSpecification<TEntity>
 
     private void ApplyDynamicSorting(string sortBy, bool ascending)
     {
-        var parameter = Expression.Parameter(typeof(TEntity), "x");
-        var property = BuildNestedProperty(parameter, sortBy);
-
-        var lambda = Expression.Lambda<Func<TEntity, object>>(
-            Expression.Convert(property, typeof(object)),
-            parameter);
-
-        if (ascending)
-            ApplyOrderBy(lambda);
-        else
-            ApplyOrderByDescending(lambda);
+        ApplyOrderBy(sortBy, !ascending);
     }
 
     private void ValidateField(string field)

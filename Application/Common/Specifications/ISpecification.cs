@@ -11,10 +11,7 @@ namespace Application.Common.Specifications
     {
         IReadOnlyList<Expression<Func<TEntity, object>>> Includes { get; }
         Expression<Func<TEntity, bool>>? Criteria { get; }
-
-        Expression<Func<TEntity, object>>? OrderBy { get; }
-        Expression<Func<TEntity, object>>? OrderByDescending { get; }
-
+        IReadOnlyList<(LambdaExpression KeySelector, bool Descending)> OrderExpressions { get; }
         int? Skip { get; }
         int? Take { get; }
 

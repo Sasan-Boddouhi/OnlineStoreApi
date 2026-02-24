@@ -1,22 +1,18 @@
 ﻿using Application.Entities;
 using Application.Interfaces;
+using Application.Common.Specifications;
 using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
-using BusinessLogic.Extensions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using BusinessLogic.Specifications.Products;
+using Application.Exceptions;
+using Application.Common.Helpers;
 
 namespace BusinessLogic.Services.Implementations
 {
-    public class ProductService : IProductService
+    public sealed class ProductService : IProductService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
@@ -48,7 +44,7 @@ namespace BusinessLogic.Services.Implementations
 
                 var entity = _mapper.Map<Product>(dto);
 
-                await _unitOfWork.Product.AddAsync(entity);
+                await _unitOfWork.Repository<Product>().AddAsync(entity, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
@@ -60,7 +56,7 @@ namespace BusinessLogic.Services.Implementations
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 _logger.LogError(ex, "Failed to create product with name: {ProductName}", dto.Name);
-                throw new Exception($"خطا در ایجاد محصول: {ex.Message}", ex);
+                throw new BusinessException("خطا در ایجاد محصول", ex);
             }
         }
 
@@ -70,17 +66,15 @@ namespace BusinessLogic.Services.Implementations
 
             try
             {
-                // Check existence efficiently
-                var exists = await _unitOfWork.Product.AnyAsync(p => p.ProductId == id && p.IsActive, cancellationToken);
-                if (!exists)
+                var product = await _unitOfWork.Repository<Product>().GetByIdAsync(id, cancellationToken);
+                if (product == null || !product.IsActive)
                 {
                     _logger.LogWarning("Delete failed: Product not found or inactive with ID: {ProductId}", id);
                     return false;
                 }
 
-                var entity = await _unitOfWork.Product.GetByIdAsync(id, cancellationToken);
-                // entity is not null because exists check passed
-                await _unitOfWork.Product.DeleteAsync(entity!);
+                // Soft Delete
+                product.IsActive = false;
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Product deleted successfully: {ProductId}", id);
@@ -93,98 +87,57 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
-        public async Task<PagedResult<ProductDto>> GetFilteredAsync(ProductFilterDto filter, CancellationToken cancellationToken = default)
+        public async Task<PagedResult<ProductDto>> GetByQueryAsync(
+            string? filter,
+            string? sort,
+            int pageNumber,
+            int pageSize,
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Retrieving filtered products. Page: {PageNumber}, Size: {PageSize}", filter.PageNumber, filter.PageSize);
+            // اعمال محدودیت‌های امنیتی
+            QueryGuard.EnsureValid(filter, sort);
+
+            _logger.LogInformation(
+                "Retrieving products. Filter: {Filter}, Sort: {Sort}, Page: {Page}",
+                filter, sort, pageNumber);
 
             try
             {
-                var query = _unitOfWork.Product.Query(); // No Include needed with ProjectTo
+                var skip = (pageNumber - 1) * pageSize;
 
-                // Apply filters
-                if (!string.IsNullOrWhiteSpace(filter.Search) && filter.Search.Length > 2)
+                // Specification برای داده‌ها
+                var dataSpec = new QuerySpecification<Product, ProductDto>(
+                    filter,
+                    sort,
+                    skip,
+                    pageSize,
+                    ProductQueryConfig.Projection,
+                    ProductQueryConfig.AllowedFields);
+
+                // استفاده از QueryCountSpecification برای شمارش
+                var countSpec = new QueryCountSpecification<Product>(
+                    filter,
+                    ProductQueryConfig.AllowedFields);
+
+                var items = await _unitOfWork
+                    .Repository<Product>()
+                    .ListAsync<ProductDto>(dataSpec, cancellationToken);
+
+                var totalCount = await _unitOfWork
+                    .Repository<Product>()
+                    .CountAsync(countSpec, cancellationToken);
+
+                return new PagedResult<ProductDto>
                 {
-                    query = query.Where(p => p.Name.Contains(filter.Search));
-                    _logger.LogDebug("Applied search filter: {Search}", filter.Search);
-                }
-
-                if (filter.CategoryId.HasValue)
-                {
-                    query = query.Where(p => p.Subcategory.CategoryId == filter.CategoryId.Value);
-                    _logger.LogDebug("Applied category filter: {CategoryId}", filter.CategoryId);
-                }
-
-                if (filter.SubcategoryId.HasValue)
-                {
-                    query = query.Where(p => p.SubcategoryId == filter.SubcategoryId.Value);
-                    _logger.LogDebug("Applied subcategory filter: {SubcategoryId}", filter.SubcategoryId);
-                }
-
-                if (filter.MinPrice.HasValue)
-                {
-                    query = query.Where(p => p.Price >= filter.MinPrice.Value);
-                    _logger.LogDebug("Applied min price filter: {MinPrice}", filter.MinPrice);
-                }
-
-                if (filter.MaxPrice.HasValue)
-                {
-                    query = query.Where(p => p.Price <= filter.MaxPrice.Value);
-                    _logger.LogDebug("Applied max price filter: {MaxPrice}", filter.MaxPrice);
-                }
-
-                // Apply sorting
-                string sortBy;
-                bool ascending;
-
-                switch (filter.SortOrder?.ToLower())
-                {
-                    case "asc":
-                        sortBy = "Price";
-                        ascending = true;
-                        break;
-                    case "desc":
-                        sortBy = "Price";
-                        ascending = false;
-                        break;
-                    default:
-                        sortBy = "ProductId";
-                        ascending = true;
-                        break;
-                }
-
-                query = query.ApplySorting(sortBy, ascending);
-                _logger.LogDebug("Applied sorting: {SortBy} {SortDirection}", sortBy, ascending ? "ASC" : "DESC");
-
-                var pagedResult = await query
-                    .ProjectTo<ProductDto>(_mapper.ConfigurationProvider)
-                    .ToPagedResultAsync(filter.PageNumber, filter.PageSize, cancellationToken);
-
-                _logger.LogDebug("Retrieved {ItemCount} products out of {TotalCount} total", pagedResult.Items.Count(), pagedResult.TotalCount);
-                return pagedResult;
+                    Items = items,
+                    TotalCount = totalCount,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving filtered products");
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<ProductDto>> GetAllAsync(CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("Retrieving all active products");
-
-            try
-            {
-                var products = await _unitOfWork.Product.Query()
-                    .ProjectTo<ProductDto>(_mapper.ConfigurationProvider)
-                    .ToListAsync(cancellationToken);
-
-                _logger.LogDebug("Retrieved {ProductCount} products", products.Count);
-                return products;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving all products");
+                _logger.LogError(ex, "Error retrieving products");
                 throw;
             }
         }
@@ -195,18 +148,24 @@ namespace BusinessLogic.Services.Implementations
 
             try
             {
-                var product = await _unitOfWork.Product.Query()
-                    .Where(p => p.ProductId == id)
-                    .ProjectTo<ProductDto>(_mapper.ConfigurationProvider)
-                    .FirstOrDefaultAsync(cancellationToken);
+                var spec = new QuerySpecification<Product, ProductDto>(
+                    filter: $"id eq {id}",
+                    sort: null,
+                    skip: null,
+                    take: null,
+                    projection: ProductQueryConfig.Projection,
+                    allowedFields: ProductQueryConfig.AllowedFields,
+                    applyDefaultSoftDelete: true
+                );
+
+                // ذکر صریح نوع خروجی برای رفع ابهام
+                var product = await _unitOfWork
+                    .Repository<Product>()
+                    .FirstOrDefaultAsync<ProductDto>(spec, cancellationToken);
 
                 if (product == null)
-                {
                     _logger.LogDebug("Product not found with ID: {ProductId}", id);
-                    return null;
-                }
 
-                _logger.LogDebug("Product found: {ProductId} - {ProductName}", id, product.Name);
                 return product;
             }
             catch (Exception ex)
@@ -222,7 +181,7 @@ namespace BusinessLogic.Services.Implementations
 
             try
             {
-                var entity = await _unitOfWork.Product.GetByIdAsync(dto.ProductId, cancellationToken);
+                var entity = await _unitOfWork.Repository<Product>().GetByIdAsync(dto.ProductId, cancellationToken);
 
                 if (entity == null)
                 {
@@ -233,7 +192,8 @@ namespace BusinessLogic.Services.Implementations
                 // Optional: check for duplicate name if changed
                 if (!string.Equals(entity.Name, dto.Name, StringComparison.OrdinalIgnoreCase))
                 {
-                    var nameExists = await _unitOfWork.Product.AnyAsync(p => p.Name == dto.Name && p.ProductId != dto.ProductId, cancellationToken);
+                    var nameExists = await _unitOfWork.Repository<Product>()
+                        .AnyAsync(p => p.Name == dto.Name && p.ProductId != dto.ProductId, cancellationToken);
                     if (nameExists)
                     {
                         _logger.LogWarning("Update failed: Duplicate product name '{ProductName}' for ID: {ProductId}", dto.Name, dto.ProductId);
@@ -244,7 +204,7 @@ namespace BusinessLogic.Services.Implementations
                 _logger.LogDebug("Mapping UpdateProductDto to existing product entity");
                 _mapper.Map(dto, entity);
 
-                await _unitOfWork.Product.UpdateAsync(entity);
+                _unitOfWork.Repository<Product>().Update(entity);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 _logger.LogInformation("Product updated successfully: {ProductId}", dto.ProductId);
@@ -265,7 +225,7 @@ namespace BusinessLogic.Services.Implementations
         {
             _logger.LogDebug("Checking for duplicate product name: {ProductName}", dto.Name);
 
-            var exists = await _unitOfWork.Product.AnyAsync(p => p.Name == dto.Name, cancellationToken);
+            var exists = await _unitOfWork.Repository<Product>().AnyAsync(p => p.Name == dto.Name, cancellationToken);
 
             if (exists)
             {

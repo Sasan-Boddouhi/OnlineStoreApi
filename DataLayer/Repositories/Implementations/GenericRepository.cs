@@ -109,6 +109,16 @@ namespace DataLayer.Repositories.Implementations
             return await query.ToListAsync(cancellationToken);
         }
 
+        public async Task<bool> AnyAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default)
+        {
+            var query = _dbSet.AsQueryable();
+
+            if (spec.Criteria != null)
+                query = query.Where(spec.Criteria);
+
+            return await query.AnyAsync(cancellationToken);
+        }
+
         #endregion
     }
 }

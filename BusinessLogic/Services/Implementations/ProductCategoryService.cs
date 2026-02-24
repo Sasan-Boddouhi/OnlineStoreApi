@@ -1,14 +1,15 @@
 ﻿using Application.Entities;
 using Application.Interfaces;
+using Application.Common.Specifications;
 using AutoMapper;
 using BusinessLogic.DTOs.ProductCategory;
 using BusinessLogic.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using BusinessLogic.Specifications.ProductCategories;
 
 namespace BusinessLogic.Services.Implementations
 {
-    public class ProductCategoryService : IProductCategoryService
+    public sealed class ProductCategoryService : IProductCategoryService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
@@ -34,23 +35,26 @@ namespace BusinessLogic.Services.Implementations
                 throw new UnauthorizedAccessException("Access denied. Only Admin or Manager can perform this action.");
         }
 
+        #region Create
+
         public async Task<ProductCategoryDto> CreateAsync(CreateProductCategoryDto dto)
         {
             try
             {
                 EnsureAdmin();
 
-                var existingCategory = await _unitOfWork.ProductCategory.Query()
-                    .FirstOrDefaultAsync(pc => pc.CategoryName == dto.Name);
+                // بررسی تکراری بودن نام
+                var exists = await _unitOfWork.Repository<ProductCategory>()
+                    .AnyAsync(pc => pc.CategoryName == dto.Name);
 
-                if (existingCategory != null)
+                if (exists)
                 {
                     throw new Exception("Category with this name already exists.");
                 }
 
                 var entity = _mapper.Map<ProductCategory>(dto);
 
-                await _unitOfWork.ProductCategory.AddAsync(entity);
+                await _unitOfWork.Repository<ProductCategory>().AddAsync(entity);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Category created by {User} at {Time}. Id={Id}, Name={Name}, Entity={@Entity}",
@@ -61,12 +65,14 @@ namespace BusinessLogic.Services.Implementations
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating category by {User} at {Time}. Input={@Dto}",
-                    _currentUserService.GetCurrentUserName(), DateTime.Now, dto
-                );
+                    _currentUserService.GetCurrentUserName(), DateTime.Now, dto);
                 throw;
             }
         }
 
+        #endregion
+
+        #region Delete
 
         public async Task<bool> DeleteAsync(int id)
         {
@@ -74,7 +80,7 @@ namespace BusinessLogic.Services.Implementations
             {
                 EnsureAdmin();
 
-                var entity = await _unitOfWork.ProductCategory.GetByIdAsync(id);
+                var entity = await _unitOfWork.Repository<ProductCategory>().GetByIdAsync(id);
                 if (entity == null || !entity.IsActive)
                 {
                     _logger.LogWarning("Delete failed. Category with Id={Id} not found or inactive. User={User}, Time={Time}",
@@ -84,7 +90,7 @@ namespace BusinessLogic.Services.Implementations
 
                 var oldEntity = _mapper.Map<ProductCategoryDto>(entity);
 
-                await _unitOfWork.ProductCategory.DeleteAsync(entity);
+                _unitOfWork.Repository<ProductCategory>().Delete(entity);
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Category deleted successfully by {User} at {Time}. Deleted entity: {@OldEntity}",
@@ -100,14 +106,16 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Get All
 
         public async Task<IEnumerable<ProductCategoryDto>> GetAllAsync()
         {
             try
             {
-                var categories = await _unitOfWork.ProductCategory.Query()
-                    .Include(c => c.Subcategories)
-                    .ToListAsync();
+                var spec = new ProductCategoryWithSubcategoriesSpecification();
+                var categories = await _unitOfWork.Repository<ProductCategory>().ListAsync(spec);
 
                 _logger.LogInformation("{Count} categories fetched by {User} at {Time}.",
                     categories.Count, _currentUserService.GetCurrentUserName(), DateTime.Now);
@@ -122,12 +130,15 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Get By Id
 
         public async Task<ProductCategoryDto?> GetByIdAsync(int id)
         {
             try
             {
-                var entity = await _unitOfWork.ProductCategory.GetByIdAsync(id);
+                var entity = await _unitOfWork.Repository<ProductCategory>().GetByIdAsync(id);
                 if (entity == null)
                 {
                     _logger.LogWarning("Category with Id={Id} not found. Requested by {User} at {Time}.",
@@ -147,6 +158,9 @@ namespace BusinessLogic.Services.Implementations
             }
         }
 
+        #endregion
+
+        #region Update
 
         public async Task<ProductCategoryDto?> UpdateAsync(UpdateProductCategoryDto dto)
         {
@@ -154,18 +168,19 @@ namespace BusinessLogic.Services.Implementations
             {
                 EnsureAdmin();
 
-                var existingCategory = await _unitOfWork.ProductCategory.Query()
-                    .FirstOrDefaultAsync(pc => pc.CategoryName == dto.Name && pc.CategoryId != dto.ProductCategoryId);
+                // بررسی تکراری بودن نام (به غیر از خودش)
+                var exists = await _unitOfWork.Repository<ProductCategory>()
+                    .AnyAsync(pc => pc.CategoryName == dto.Name && pc.CategoryId != dto.ProductCategoryId);
 
-                if (existingCategory != null)
+                if (exists)
                 {
                     throw new Exception("Category with this name already exists.");
                 }
 
-                var entity = await _unitOfWork.ProductCategory.GetByIdAsync(dto.ProductCategoryId);
+                var entity = await _unitOfWork.Repository<ProductCategory>().GetByIdAsync(dto.ProductCategoryId);
                 if (entity == null || !entity.IsActive)
                 {
-                    _logger.LogWarning("Update failed. Category with Id={Id} not found.", dto.ProductCategoryId);
+                    _logger.LogWarning("Update failed. Category with Id={Id} not found or inactive.", dto.ProductCategoryId);
                     return null;
                 }
 
@@ -173,14 +188,14 @@ namespace BusinessLogic.Services.Implementations
 
                 _mapper.Map(dto, entity);
 
-                await _unitOfWork.ProductCategory.UpdateAsync(entity);
+                _unitOfWork.Repository<ProductCategory>().Update(entity);
                 await _unitOfWork.SaveChangesAsync();
 
                 var newEntity = _mapper.Map<ProductCategoryDto>(entity);
 
                 _logger.LogInformation("Category updated by {User} at {Time}. Old: {@OldEntity}, New: {@NewEntity}",
                     _currentUserService.GetCurrentUserName(), DateTime.Now, oldEntity, newEntity);
-                return _mapper.Map<ProductCategoryDto>(entity);
+                return newEntity;
             }
             catch (Exception ex)
             {
@@ -188,5 +203,7 @@ namespace BusinessLogic.Services.Implementations
                 throw;
             }
         }
+
+        #endregion
     }
 }

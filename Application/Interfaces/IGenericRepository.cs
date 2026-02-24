@@ -16,6 +16,7 @@ namespace Application.Interfaces
 
         // Simple Queries
         Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+        Task<bool> AnyAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
         Task<int> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default);
 
         // Specification (Entity Result)

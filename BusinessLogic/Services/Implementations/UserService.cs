@@ -4,13 +4,13 @@ using Application.Common.Specifications;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
-using BusinessLogic.Specifications.Users;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Memory;
 using Application.Exceptions;
 using Application.Interfaces.Security;
-using System.Linq;
 using AutoMapper;
+using Application.Common.Helpers;
+using BusinessLogic.Specifications.Users;
 
 namespace BusinessLogic.Services.Implementations;
 
@@ -58,7 +58,6 @@ public sealed class UserService : IUserService
 
         try
         {
-            // اعتبارسنجی تکراری نبودن شماره موبایل
             var exists = await _unitOfWork
                 .Repository<User>()
                 .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber);
@@ -75,23 +74,26 @@ public sealed class UserService : IUserService
             user.IsActive = true;
 
             await _unitOfWork.Repository<User>().AddAsync(user);
+            await _unitOfWork.SaveChangesAsync();
 
             if (dto.Addresses?.Any() == true)
             {
-                foreach (var addressDto in dto.Addresses)
-                {
-                    var address = _mapper.Map<Address>(addressDto);
-                    address.UserId = user.UserId;
-                    await _unitOfWork.Repository<Address>().AddAsync(address);
-                }
+                var addresses = dto.Addresses
+                    .Where(a => !string.IsNullOrWhiteSpace(a.Plaque))
+                    .Select(a =>
+                    {
+                        var address = _mapper.Map<Address>(a);
+                        address.UserId = user.UserId;
+                        return address;
+                    }).ToList();
+
+                await _unitOfWork.Repository<Address>().AddRangeAsync(addresses);
+                await _unitOfWork.SaveChangesAsync();
             }
 
-            // یک بار ذخیره و commit کل تراکنش
-            await _unitOfWork.SaveChangesAsync();
             await _unitOfWork.CommitTransactionAsync();
 
             _logger.LogInformation("User created successfully with ID: {UserId}", user.UserId);
-
             _cache.Remove($"{ALL_USERS_FULL_CACHE_KEY}_all");
 
             return MapToSimpleUserDto(user);
@@ -106,7 +108,7 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region Get By Id (simple)
+    #region Get By Id
 
     public async Task<UserDto?> GetByIdAsync(int id)
     {
@@ -114,9 +116,20 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new UserByIdProjectionSpecification(id);
+            var spec = new QuerySpecification<User, UserDto>(
+                filter: $"id eq {id}",
+                sort: null,
+                skip: null,
+                take: null,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
 
-            var userDto = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(spec);
+            var userDto = await _unitOfWork
+                .Repository<User>()
+                .FirstOrDefaultAsync<UserDto>(spec);
+
             if (userDto is null)
                 _logger.LogDebug("User not found with ID: {UserId}", id);
 
@@ -131,7 +144,7 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region Get By Phone Number (simple)
+    #region Get By Phone Number
 
     public async Task<UserDto?> GetByPhoneNumberAsync(string phoneNumber)
     {
@@ -139,9 +152,20 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new UserByPhoneProjectionSpecification(phoneNumber);
+            var spec = new QuerySpecification<User, UserDto>(
+                filter: $"phonenumber eq '{phoneNumber}'",
+                sort: null,
+                skip: null,
+                take: null,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
 
-            var userDto = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(spec);
+            var userDto = await _unitOfWork
+                .Repository<User>()
+                .FirstOrDefaultAsync<UserDto>(spec);
+
             if (userDto is null)
                 _logger.LogDebug("User not found with phone: {PhoneNumber}", phoneNumber);
 
@@ -156,7 +180,7 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region Get All (simple, with optional search)
+    #region Get All (with optional search)
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync(string? search = null)
     {
@@ -164,10 +188,21 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new UserProjectionSpecification(search, null, true, null, null);
+            var filter = string.IsNullOrWhiteSpace(search) ? null : $"firstname contains '{search}' or lastname contains '{search}' or phonenumber contains '{search}'";
+
+            var spec = new QuerySpecification<User, UserDto>(
+                filter: filter,
+                sort: null,
+                skip: null,
+                take: null,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
+
             var users = await _unitOfWork
                 .Repository<User>()
-                .ListAsync(spec);
+                .ListAsync<UserDto>(spec);
 
             _logger.LogDebug("Retrieved {Count} users", users.Count);
             return users;
@@ -181,7 +216,7 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region Get Paged (simple)
+    #region Get Paged
 
     public async Task<PagedResult<UserDto>> GetPagedAsync(
         int pageNumber,
@@ -195,20 +230,36 @@ public sealed class UserService : IUserService
 
         try
         {
+            QueryGuard.EnsureValid(search, null); // فقط بررسی فیلتر (sort جداگانه بررسی می‌شود)
+
+            var filter = string.IsNullOrWhiteSpace(search) ? null : $"firstname contains '{search}' or lastname contains '{search}' or phonenumber contains '{search}'";
+            var sort = string.IsNullOrWhiteSpace(sortBy) ? null : (ascending ? sortBy : $"-{sortBy}");
+
             var skip = (pageNumber - 1) * pageSize;
 
-            var itemSpec = new UserProjectionSpecification(search, sortBy, ascending, skip, pageSize);
-            var countSpec = new UserCountSpecification(search);
+            var dataSpec = new QuerySpecification<User, UserDto>(
+                filter: filter,
+                sort: sort,
+                skip: skip,
+                take: pageSize,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
+
+            var countSpec = new QueryCountSpecification<User>(
+                filter: filter,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
 
             var items = await _unitOfWork
                 .Repository<User>()
-                .ListAsync(itemSpec);
+                .ListAsync<UserDto>(dataSpec);
 
             var totalCount = await _unitOfWork
                 .Repository<User>()
                 .CountAsync(countSpec);
-
-            _logger.LogDebug("Paged result - TotalCount: {TotalCount}, Returned: {Returned}", totalCount, items.Count);
 
             return new PagedResult<UserDto>
             {
@@ -227,7 +278,7 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region Get All With Role (full data, cached)
+    #region Get All With Role (cached)
 
     public async Task<IReadOnlyList<UserDto>> GetAllUsersWithRoleNameAsync(string? search = null)
     {
@@ -243,13 +294,23 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new UserWithRoleProjectionSpecification(search, null, true, 1, int.MaxValue);
+            var filter = string.IsNullOrWhiteSpace(search) ? null : $"firstname contains '{search}' or lastname contains '{search}' or phonenumber contains '{search}' or role contains '{search}'";
+
+            var spec = new QuerySpecification<User, UserDto>(
+                filter: filter,
+                sort: null,
+                skip: null,
+                take: null,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
+
             var users = await _unitOfWork
                 .Repository<User>()
-                .ListAsync(spec);
+                .ListAsync<UserDto>(spec);
 
             _logger.LogDebug("Retrieved {Count} users with roles from database", users.Count);
-
             _cache.Set(cacheKey, users, _cacheEntryOptions);
             return users;
         }
@@ -262,7 +323,7 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region Get By Id With Role (full data, cached)
+    #region Get By Id With Role (cached)
 
     public async Task<UserDto?> GetByIdWithRoleNameAsync(int id)
     {
@@ -278,9 +339,20 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new UserWithRoleByIdProjectionSpecification(id);
+            var spec = new QuerySpecification<User, UserDto>(
+                filter: $"id eq {id}",
+                sort: null,
+                skip: null,
+                take: null,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
 
-            var userDto = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(spec);
+            var userDto = await _unitOfWork
+                .Repository<User>()
+                .FirstOrDefaultAsync<UserDto>(spec);
+
             if (userDto is null)
             {
                 _logger.LogDebug("User not found with ID: {UserId}", id);
@@ -300,6 +372,128 @@ public sealed class UserService : IUserService
 
     #endregion
 
+    #region Get Paged With Roles (cached optionally)
+
+    public async Task<PagedResult<UserDto>> GetPagedWithRolesAsync(
+        int pageNumber,
+        int pageSize,
+        string? search = null,
+        string? sortBy = "UserId",
+        bool ascending = true)
+    {
+        _logger.LogInformation("Retrieving paged users with roles - Page: {PageNumber}, Size: {PageSize}, Search: {Search}, SortBy: {SortBy}, Ascending: {Ascending}",
+            pageNumber, pageSize, search ?? "<none>", sortBy, ascending);
+
+        try
+        {
+            QueryGuard.EnsureValid(search, sortBy);
+
+            var filter = string.IsNullOrWhiteSpace(search) ? null : $"firstname contains '{search}' or lastname contains '{search}' or phonenumber contains '{search}'";
+            var sort = string.IsNullOrWhiteSpace(sortBy) ? null : (ascending ? sortBy : $"-{sortBy}");
+
+            var skip = (pageNumber - 1) * pageSize;
+
+            var dataSpec = new QuerySpecification<User, UserDto>(
+                filter: filter,
+                sort: sort,
+                skip: skip,
+                take: pageSize,
+                projection: UserQueryConfig.Projection,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
+
+            var countSpec = new QueryCountSpecification<User>(
+                filter: filter,
+                allowedFields: UserQueryConfig.AllowedFields,
+                applyDefaultSoftDelete: true
+            );
+
+            var items = await _unitOfWork
+                .Repository<User>()
+                .ListAsync<UserDto>(dataSpec);
+
+            var totalCount = await _unitOfWork
+                .Repository<User>()
+                .CountAsync(countSpec);
+
+            return new PagedResult<UserDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged users with roles");
+            throw;
+        }
+    }
+
+    #endregion
+
+    #region GetAllRoles
+
+    public async Task<IEnumerable<string>> GetAllRolesAsync()
+    {
+        _logger.LogInformation("Retrieving all distinct roles");
+
+        try
+        {
+            // برای دریافت لیست نقش‌ها، می‌توانیم از پروجکشن ساده‌ای که فقط نقش را برمی‌گرداند استفاده کنیم
+            var users = await _unitOfWork.Repository<User>().ListAsync(spec: null); // همه کاربران
+            var roles = users.Select(u => u.Employee?.EmployeeType?.TypeName ?? (u.UserType == UserType.Customer ? "Customer" : "NoRole"))
+                             .Distinct()
+                             .ToList();
+            return roles;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving all roles");
+            throw;
+        }
+    }
+
+    #endregion
+
+    #region GetRolesByUserType
+
+    public async Task<List<string>> GetRolesByUserTypeAsync(string? userType)
+    {
+        _logger.LogInformation("Retrieving roles by user type: {UserType}", userType ?? "All");
+
+        try
+        {
+            if (Enum.TryParse<UserType>(userType, out var userTypeEnum))
+            {
+                var spec = new QuerySpecification<User, UserDto>(
+                    filter: $"usertype eq '{userTypeEnum}'",
+                    sort: null,
+                    skip: null,
+                    take: null,
+                    projection: UserQueryConfig.Projection,
+                    allowedFields: UserQueryConfig.AllowedFields,
+                    applyDefaultSoftDelete: false // می‌خواهیم همه را ببینیم
+                );
+                var users = await _unitOfWork.Repository<User>().ListAsync(spec: null);
+                var roles = users.Select(u => u.Employee?.EmployeeType?.TypeName ?? (u.UserType == UserType.Customer ? "Customer" : "NoRole"))
+                                 .Distinct()
+                                 .ToList();
+                return roles;
+            }
+            return new List<string>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving roles by user type");
+            throw;
+        }
+    }
+
+    #endregion
+
     #region Update
 
     public async Task<UserDto?> UpdateAsync(UpdateUserDto dto)
@@ -308,9 +502,7 @@ public sealed class UserService : IUserService
 
         try
         {
-            var user = await _unitOfWork
-                .Repository<User>()
-                .GetByIdAsync(dto.UserId);
+            var user = await _unitOfWork.Repository<User>().GetByIdAsync(dto.UserId);
 
             if (user is null)
             {
@@ -333,16 +525,13 @@ public sealed class UserService : IUserService
                 user.SecurityStamp = Guid.NewGuid().ToString();
             }
 
-            user.FirstName = dto.FirstName;
-            user.LastName = dto.LastName;
-            user.PhoneNumber = dto.PhoneNumber;
+            _mapper.Map(dto, user);
 
             _unitOfWork.Repository<User>().Update(user);
             await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation("User updated successfully: {UserId}", dto.UserId);
 
-            // Invalidate cache
             _cache.Remove($"{USER_FULL_CACHE_KEY_PREFIX}{user.UserId}");
             _cache.Remove(ALL_USERS_FULL_CACHE_KEY);
 
@@ -365,9 +554,7 @@ public sealed class UserService : IUserService
 
         try
         {
-            var user = await _unitOfWork
-                .Repository<User>()
-                .GetByIdAsync(id);
+            var user = await _unitOfWork.Repository<User>().GetByIdAsync(id);
 
             if (user is null)
             {
@@ -380,7 +567,6 @@ public sealed class UserService : IUserService
 
             _logger.LogInformation("User deleted successfully: {UserId}", id);
 
-            // Invalidate cache
             _cache.Remove($"{USER_FULL_CACHE_KEY_PREFIX}{id}");
             _cache.Remove(ALL_USERS_FULL_CACHE_KEY);
 
@@ -403,9 +589,7 @@ public sealed class UserService : IUserService
 
         try
         {
-            var user = await _unitOfWork
-                .Repository<User>()
-                .GetByIdAsync(id);
+            var user = await _unitOfWork.Repository<User>().GetByIdAsync(id);
 
             if (user is null)
             {
@@ -414,12 +598,13 @@ public sealed class UserService : IUserService
             }
 
             user.IsActive = isActive;
+            user.SecurityStamp = Guid.NewGuid().ToString();
+
             _unitOfWork.Repository<User>().Update(user);
             await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation("User {UserId} active status updated to: {IsActive}", id, isActive);
 
-            // Invalidate cache
             _cache.Remove($"{USER_FULL_CACHE_KEY_PREFIX}{id}");
             _cache.Remove(ALL_USERS_FULL_CACHE_KEY);
 
@@ -463,31 +648,6 @@ public sealed class UserService : IUserService
             PhoneNumber = user.PhoneNumber,
             IsActive = user.IsActive
         };
-
-    public Task<PagedResult<UserDto>> GetPagedWithRolesAsync(int pageNumber, int pageSize, string? search = null, string? sortBy = "UserId", bool ascending = true)
-    {
-        throw new NotImplementedException();
-    }
-
-    Task<IEnumerable<UserDto>> IUserService.GetAllAsync(string? search)
-    {
-        throw new NotImplementedException();
-    }
-
-    Task<IEnumerable<UserDto>> IUserService.GetAllUsersWithRoleNameAsync(string? search)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<IEnumerable<string>> GetAllRolesAsync()
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<List<string>> GetRolesByUserTypeAsync(string? userType)
-    {
-        throw new NotImplementedException();
-    }
 
     #endregion
 }
