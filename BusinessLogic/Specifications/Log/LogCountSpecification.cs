@@ -1,19 +1,18 @@
 ﻿using Application.Common.Specifications;
 using Application.Entities;
 using BusinessLogic.DTOs.Log;
-using BusinessLogic.Specifications.Log;
 using Application.Common.Helpers;
+using BusinessLogic.Specifications.Log;
 using System;
 using System.Linq.Expressions;
 
 namespace BusinessLogic.Specifications.Log
 {
-    public sealed class LogProjectionSpecification : BaseProjectionSpecification<Logs, LogEntryDto>
+    public sealed class LogCountSpecification : BaseSpecification<Logs>
     {
-        public LogProjectionSpecification(LogFilterDto filter)
+        public LogCountSpecification(LogFilterDto filter)
             : base(LogQueryConfig.AllowedFields)
         {
-            // ===== ساخت شرط (Criteria) =====
             Expression<Func<Logs, bool>> criteria = l => true;
 
             if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -39,22 +38,6 @@ namespace BusinessLogic.Specifications.Log
             }
 
             AddCriteria(criteria);
-
-            // ===== مرتب‌سازی =====
-            if (filter.SortOrder?.ToLower() == "asc")
-            {
-                ApplyOrderBy(l => l.TimeStamp);
-            }
-            else
-            {
-                ApplyOrderBy(l => l.TimeStamp, descending: true);
-            }
-
-            // ===== صفحه‌بندی =====
-            ApplyPaging((filter.PageNumber - 1) * filter.PageSize, filter.PageSize);
-
-            // ===== پروجکشن =====
-            SetProjection(LogQueryConfig.Projection);
         }
     }
 }

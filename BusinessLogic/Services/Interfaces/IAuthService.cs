@@ -10,10 +10,10 @@ namespace BusinessLogic.Services.Interfaces
 {
     public interface IAuthService
     {
-        Task<AuthResultDto> RegisterAsync(RegisterDto dto);
-        Task<AuthResultDto?> LoginAsync(LoginDto dto);
-        Task<AuthResultDto?> RefreshTokenAsync(string refreshToken);
-        Task LogoutSessionAsync(Guid sessionId);
-        Task LogoutAllAsync(int userId);
+        Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken cancellationToken = default);
+        Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken cancellationToken = default);
+        Task<AuthResultDto?> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
+        Task LogoutSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
+        Task LogoutAllAsync(int userId, CancellationToken cancellationToken = default);
     }
 }

@@ -9,6 +9,7 @@ namespace BusinessLogic.Specifications.Products
     {
         public static readonly string[] AllowedFields =
         {
+            "productid",
             "name",
             "price",
             "description",

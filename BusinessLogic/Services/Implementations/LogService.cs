@@ -1,65 +1,118 @@
-﻿using BusinessLogic.DTOs.Log;
-using BusinessLogic.Services.Interfaces;
-using Microsoft.Extensions.Configuration;
-using Dapper;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using BusinessLogic.DTOs.Shared;
-using AutoMapper;
-using Microsoft.EntityFrameworkCore;
+﻿using Application.Entities;
 using Application.Interfaces;
-using Application.Entities;
+using AutoMapper;
+using BusinessLogic.DTOs.Log;
+using BusinessLogic.DTOs.Shared;
+using BusinessLogic.Services.Interfaces;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using BusinessLogic.Specifications.Log;
 
 namespace BusinessLogic.Services.Implementations
 {
-    public class LogService : ILogService
+    public sealed class LogService : ILogService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
-        public LogService(IUnitOfWork unitOfWork, IMapper mapper)
+        private readonly ILogger<LogService> _logger;
+
+        public LogService(
+            IUnitOfWork unitOfWork,
+            IMapper mapper,
+            ILogger<LogService> logger)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _logger = logger;
         }
 
-        public async Task<PagedResult<LogEntryDto>> GetPagedAsync(LogFilterDto filter, CancellationToken cancellationToken = default)
+        #region GetPagedAsync
+
+        public async Task<PagedResult<LogEntryDto>> GetPagedAsync(
+            LogFilterDto filter,
+            CancellationToken cancellationToken = default)
         {
-            var spec = new LogProjectionSpecification(filter);
+            _logger.LogInformation("Retrieving paged logs. Page: {PageNumber}, Size: {PageSize}, Level: {Level}",
+                filter.PageNumber, filter.PageSize, filter.Level ?? "All");
 
-            var items = await _unitOfWork.Repository<Logs>()
-                .ListAsync(spec, cancellationToken);
-
-            var totalCount = await _unitOfWork.Repository<Logs>()
-                .CountAsync(spec.Criteria, cancellationToken);
-
-            return new PagedResult<LogEntryDto>
+            try
             {
-                Items = items,
-                TotalCount = totalCount,
-                PageNumber = filter.PageNumber,
-                PageSize = filter.PageSize
-            };
+                var itemSpec = new LogProjectionSpecification(filter);
+                var countSpec = new LogCountSpecification(filter);
+
+                var items = await _unitOfWork
+                    .Repository<Logs>()
+                    .ListAsync<LogEntryDto>(itemSpec, cancellationToken);
+
+                var totalCount = await _unitOfWork
+                    .Repository<Logs>()
+                    .CountAsync(countSpec, cancellationToken);
+
+                return new PagedResult<LogEntryDto>
+                {
+                    Items = items,
+                    TotalCount = totalCount,
+                    PageNumber = filter.PageNumber,
+                    PageSize = filter.PageSize
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving paged logs");
+                throw;
+            }
         }
 
-        public async Task<LogEntryDto> CreateAsync(LogEntryDto dto)
+        #endregion
+
+        #region CreateAsync
+
+        public async Task<LogEntryDto> CreateAsync(LogEntryDto dto, CancellationToken cancellationToken = default)
         {
-            var log = _mapper.Map<Logs>(dto);
-            await _unitOfWork.Repository<Logs>().AddAsync(log);
-            await _unitOfWork.SaveChangesAsync();
+            _logger.LogDebug("Creating log entry with level: {Level}", dto.Level);
 
-            return _mapper.Map<LogEntryDto>(log);
+            try
+            {
+                var log = _mapper.Map<Logs>(dto);
+                log.TimeStamp = DateTime.UtcNow; // اطمینان از تنظیم زمان
+
+                await _unitOfWork.Repository<Logs>().AddAsync(log, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Log entry created with ID: {Id}", log.Id);
+                return _mapper.Map<LogEntryDto>(log);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating log entry");
+                throw;
+            }
         }
 
-        public async Task<IEnumerable<LogEntryDto>> GetLatestAsync(int count = 100)
+        #endregion
+
+        #region GetLatestAsync
+
+        public async Task<IEnumerable<LogEntryDto>> GetLatestAsync(int count = 100, CancellationToken cancellationToken = default)
         {
-            var spec = new LatestLogsSpecification(count);
-            var items = await _unitOfWork.Repository<Logs>().ListAsync(spec);
+            _logger.LogDebug("Retrieving latest {Count} logs", count);
 
-            return _mapper.Map<IEnumerable<LogEntryDto>>(items);
+            try
+            {
+                var spec = new LogLatestSpecification(count);
+                var logs = await _unitOfWork
+                    .Repository<Logs>()
+                    .ListAsync<LogEntryDto>(spec, cancellationToken);
+
+                return logs;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving latest logs");
+                throw;
+            }
         }
+
+        #endregion
     }
 }

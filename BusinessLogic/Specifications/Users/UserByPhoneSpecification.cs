@@ -12,10 +12,12 @@ namespace BusinessLogic.Specifications.Users
     {
         public UserByPhoneSpecification(string phoneNumber, bool includeInactive = false)
         {
-            if (includeInactive)
-                Criteria = u => u.PhoneNumber == phoneNumber;
-            else
-                Criteria = u => u.PhoneNumber == phoneNumber && u.IsActive;
+            AddCriteria(u => u.PhoneNumber == phoneNumber);
+
+            if (!includeInactive)
+                AddCriteria(u => u.IsActive);
+
+            ApplyNoTracking(); // فقط خواندنی
         }
     }
 }

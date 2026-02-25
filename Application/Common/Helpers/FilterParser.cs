@@ -63,6 +63,8 @@ namespace Application.Common.Helpers
             var fieldToken = Consume(TokenType.Identifier, "Expected field name");
             var fieldPath = fieldToken.Value;
 
+            ValidatePropertyPath(fieldPath);
+
             // اعتبارسنجی فیلد
             if (_allowedFields != null &&
                 !_allowedFields.Contains(fieldPath,
@@ -128,6 +130,13 @@ namespace Application.Common.Helpers
             };
 
             return Expression.Lambda<Func<T, bool>>(body, parameter);
+        }
+
+        private void ValidatePropertyPath(string propertyPath)
+        {
+            int depth = propertyPath.Count(c => c == '.');
+            if (depth >= QueryGuard.MaxNestingDepth)
+                throw new ArgumentException($"Nesting depth too deep. Max {QueryGuard.MaxNestingDepth} levels.");
         }
 
         // متدهای کمکی برای پیمایش توکن‌ها

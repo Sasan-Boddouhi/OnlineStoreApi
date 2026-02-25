@@ -12,8 +12,10 @@ namespace BusinessLogic.Specifications.Auth
     {
         public RefreshTokenByIdentifierSpecification(string identifier)
         {
-            Criteria = t => t.TokenIdentifier == identifier;
+            AddCriteria(t => t.TokenIdentifier == identifier);
+
             AddInclude(t => t.Session);
+            AddInclude(t => t.User);
         }
     }
 }

@@ -11,7 +11,7 @@ namespace BusinessLogic.Services.Interfaces
     public interface ILogService
     {
         Task<PagedResult<LogEntryDto>> GetPagedAsync(LogFilterDto filter, CancellationToken cancellationToken = default);
-        Task<LogEntryDto> CreateAsync(LogEntryDto dto);
-        Task<IEnumerable<LogEntryDto>> GetLatestAsync(int count = 100);
+        Task<LogEntryDto> CreateAsync(LogEntryDto dto, CancellationToken cancellationToken = default);
+        Task<IEnumerable<LogEntryDto>> GetLatestAsync(int count = 100, CancellationToken cancellationToken = default);
     }
 }

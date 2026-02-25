@@ -14,8 +14,8 @@ namespace Application.Common.Specifications
         IReadOnlyList<(LambdaExpression KeySelector, bool Descending)> OrderExpressions { get; }
         int? Skip { get; }
         int? Take { get; }
-
         bool IsPagingEnabled { get; }
+        bool IsReadOnly { get; }
     }
 
 }

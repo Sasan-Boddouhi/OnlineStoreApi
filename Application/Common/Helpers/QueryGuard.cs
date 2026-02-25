@@ -5,7 +5,6 @@ namespace Application.Common.Helpers
 {
     public static class QueryGuard
     {
-        // محدودیت‌های پیش‌فرض
         public const int MaxFilterLength = 500;
         public const int MaxSortLength = 200;
         public const int MaxSortFields = 3;
@@ -18,10 +17,6 @@ namespace Application.Common.Helpers
             {
                 if (filter.Length > MaxFilterLength)
                     throw new ArgumentException($"Filter string too long. Max {MaxFilterLength} characters.");
-
-                int maxDots = filter.Split('.').Length - 1;
-                if (maxDots > MaxNestingDepth)
-                    throw new ArgumentException($"Nesting depth too deep. Max {MaxNestingDepth} levels.");
 
                 int conditionCount = filter.Split(new[] { " and ", " or " }, StringSplitOptions.None).Length;
                 if (conditionCount > MaxFilterConditions)

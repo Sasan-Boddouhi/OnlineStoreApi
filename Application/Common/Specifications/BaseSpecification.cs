@@ -8,16 +8,26 @@ public abstract class BaseSpecification<TEntity> : ISpecification<TEntity>
 
     private readonly HashSet<string> _allowedFields;
     private readonly List<(LambdaExpression KeySelector, bool Descending)> _orderExpressions = new();
+
+    private bool _isReadOnly;
+    public bool IsReadOnly => _isReadOnly;
     public IReadOnlyList<(LambdaExpression KeySelector, bool Descending)> OrderExpressions => _orderExpressions;
+
+    protected void ApplyNoTracking()
+    {
+        _isReadOnly = true;
+    }
 
     protected BaseSpecification(IEnumerable<string>? allowedFields = null)
     {
-        _allowedFields = allowedFields?.ToHashSet() ?? new HashSet<string>();
+        _allowedFields = allowedFields?
+            .Select(x => x.ToLower())
+            .ToHashSet() ?? new HashSet<string>();
     }
 
     protected void ValidateField(string propertyPath)
     {
-        if (_allowedFields.Any() && !_allowedFields.Contains(propertyPath))
+        if (_allowedFields.Any() && !_allowedFields.Contains(propertyPath.ToLower()))
             throw new InvalidOperationException($"Field '{propertyPath}' is not allowed for sorting.");
     }
     protected void ApplyOrderBy<TKey>(Expression<Func<TEntity, TKey>> keySelector, bool descending = false)

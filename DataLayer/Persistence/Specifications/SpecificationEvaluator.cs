@@ -19,6 +19,9 @@ namespace DataLayer.Persistence.Specifications
 
             query = spec.Includes.Aggregate(query, (current, include) => current.Include(include));
 
+            if (spec.IsReadOnly)
+                query = query.AsNoTracking();
+
             if (spec.OrderExpressions?.Any() == true)
             {
                 IOrderedQueryable<T>? orderedQuery = null;

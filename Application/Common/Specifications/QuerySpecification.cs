@@ -19,7 +19,7 @@ namespace Application.Common.Specifications
             bool applyDefaultSoftDelete = true)
             : base(allowedFields)
         {
-            if (applyDefaultSoftDelete)
+            if (applyDefaultSoftDelete && typeof(TEntity).GetProperty("IsActive") != null)
             {
                 bool hasIsActive = _hasIsActiveCache.GetOrAdd(typeof(TEntity), t =>
                 {
