@@ -1,13 +1,18 @@
 ﻿using BusinessLogic.Extensions;
-using DataLayer.Extensions;
 using Serilog;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using BusinessLogic.Services.Implementations;
-using DataLayer.Repositories.Implementations;
 using Online_Store_Application.Services;
 using Application.Interfaces;
+using Application.Middleware;
+using DataLayer.Extensions;
+using DataLayer.Security;
+using Application.Interfaces.Security;
+using BusinessLogic.Services.Interfaces;
+using DataLayer.Context;
+using Microsoft.EntityFrameworkCore;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -62,8 +67,14 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddDataLayerServices(builder.Configuration);
 builder.Services.AddBusinessLogicServices();
+builder.Services.AddFluentValidationServices();
+
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -95,7 +106,8 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins(
                     "https://localhost:5173",
-                    "http://localhost:5173"
+                    "http://localhost:5173",
+                    "http://localhost:5178"
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod()
@@ -104,6 +116,12 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    context.Database.Migrate();
+}
 
 // pipeline
 if (app.Environment.IsDevelopment())
@@ -114,6 +132,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseMiddleware<QueryMetricsMiddleware>();
 app.UseCors("ReactFrontend");
 
 app.UseAuthentication();

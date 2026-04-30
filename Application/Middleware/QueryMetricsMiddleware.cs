@@ -11,7 +11,6 @@ namespace Application.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<QueryMetricsMiddleware> _logger;
-        private readonly IHttpContextAccessor _httpContextAccessor; // برای دسترسی به HttpContext در متدهای غیر همزمان
 
         public QueryMetricsMiddleware(
             RequestDelegate next,
@@ -20,7 +19,6 @@ namespace Application.Middleware
         {
             _next = next;
             _logger = logger;
-            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -45,10 +43,22 @@ namespace Application.Middleware
             {
                 sw.Stop();
 
-                // دریافت اطلاعات کاربر از طریق سرویس‌های اسکوپ‌شده
-                var userService = context.RequestServices.GetService(typeof(ICurrentUserService)) as ICurrentUserService;
-                string? userId = userService?.GetCurrentUserId().ToString();
-                string? userName = userService?.GetCurrentUserName();
+                string? userId = null;
+                string? userName = null;
+                try
+                {
+                    var userService = context.RequestServices.GetService(typeof(ICurrentUserService)) as ICurrentUserService;
+                    if (userService != null)
+                    {
+                        var userIdValue = userService.TryGetCurrentUserId();
+                        userId = userIdValue?.ToString();
+                        userName = userService.GetCurrentUserName();
+                    }
+                }
+                catch
+                {
+                    // در صورت بروز خطا، اطلاعات کاربر ثبت نمی‌شود
+                }
 
                 var metrics = new QueryMetrics
                 {

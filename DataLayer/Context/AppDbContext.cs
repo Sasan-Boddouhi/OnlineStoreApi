@@ -96,6 +96,12 @@ namespace DataLayer.Context
                 .WithOne(p => p.Subcategory)
                 .HasForeignKey(p => p.SubcategoryId);
 
+            modelBuilder.Entity<Inventory>(entity =>
+            {
+                entity.Property(i => i.MinimumStock)
+                    .HasPrecision(18, 2);
+            });
+
             // Product : Inventory (1:N)
             modelBuilder.Entity<Product>()
                 .HasMany(p => p.Inventories)
@@ -232,6 +238,12 @@ namespace DataLayer.Context
                 .WithMany(s => s.RefreshTokens)
                 .HasForeignKey(r => r.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RefreshTokenEntity>()
+                .HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

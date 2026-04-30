@@ -33,9 +33,10 @@ namespace BusinessLogic.Specifications.Products
                 Price = p.Price,
                 Description = p.Description,
                 SubcategoryId = p.SubcategoryId,
-                IsActive = p.IsActive
-                // اگر navigation داری:
-                // CategoryName = p.Subcategory.Category.Name
+                IsActive = p.IsActive,
+                SubcategoryName = p.Subcategory.SubcategoryName,
+                CategoryName = p.Subcategory.Category.CategoryName,
+                CategoryId = p.Subcategory.CategoryId
             });
         }
     }

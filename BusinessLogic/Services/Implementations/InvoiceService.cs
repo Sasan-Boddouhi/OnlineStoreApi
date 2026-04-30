@@ -24,8 +24,11 @@ namespace BusinessLogic.Services.Implementations
         public async Task<InvoiceDto> CreateInvoiceAsync(int orderId, decimal taxAmount = 0, decimal discountAmount = 0)
         {
             var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId);
+
             if (order == null) throw new BusinessException("سفارش یافت نشد.");
-            if (!order.IsConfirmed) throw new BusinessException("سفارش باید تایید شده باشد.");
+
+            if (order.Status != OrderStatus.Processing)
+                throw new BusinessException("سفارش باید تایید شده باشد.");
 
             if (order.Invoice != null) throw new BusinessException("Invoice قبلا ایجاد شده است.");
 

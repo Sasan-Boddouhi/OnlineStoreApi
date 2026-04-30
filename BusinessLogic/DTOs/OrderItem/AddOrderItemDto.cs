@@ -6,13 +6,11 @@ using System.Threading.Tasks;
 
 namespace BusinessLogic.DTOs.OrderItem
 {
-    public class OrderItemDto
+    public class AddOrderItemDto
     {
-        public int OrderItemId { get; set; }
         public int ProductId { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
-        public decimal TotalPrice { get; set; } 
         public string? Description { get; set; }
     }
 }

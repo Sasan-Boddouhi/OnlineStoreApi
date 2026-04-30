@@ -13,66 +13,46 @@ namespace Online_Store_Application.Controllers
         private readonly IProductService _productService;
         private readonly ILogger<ProductsController> _logger;
 
-        public ProductsController(
-            IProductService productService,
-            ILogger<ProductsController> logger)
+        public ProductsController(IProductService productService, ILogger<ProductsController> logger)
         {
             _productService = productService;
             _logger = logger;
         }
 
-        // -------------------------
-        // GET all products (public)
-        // -------------------------
         [HttpGet]
-        public async Task<ActionResult<PagedResult<ProductDto>>> GetAsync(
-            [FromQuery] ProductFilterDto filter)
+        public async Task<ActionResult<PagedResult<ProductDto>>> GetProducts(
+            [FromQuery] string? filter,
+            [FromQuery] string? sort,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var result = await _productService.GetFilteredAsync(filter);
+            var result = await _productService.GetByQueryAsync(filter, sort, pageNumber, pageSize);
             return Ok(result);
         }
 
-        // -------------------------
-        // GET product by id (public)
-        // -------------------------
         [HttpGet("{id:int}")]
-        public async Task<ActionResult<ProductDto>> GetByIdAsync(int id)
+        public async Task<ActionResult<ProductDto>> GetProduct(int id)
         {
             var product = await _productService.GetByIdAsync(id);
             if (product == null)
                 return NotFound();
-
             return Ok(product);
         }
 
-        // -------------------------
-        // CREATE product (protected)
-        // -------------------------
         [HttpPost]
-        [Authorize(Roles = "Admin,Employee")] // فقط کاربران Admin یا Employee میتونن ایجاد کنن
-        public async Task<ActionResult<ProductDto>> CreateAsync(
-            [FromBody] CreateProductDto dto)
+        [Authorize(Roles = "Admin,Employee")]
+        public async Task<ActionResult<ProductDto>> CreateProduct(CreateProductDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             var created = await _productService.CreateAsync(dto);
-
-            return CreatedAtAction(
-                nameof(GetByIdAsync),
-                new { id = created.ProductId },
-                created
-            );
+            return CreatedAtAction(nameof(GetProduct), new { id = created.ProductId }, created);
         }
 
-        // -------------------------
-        // UPDATE product (protected)
-        // -------------------------
         [HttpPut("{id:int}")]
         [Authorize(Roles = "Admin,Employee")]
-        public async Task<ActionResult<ProductDto>> UpdateAsync(
-            int id,
-            [FromBody] UpdateProductDto dto)
+        public async Task<ActionResult<ProductDto>> UpdateProduct(int id, UpdateProductDto dto)
         {
             if (!ModelState.IsValid || id != dto.ProductId)
                 return BadRequest();
@@ -84,12 +64,9 @@ namespace Online_Store_Application.Controllers
             return Ok(updated);
         }
 
-        // -------------------------
-        // DELETE product (protected)
-        // -------------------------
         [HttpDelete("{id:int}")]
         [Authorize(Roles = "Admin,Employee")]
-        public async Task<IActionResult> DeleteAsync(int id)
+        public async Task<IActionResult> DeleteProduct(int id)
         {
             var success = await _productService.DeleteAsync(id);
             if (!success)

@@ -1,4 +1,6 @@
-﻿using FluentValidation;
+﻿using Application.Interfaces;
+using FluentValidation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
 using System.Reflection;

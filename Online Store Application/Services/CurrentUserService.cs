@@ -1,5 +1,4 @@
 ﻿using Application.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Online_Store_Application.Services
@@ -7,12 +6,10 @@ namespace Online_Store_Application.Services
     public class CurrentUserService : ICurrentUserService
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly IUnitOfWork _unitOfWork;
 
-        public CurrentUserService(IHttpContextAccessor httpContextAccessor, IUnitOfWork unitOfWork)
+        public CurrentUserService(IHttpContextAccessor httpContextAccessor)
         {
             _httpContextAccessor = httpContextAccessor;
-            _unitOfWork = unitOfWork;
         }
 
         public string GetCurrentUserName()
@@ -25,10 +22,13 @@ namespace Online_Store_Application.Services
         {
             var user = _httpContextAccessor.HttpContext?.User;
             if (user?.Identity?.IsAuthenticated != true)
-                return 0;
+                return null;
 
             var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return int.TryParse(userIdClaim, out var userId) ? userId : 0;
+            if (int.TryParse(userIdClaim, out var userId))
+                return userId;
+
+            return null;
         }
 
 
@@ -52,16 +52,6 @@ namespace Online_Store_Application.Services
             return user?.FindFirst(ClaimTypes.Role)?.Value;
         }
 
-        public async Task<int> GetCurrentCustomerId()
-        {
-            var userId = GetCurrentUserId();
 
-            var customerId = await _unitOfWork.Customer.Query()
-                                .Where(c => c.UserId == userId)
-                                .Select(c => (int?)c.CustomerId)
-                                .FirstOrDefaultAsync();
-
-            return customerId ?? throw new Exception($"Customer not found for user with ID: {userId}");
-        }
     }
 }

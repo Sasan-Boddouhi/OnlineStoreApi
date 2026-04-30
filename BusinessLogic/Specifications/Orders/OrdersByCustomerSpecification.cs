@@ -14,7 +14,7 @@ namespace BusinessLogic.Specifications.Orders
         {
             Criteria = o => o.CustomerId == customerId;
             AddInclude(o => o.OrderItems);
-            ApplyOrderByDescending(o => o.OrderDate);
+            ApplyOrderBy(o => o.OrderDate, false);
         }
     }
 }

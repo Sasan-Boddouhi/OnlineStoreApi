@@ -21,7 +21,7 @@ namespace Online_Store_Application.Controllers
         }
 
         // --------------------------------------------------
-        // GET: api/users?search=ali&includeRoles=true
+        // GET: api/users?search=ali&includeRoles=true&pageNumber=1&pageSize=20&sortBy=UserId&ascending=true
         // --------------------------------------------------
         [HttpGet]
         public async Task<IActionResult> GetAsync(
@@ -34,11 +34,9 @@ namespace Online_Store_Application.Controllers
         {
             try
             {
-                var pagedResult = includeRoles
-                    ? await _userService.GetPagedWithRolesAsync(pageNumber, pageSize, search, sortBy, ascending)
-                    : await _userService.GetPagedAsync(pageNumber, pageSize, search, sortBy, ascending);
-
-                return Ok(pagedResult);
+                // استفاده از متد جدید GetPagedAsync با پارامتر includeRoles
+                var result = await _userService.GetPagedAsync(pageNumber, pageSize, search, sortBy, ascending, includeRoles);
+                return Ok(result);
             }
             catch (Exception ex)
             {
@@ -46,8 +44,6 @@ namespace Online_Store_Application.Controllers
                 return StatusCode(500, "An error occurred while processing the request.");
             }
         }
-
-
 
         // --------------------------------------------------
         // GET: api/users/{id}?includeRoles=true
@@ -59,10 +55,7 @@ namespace Online_Store_Application.Controllers
         {
             try
             {
-                var user = includeRoles
-                    ? await _userService.GetByIdWithRoleNameAsync(id)
-                    : await _userService.GetByIdAsync(id);
-
+                var user = await _userService.GetByIdAsync(id, includeRoles);
                 if (user == null) return NotFound();
                 return Ok(user);
             }
@@ -156,15 +149,22 @@ namespace Online_Store_Application.Controllers
             }
         }
 
+        // --------------------------------------------------
+        // GET: api/users/me
+        // --------------------------------------------------
         [Authorize]
         [HttpGet("me")]
         public async Task<IActionResult> GetMyProfile()
         {
-            var userId = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
+            var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdClaim))
                 return Unauthorized();
 
-            var user = await _userService.GetByIdWithRoleNameAsync(Int32.Parse(userId));
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
+
+            // استفاده از متد GetByIdAsync با includeRoles = true
+            var user = await _userService.GetByIdAsync(userId, includeRoles: true);
             if (user == null)
                 return NotFound();
 

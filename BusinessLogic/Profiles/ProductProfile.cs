@@ -1,5 +1,6 @@
 ﻿using Application.Entities;
 using AutoMapper;
+using BusinessLogic.DTOs.Product;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,9 +18,9 @@ namespace BusinessLogic.Profiles
             //    .ForMember(dest => dest.CategoryId, opt => opt.MapFrom(src => src.Subcategory.CategoryId))
             //    .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Subcategory.Category.CategoryName));
 
-            //CreateMap<CreateProductDto, Product>()
-            //    .ForMember(dest => dest.SubcategoryId, opt => opt.MapFrom(src => src.ProductSubcategoryId));
-
+            CreateMap<CreateProductDto, Product>()
+                .ForMember(dest => dest.Subcategory, opt => opt.Ignore())
+                .ForMember(dest => dest.Inventories, opt => opt.Ignore());
 
             //CreateMap<UpdateProductDto, Product>().ReverseMap();
         }

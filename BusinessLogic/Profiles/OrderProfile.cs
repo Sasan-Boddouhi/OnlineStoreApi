@@ -16,9 +16,13 @@ namespace BusinessLogic.Profiles
         public OrderProfile()
         {
             CreateMap<Order, OrderDto>()
-                .ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.OrderItems));
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()))
+                .ReverseMap();
 
-            CreateMap<CreateOrderDto, Order>();
+            CreateMap<Order, OrderDetailsDto>()
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()))
+                .ForMember(dest => dest.Items, opt => opt.MapFrom(src => src.OrderItems))
+                .ReverseMap();
         }
     }
 }

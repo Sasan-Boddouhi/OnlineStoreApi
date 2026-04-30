@@ -40,7 +40,7 @@ namespace BusinessLogic.Services.Implementations
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
-                await ValidateProductCreationAsync(dto, cancellationToken);
+                await EnsureValidProductCreationAsync(dto, cancellationToken);
 
                 var entity = _mapper.Map<Product>(dto);
 
@@ -221,19 +221,27 @@ namespace BusinessLogic.Services.Implementations
 
         #region Private Methods
 
-        private async Task ValidateProductCreationAsync(CreateProductDto dto, CancellationToken cancellationToken)
+        private async Task EnsureValidProductCreationAsync(CreateProductDto dto, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("Checking for duplicate product name: {ProductName}", dto.Name);
+            // ۱. فیلدهای اجباری (DTO خودش Required دارد، اما باز هم بررسی کنیم)
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                throw new BusinessException("نام محصول الزامی است.");
 
-            var exists = await _unitOfWork.Repository<Product>().AnyAsync(p => p.Name == dto.Name, cancellationToken);
+            if (dto.Price <= 0)
+                throw new BusinessException("قیمت محصول باید بزرگتر از صفر باشد.");
 
-            if (exists)
-            {
-                _logger.LogWarning("Duplicate product name detected: {ProductName}", dto.Name);
-                throw new Exception("محصولی با این نام قبلاً ثبت شده است");
-            }
+            if (dto.SubcategoryId <= 0)
+                throw new BusinessException("ابتدا زیردسته‌بندی را انتخاب کنید.");
 
-            _logger.LogDebug("Product name validation passed for: {ProductName}", dto.Name);
+            var subcategoryExists = await _unitOfWork.Repository<ProductSubcategory>()
+                .AnyAsync(sc => sc.SubcategoryId == dto.SubcategoryId, cancellationToken);
+            if (!subcategoryExists)
+                throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.");
+
+            var nameExists = await _unitOfWork.Repository<Product>()
+                .AnyAsync(p => p.Name == dto.Name, cancellationToken);
+            if (nameExists)
+                throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.");
         }
 
         #endregion

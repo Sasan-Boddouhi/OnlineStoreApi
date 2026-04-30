@@ -27,16 +27,17 @@ namespace BusinessLogic.Services.Implementations
             var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId);
             if (order == null) throw new BusinessException("سفارش یافت نشد.");
 
-            var item = new OrderItem
-            {
-                OrderId = orderId,
-                ProductId = dto.ProductId,
-                Quantity = dto.Quantity,
-                UnitPrice = dto.UnitPrice
-            };
+            var item = new OrderItem(
+                productId: dto.ProductId,
+                quantity: dto.Quantity,
+                unitPrice: dto.UnitPrice,
+                description: dto.Description
+            );
+
+            item.OrderId = orderId;
 
             await _unitOfWork.Repository<OrderItem>().AddAsync(item);
-            order.AddItem(item); // TotalAmount بروزرسانی میشه
+            order.AddItem(item);
             await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation("Added item {ProductId} to order {OrderId}", dto.ProductId, orderId);

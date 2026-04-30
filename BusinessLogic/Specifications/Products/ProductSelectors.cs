@@ -24,8 +24,7 @@ namespace BusinessLogic.Specifications.Products
                 CategoryName = p.Subcategory.Category.CategoryName,
                 IsActive = p.IsActive,
                 Barcode = p.Barcode,
-                Weight = p.Weight,
-                Dimensions = p.Dimensions
+                ImageUrl = p.ImageUrl
             };
     }
 }

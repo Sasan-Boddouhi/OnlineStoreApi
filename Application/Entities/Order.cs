@@ -19,7 +19,7 @@ namespace Application.Entities
 
         public OrderStatus Status { get; private set; } = OrderStatus.Pending;
 
-        // ===== Shipping Snapshot =====
+        // Shipping Snapshot
         [Required, MaxLength(200)]
         public string ShippingFullName { get; set; } = null!;
 
@@ -29,27 +29,37 @@ namespace Application.Entities
         [Required, MaxLength(20)]
         public string ShippingPhoneNumber { get; set; } = null!;
 
-        public bool IsConfirmed { get; private set; }
-
         public int CustomerId { get; set; }
         public virtual Customer Customer { get; set; } = null!;
 
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
-
         public virtual Invoice? Invoice { get; set; }
-
-        // ===== Domain Methods =====
 
         public void AddItem(OrderItem item)
         {
+            item.OrderId = OrderId;
             OrderItems.Add(item);
+            RecalculateTotal();
+        }
+
+        public void RemoveItem(OrderItem item)
+        {
+            OrderItems.Remove(item);
             RecalculateTotal();
         }
 
         public void Confirm()
         {
-            IsConfirmed = true;
+            if (Status != OrderStatus.Pending)
+                throw new InvalidOperationException("Only pending orders can be confirmed.");
             Status = OrderStatus.Processing;
+        }
+
+        public void Cancel()
+        {
+            if (Status == OrderStatus.Shipped || Status == OrderStatus.Delivered)
+                throw new InvalidOperationException("Cannot cancel shipped or delivered orders.");
+            Status = OrderStatus.Cancelled;
         }
 
         private void RecalculateTotal()

@@ -3,6 +3,7 @@ using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.IdentityModel.Tokens.Jwt;
+using System.Numerics;
 using System.Security.Claims;
 
 namespace WebApi.Controllers
@@ -79,7 +80,7 @@ namespace WebApi.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized();
 
-            await _authService.LogoutAsync(userId);
+            await _authService.LogoutAllAsync(Convert.ToInt32(userId));
 
             return NoContent();
         }
