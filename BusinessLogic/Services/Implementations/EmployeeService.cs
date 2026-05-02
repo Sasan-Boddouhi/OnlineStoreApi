@@ -123,6 +123,22 @@ namespace BusinessLogic.Services.Implementations
             return employee == null ? null : _mapper.Map<EmployeeDto>(employee);
         }
 
+        public async Task<EmployeeDto?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            var filter = $"UserId eq {userId}";
+            var spec = new QuerySpecification<Employee, EmployeeDto>(
+                filter,
+                sort: null,
+                skip: null,
+                take: null,
+                projection: GetEmployeeProjection(),
+                allowedFields: AllowedEmployeeFields()
+            );
+
+            return await _unitOfWork.Repository<Employee>()
+                .FirstOrDefaultAsync<EmployeeDto>(spec, cancellationToken);
+        }
+
         public async Task<PagedResult<EmployeeDto>> GetAllAsync(
             string? filter,
             string? sort,
