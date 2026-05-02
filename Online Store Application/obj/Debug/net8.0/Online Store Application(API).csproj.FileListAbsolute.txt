@@ -184,6 +184,13 @@ D:\source\SupermarketWebApp\Online Store Application\obj\Debug\net8.0\ref\Online
 D:\source\SupermarketWebApp\Online Store Application\obj\Debug\net8.0\Online Store Application(API).MvcApplicationPartsAssemblyInfo.cs
 D:\source\SupermarketWebApp\Online Store Application\bin\Debug\net8.0\DataLayer.dll
 D:\source\SupermarketWebApp\Online Store Application\bin\Debug\net8.0\DataLayer.pdb
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).csproj.AssemblyReference.cache
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).GeneratedMSBuildEditorConfig.editorconfig
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).AssemblyInfoInputs.cache
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).AssemblyInfo.cs
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).csproj.CoreCompileInputs.cache
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).MvcApplicationPartsAssemblyInfo.cache
+D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).sourcelink.json
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\appsettings.Development.json
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\appsettings.json
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Online Store Application(API).staticwebassets.runtime.json
@@ -350,14 +357,7 @@ D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Dat
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Application.pdb
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\BusinessLogic.pdb
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\DataLayer.pdb
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).csproj.AssemblyReference.cache
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).GeneratedMSBuildEditorConfig.editorconfig
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).AssemblyInfoInputs.cache
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).AssemblyInfo.cs
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).csproj.CoreCompileInputs.cache
 D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).MvcApplicationPartsAssemblyInfo.cs
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).MvcApplicationPartsAssemblyInfo.cache
-D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\Online Store Application(API).sourcelink.json
 D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\staticwebassets.build.json
 D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\staticwebassets.development.json
 D:\source\Online Store Application\Online Store Application\obj\Debug\net8.0\staticwebassets\msbuild.Online Store Application(API).Microsoft.AspNetCore.StaticWebAssets.props
