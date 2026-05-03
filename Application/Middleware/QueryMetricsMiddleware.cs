@@ -1,33 +1,39 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using System.Diagnostics;
-using System.Security.Claims;
+﻿using System.Diagnostics;
 using Application.Interfaces;
 using Application.Models.Metrics;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
-namespace Application.Middleware
+namespace Application.Middleware;
+
+public class QueryMetricsMiddleware
 {
-    public class QueryMetricsMiddleware
+    private readonly RequestDelegate _next;
+    private readonly ILogger<QueryMetricsMiddleware> _logger;
+    private readonly IQueryMetricsService _metricsService;
+
+    public QueryMetricsMiddleware(
+        RequestDelegate next,
+        ILogger<QueryMetricsMiddleware> logger,
+        IQueryMetricsService metricsService)
     {
-        private readonly RequestDelegate _next;
-        private readonly ILogger<QueryMetricsMiddleware> _logger;
+        _next = next;
+        _logger = logger;
+        _metricsService = metricsService;
+    }
 
-        public QueryMetricsMiddleware(
-            RequestDelegate next,
-            ILogger<QueryMetricsMiddleware> logger,
-            IHttpContextAccessor httpContextAccessor)
+    public async Task InvokeAsync(HttpContext context)
+    {
+        using (_logger.BeginScope(new Dictionary<string, object>
         {
-            _next = next;
-            _logger = logger;
-        }
-
-        public async Task InvokeAsync(HttpContext context)
+            ["TraceId"] = context.TraceIdentifier,
+            ["Path"] = context.Request.Path,
+            ["Method"] = context.Request.Method
+        }))
         {
             var sw = Stopwatch.StartNew();
-
             var filter = context.Request.Query["filter"].FirstOrDefault();
             var sort = context.Request.Query["sort"].FirstOrDefault();
-
             bool exceptionThrown = false;
 
             try
@@ -55,10 +61,7 @@ namespace Application.Middleware
                         userName = userService.GetCurrentUserName();
                     }
                 }
-                catch
-                {
-                    // در صورت بروز خطا، اطلاعات کاربر ثبت نمی‌شود
-                }
+                catch { }
 
                 var metrics = new QueryMetrics
                 {
@@ -71,36 +74,19 @@ namespace Application.Middleware
                     ElapsedMilliseconds = sw.ElapsedMilliseconds,
                     HasException = exceptionThrown,
                     UserId = userId,
-                    UserName = userName
+                    UserName = userName,
+                    TraceId = context.TraceIdentifier 
                 };
 
-                LogMetrics(metrics);
+                await _metricsService.LogAsync(metrics);
             }
         }
+    }
 
-        private int CountConditions(string? filter)
-        {
-            if (string.IsNullOrWhiteSpace(filter))
-                return 0;
-
-            // تخمین تعداد شرایط با شمارش عملگرهای and و or
-            return filter.Split(new[] { " and ", " or " }, StringSplitOptions.RemoveEmptyEntries).Length;
-        }
-
-        private void LogMetrics(QueryMetrics metrics)
-        {
-            // ثبت ساختاریافته برای قابلیت جستجوی بهتر
-            _logger.LogInformation(
-                "QueryMetrics | Path: {Path} | UserId: {UserId} | UserName: {UserName} | Time: {Time}ms | FilterLen: {FilterLen} | SortFields: {SortFields} | Conditions: {Conditions} | Exception: {Exception}",
-                metrics.Path,
-                metrics.UserId,
-                metrics.UserName,
-                metrics.ElapsedMilliseconds,
-                metrics.FilterLength,
-                metrics.SortFields,
-                metrics.FilterConditions,
-                metrics.HasException
-            );
-        }
+    private int CountConditions(string? filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+            return 0;
+        return filter.Split(new[] { " and ", " or " }, StringSplitOptions.RemoveEmptyEntries).Length;
     }
 }

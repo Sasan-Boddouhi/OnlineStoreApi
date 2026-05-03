@@ -200,7 +200,6 @@ D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Onl
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Online Store Application(API).dll
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Online Store Application(API).pdb
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\AutoMapper.dll
-D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\AutoMapper.Extensions.Microsoft.DependencyInjection.dll
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Azure.Core.dll
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\Azure.Identity.dll
 D:\source\Online Store Application\Online Store Application\bin\Debug\net8.0\BCrypt.Net-Next.dll

@@ -13,7 +13,10 @@ namespace BusinessLogic.Extensions
         {
             services.AddHttpContextAccessor();
 
-            services.AddAutoMapper(Assembly.GetExecutingAssembly());
+            services.AddAutoMapper(cfg =>
+            {
+                cfg.AddMaps(Assembly.GetExecutingAssembly());
+            });
 
             var serviceTypes = Assembly.GetExecutingAssembly()
                 .GetTypes()

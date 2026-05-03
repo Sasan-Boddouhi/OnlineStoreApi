@@ -36,6 +36,13 @@ namespace DataLayer.Persistence.Specifications
             if (spec.IsPagingEnabled)
                 query = query.Skip(spec.Skip!.Value).Take(spec.Take!.Value);
 
+            // Tagging for EF Core debug
+            if (spec is Spec<T> concreteSpec && concreteSpec.Tags.Any())
+            {
+                var combinedTag = string.Join(" | ", concreteSpec.Tags);
+                query = query.TagWith(combinedTag);
+            }
+
             return query;
         }
 

@@ -1,33 +1,35 @@
 ﻿using Application.Common.Specifications;
 using System.Linq.Expressions;
 
-namespace Application.Interfaces
+public interface IGenericRepository<TEntity> where TEntity : class
 {
-    public interface IGenericRepository<TEntity> where TEntity : class
-    {
-        // Basic CRUD
-        Task<TEntity?> GetByIdAsync(object id, CancellationToken cancellationToken = default);
-        Task AddAsync(TEntity entity, CancellationToken cancellationToken = default);
-        Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-        void Update(TEntity entity);
-        void UpdateRange(IEnumerable<TEntity> entities);
-        void Delete(TEntity entity);
-        void DeleteRange(IEnumerable<TEntity> entities);
+    // CRUD ...
+    Task<TEntity?> GetByIdAsync(object id, CancellationToken ct = default);
+    Task AddAsync(TEntity entity, CancellationToken ct = default);
+    Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken ct = default);
+    void Update(TEntity entity);
+    void UpdateRange(IEnumerable<TEntity> entities);
+    void Delete(TEntity entity);
+    void DeleteRange(IEnumerable<TEntity> entities);
 
-        // Simple Queries
-        Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
-        Task<bool> AnyAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
-        Task<int> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default);
+    // Simple queries
+    Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken ct = default);
+    Task<int> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken ct = default);
 
-        // Specification (Entity Result)
-        Task<TEntity?> FirstOrDefaultAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
-        Task<TResult?> FirstOrDefaultAsync<TResult>(IProjectionSpecification<TEntity, TResult> spec, CancellationToken cancellationToken = default);
-        Task<IReadOnlyList<TEntity>> ListAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
-        Task<int> CountAsync(ISpecification<TEntity> spec, CancellationToken cancellationToken = default);
+    // Specification queries (entity)
+    Task<TEntity?> FirstOrDefaultAsync(Spec<TEntity> spec, CancellationToken ct = default);
+    Task<IReadOnlyList<TEntity>> ListAsync(Spec<TEntity> spec, CancellationToken ct = default);
+    Task<int> CountAsync(Spec<TEntity> spec, CancellationToken ct = default);
+    Task<bool> AnyAsync(Spec<TEntity> spec, CancellationToken ct = default);
 
-        // Projection Specification (DTO Result)
-        Task<IReadOnlyList<TResult>> ListAsync<TResult>(
-            IProjectionSpecification<TEntity, TResult> spec,
-            CancellationToken cancellationToken = default);
-    }
+    // Projected queries (DTO)
+    Task<TResult?> FirstOrDefaultAsync<TResult>(
+        Spec<TEntity> spec,
+        Expression<Func<TEntity, TResult>> selector,
+        CancellationToken ct = default) where TResult : class;
+
+    Task<IReadOnlyList<TResult>> ListAsync<TResult>(
+        Spec<TEntity> spec,
+        Expression<Func<TEntity, TResult>> selector,
+        CancellationToken ct = default) where TResult : class;
 }
