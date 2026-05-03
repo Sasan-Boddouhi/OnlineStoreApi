@@ -9,9 +9,8 @@ using Microsoft.Extensions.Caching.Memory;
 using Application.Exceptions;
 using Application.Interfaces.Security;
 using AutoMapper;
-using Application.Common.Helpers;
+using Application.Common.Queries;
 using BusinessLogic.Specifications.Users;
-using System.Linq.Expressions;
 
 namespace BusinessLogic.Services.Implementations;
 
@@ -127,19 +126,16 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new QuerySpecification<User, UserDto>(
-                filter: $"id eq {id}",
-                sort: null,
-                skip: null,
-                take: null,
-                projection: includeRoles ? UserQueryConfig.Projection : UserQueryConfig.SimpleProjection,
-                allowedFields: UserQueryConfig.AllowedFields,
-                applyDefaultSoftDelete: true
-            );
+            // در اینجا نیازی به QueryBuilder نیست، مستقیماً Spec می‌سازیم
+            var spec = new Spec<User>()
+                .Where(u => u.UserId == id)
+                .Where(u => u.IsActive);
+
+            var profile = includeRoles ? UserQueryProfile.WithRole : UserQueryProfile.Basic;
 
             var userDto = await _unitOfWork
                 .Repository<User>()
-                .FirstOrDefaultAsync<UserDto>(spec, cancellationToken);
+                .FirstOrDefaultAsync(spec, profile.Projection, cancellationToken);
 
             if (userDto is null)
             {
@@ -173,19 +169,13 @@ public sealed class UserService : IUserService
 
         try
         {
-            var spec = new QuerySpecification<User, UserDto>(
-                filter: $"phonenumber eq '{phoneNumber}'",
-                sort: null,
-                skip: null,
-                take: null,
-                projection: UserQueryConfig.SimpleProjection,
-                allowedFields: UserQueryConfig.AllowedFields,
-                applyDefaultSoftDelete: true
-            );
+            var spec = new Spec<User>()
+                .Where(u => u.PhoneNumber == phoneNumber)
+                .Where(u => u.IsActive);
 
             var userDto = await _unitOfWork
                 .Repository<User>()
-                .FirstOrDefaultAsync<UserDto>(spec, cancellationToken);
+                .FirstOrDefaultAsync(spec, UserQueryProfile.Basic.Projection, cancellationToken);
 
             if (userDto is null)
                 _logger.LogDebug("User not found with phone: {PhoneNumber}", phoneNumber);
@@ -219,21 +209,18 @@ public sealed class UserService : IUserService
 
         try
         {
-            var filter = string.IsNullOrWhiteSpace(search) ? null : $"firstname contains '{search}' or lastname contains '{search}' or phonenumber contains '{search}'";
-
-            var spec = new QuerySpecification<User, UserDto>(
-                filter: filter,
-                sort: null,
-                skip: null,
-                take: null,
-                projection: includeRoles ? UserQueryConfig.Projection : UserQueryConfig.SimpleProjection,
-                allowedFields: UserQueryConfig.AllowedFields,
-                applyDefaultSoftDelete: true
-            );
+            var query = new QueryContract
+            {
+                Filter = search,
+                Page = 1,
+                Size = int.MaxValue   // بدون محدودیت صفحه‌بندی
+            };
+            var profile = includeRoles ? UserQueryProfile.WithRole : UserQueryProfile.Basic;
+            var spec = QueryBuilder.BuildFromProfile(profile, query);
 
             var users = await _unitOfWork
                 .Repository<User>()
-                .ListAsync<UserDto>(spec, cancellationToken);
+                .ListAsync(spec, profile.Projection, cancellationToken);
 
             _logger.LogDebug("Retrieved {Count} users", users.Count);
 
@@ -268,52 +255,31 @@ public sealed class UserService : IUserService
         _logger.LogInformation("Retrieving paged users - Page: {PageNumber}, Size: {PageSize}, Search: {Search}, SortBy: {SortBy}, Ascending: {Ascending}, IncludeRoles: {IncludeRoles}",
             pageNumber, pageSize, search ?? "<none>", sortBy, ascending, includeRoles);
 
-        try
+        var query = new QueryContract
         {
-            QueryGuard.EnsureValid(search, sortBy);
+            Filter = search,
+            Sort = ascending ? sortBy : $"-{sortBy}",
+            Page = pageNumber,
+            Size = pageSize
+        };
 
-            var filter = string.IsNullOrWhiteSpace(search) ? null : $"firstname contains '{search}' or lastname contains '{search}' or phonenumber contains '{search}'";
-            var sort = string.IsNullOrWhiteSpace(sortBy) ? null : (ascending ? sortBy : $"-{sortBy}");
+        var profile = includeRoles ? UserQueryProfile.WithRole : UserQueryProfile.Basic;
 
-            var skip = (pageNumber - 1) * pageSize;
+        var spec = QueryBuilder.BuildFromProfile(profile, query);
+        var items = await _unitOfWork.Repository<User>()
+            .ListAsync(spec, profile.Projection, cancellationToken);
 
-            var dataSpec = new QuerySpecification<User, UserDto>(
-                filter: filter,
-                sort: sort,
-                skip: skip,
-                take: pageSize,
-                projection: includeRoles ? UserQueryConfig.Projection : UserQueryConfig.SimpleProjection,
-                allowedFields: UserQueryConfig.AllowedFields,
-                applyDefaultSoftDelete: true
-            );
+        var countSpec = QueryBuilder.BuildForCount(profile, query.Filter);
+        var totalCount = await _unitOfWork.Repository<User>()
+            .CountAsync(countSpec, cancellationToken);
 
-            var countSpec = new QueryCountSpecification<User>(
-                filter: filter,
-                allowedFields: UserQueryConfig.AllowedFields,
-                applyDefaultSoftDelete: true
-            );
-
-            var items = await _unitOfWork
-                .Repository<User>()
-                .ListAsync<UserDto>(dataSpec, cancellationToken);
-
-            var totalCount = await _unitOfWork
-                .Repository<User>()
-                .CountAsync(countSpec, cancellationToken);
-
-            return new PagedResult<UserDto>
-            {
-                Items = items,
-                TotalCount = totalCount,
-                PageNumber = pageNumber,
-                PageSize = pageSize
-            };
-        }
-        catch (Exception ex)
+        return new PagedResult<UserDto>
         {
-            _logger.LogError(ex, "Error retrieving paged users");
-            throw;
-        }
+            Items = items,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
     }
 
     #endregion
@@ -326,17 +292,14 @@ public sealed class UserService : IUserService
 
         try
         {
-            // ساخت شرط فیلتر در صورت وجود userType
-            Expression<Func<User, bool>>? criteria = null;
+            var spec = new Spec<User>();
+
             if (!string.IsNullOrWhiteSpace(userType) && Enum.TryParse<UserType>(userType, out var userTypeEnum))
             {
-                criteria = u => u.UserType == userTypeEnum;
+                spec.Where(u => u.UserType == userTypeEnum);
             }
 
-            // ایجاد specification با استفاده از ExpressionSpecification (کلاس concrete)
-            var spec = criteria == null
-                ? new ExpressionSpecification<User>(u => true)  // همه کاربران
-                : new ExpressionSpecification<User>(criteria);
+            spec.Include(u => u.Employee.EmployeeType); // بارگذاری داده‌های مرتبط
 
             var users = await _unitOfWork.Repository<User>().ListAsync(spec, cancellationToken);
 

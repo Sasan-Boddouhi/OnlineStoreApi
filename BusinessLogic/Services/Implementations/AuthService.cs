@@ -3,13 +3,11 @@ using Application.Exceptions;
 using Application.Helper;
 using Application.Interfaces;
 using Application.Interfaces.Security;
+using Application.Common.Specifications;   // ← Spec<T>
 using AutoMapper;
 using BusinessLogic.DTOs.Auth;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
-using BusinessLogic.Specifications.Auth;
-using BusinessLogic.Specifications.Sessions;
-using BusinessLogic.Specifications.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
@@ -115,7 +113,12 @@ public sealed class AuthService : IAuthService
 
         try
         {
-            var spec = new UserByPhoneSpecification(dto.PhoneNumber, includeInactive: false);
+            // ساختن Spec به صورت فلوئنت و فعال کردن Tracking برای ذخیره‌سازی تغییرات
+            var spec = new Spec<User>()
+                .Where(u => u.PhoneNumber == dto.PhoneNumber)
+                .Where(u => u.IsActive)          // فقط کاربران فعال
+                .AsTracking();                   // مطمئن می‌شویم تغییرات ذخیره شوند
+
             var user = await _unitOfWork
                 .Repository<User>()
                 .FirstOrDefaultAsync(spec, cancellationToken);
@@ -191,7 +194,12 @@ public sealed class AuthService : IAuthService
     public async Task<AuthResultDto?> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
         var identifier = ComputeSha256Hash(refreshToken);
-        var spec = new RefreshTokenByIdentifierSpecification(identifier);
+        var spec = new Spec<RefreshTokenEntity>()
+            .Where(t => t.TokenIdentifier == identifier)
+            .Include(t => t.Session)
+            .Include(t => t.User)
+            .AsTracking();                      // نیاز به به‌روزرسانی توکن
+
         var token = await _unitOfWork
             .Repository<RefreshTokenEntity>()
             .FirstOrDefaultAsync(spec, cancellationToken);
@@ -217,7 +225,6 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            // بررسی انقضای idle قبل از هر چیز
             if (token.Session.IsIdleExpired(IdleTimeout))
             {
                 token.Session.Status = UserSession.SessionStatus.Expired;
@@ -227,7 +234,6 @@ public sealed class AuthService : IAuthService
                 return null;
             }
 
-            // بررسی مجدد وضعیت توکن (با همان token که تحت نظر است)
             if (token.IsRevoked || token.ExpiryDate <= DateTime.UtcNow)
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
@@ -235,16 +241,12 @@ public sealed class AuthService : IAuthService
                 return null;
             }
 
-            // ابطال توکن فعلی
             token.IsRevoked = true;
             token.RevokedAtUtc = DateTime.UtcNow;
-
-            // به‌روزرسانی آخرین فعالیت نشست
             token.Session.LastActivityUtc = DateTime.UtcNow;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // ایجاد توکن جدید (خودش در تراکنش ذخیره می‌کند)
             var result = await CreateAuthResultAsync(
                 token.UserId,
                 token.SessionId,
@@ -282,7 +284,10 @@ public sealed class AuthService : IAuthService
 
     public async Task LogoutAllAsync(int userId, CancellationToken cancellationToken = default)
     {
-        var spec = new ActiveUserSessionsSpecification(userId);
+        var spec = new Spec<UserSession>()
+            .Where(s => s.UserId == userId && s.Status == UserSession.SessionStatus.Active)
+            .AsTracking();                     // می‌خواهیم تغییر دهیم
+
         var sessions = await _unitOfWork
             .Repository<UserSession>()
             .ListAsync(spec, cancellationToken);
@@ -318,7 +323,11 @@ public sealed class AuthService : IAuthService
 
     private async Task<(User user, string accessToken)> GenerateAccessTokenAsync(int userId, CancellationToken cancellationToken)
     {
-        var spec = new UserWithRoleSpecification(userId);
+        var spec = new Spec<User>()
+            .Where(u => u.UserId == userId)
+            .Include(u => u.Employee.EmployeeType)
+            .AsTracking();                     // خواندن برای ساختن Claims، Tracking لازم نیست ولی بی‌ضرر است
+
         var user = await _unitOfWork
             .Repository<User>()
             .FirstOrDefaultAsync(spec, cancellationToken);

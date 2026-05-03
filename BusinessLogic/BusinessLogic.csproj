@@ -24,4 +24,9 @@
     <ProjectReference Include="..\..\Online Store Application\Application\Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Specifications\Auth\" />
+    <Folder Include="Specifications\Sessions\" />
+  </ItemGroup>
+
 </Project>
