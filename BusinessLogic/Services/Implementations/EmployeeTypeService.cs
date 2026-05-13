@@ -1,4 +1,5 @@
-﻿using Application.Common.Specifications;
+﻿using Application.Common.Queries;
+using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
@@ -6,6 +7,7 @@ using AutoMapper;
 using BusinessLogic.DTOs.EmployeeType;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Specifications.EmployeeTypes;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations
@@ -115,28 +117,19 @@ namespace BusinessLogic.Services.Implementations
         }
 
         public async Task<PagedResult<EmployeeTypeDto>> GetAllAsync(
-            string? filter,
-            string? sort,
-            int pageNumber,
-            int pageSize,
+            string? filter, string? sort, int pageNumber, int pageSize,
             CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Fetching employee types page {Page}", pageNumber);
+            var query = new QueryContract { Filter = filter, Sort = sort, Page = pageNumber, Size = pageSize };
+            var profile = EmployeeTypeQueryProfile.Profile; // QueryProfile<EmployeeType, EmployeeTypeDto>
+            var spec = QueryBuilder.BuildFromProfile(profile, query);
 
-            var allowedFields = new[] { "EmployeeTypeId", "TypeName", "Description" };
+            var items = await _unitOfWork.Repository<EmployeeType>()
+                .ListAsync(spec, profile.Projection, cancellationToken);
 
-            var spec = new QuerySpecification<EmployeeType, EmployeeTypeDto>(
-                filter,
-                sort,
-                (pageNumber - 1) * pageSize,
-                pageSize,
-                GetProjection(),
-                allowedFields);
-
-            var countSpec = new QueryCountSpecification<EmployeeType>(filter, allowedFields);
-
-            var items = await _unitOfWork.Repository<EmployeeType>().ListAsync<EmployeeTypeDto>(spec, cancellationToken);
-            var total = await _unitOfWork.Repository<EmployeeType>().CountAsync(countSpec, cancellationToken);
+            var countSpec = QueryBuilder.BuildForCount(profile, query.Filter);
+            var total = await _unitOfWork.Repository<EmployeeType>()
+                .CountAsync(countSpec, cancellationToken);
 
             return new PagedResult<EmployeeTypeDto>
             {
@@ -144,16 +137,6 @@ namespace BusinessLogic.Services.Implementations
                 TotalCount = total,
                 PageNumber = pageNumber,
                 PageSize = pageSize
-            };
-        }
-
-        private static System.Linq.Expressions.Expression<System.Func<EmployeeType, EmployeeTypeDto>> GetProjection()
-        {
-            return et => new EmployeeTypeDto
-            {
-                EmployeeTypeId = et.EmployeeTypeId,
-                TypeName = et.TypeName,
-                Description = et.Description
             };
         }
     }

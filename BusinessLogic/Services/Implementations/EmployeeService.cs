@@ -1,4 +1,5 @@
-﻿using Application.Common.Specifications;
+﻿using Application.Common.Queries;
+using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
@@ -6,6 +7,7 @@ using AutoMapper;
 using BusinessLogic.DTOs.Employee;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Specifications.Employees;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations
@@ -23,6 +25,8 @@ namespace BusinessLogic.Services.Implementations
             _logger = logger;
         }
 
+        #region Create
+
         public async Task<EmployeeDto> CreateAsync(CreateEmployeeDto dto, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Creating employee for UserId: {UserId}", dto.UserId);
@@ -33,8 +37,6 @@ namespace BusinessLogic.Services.Implementations
                 await ValidateEmployeeCreationAsync(dto, cancellationToken);
 
                 var entity = _mapper.Map<Employee>(dto);
-                // اگر در `AuditableEntity` فیلدی مثل IsActive ندارید، می‌توانید پیش‌فرض بگذارید
-                // entity.IsActive = true; // در صورت وجود
 
                 await _unitOfWork.Repository<Employee>().AddAsync(entity, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -55,6 +57,10 @@ namespace BusinessLogic.Services.Implementations
                 throw new BusinessException("خطا در ایجاد کارمند", ex);
             }
         }
+
+        #endregion
+
+        #region Update
 
         public async Task<EmployeeDto?> UpdateAsync(UpdateEmployeeDto dto, CancellationToken cancellationToken = default)
         {
@@ -94,6 +100,10 @@ namespace BusinessLogic.Services.Implementations
             return _mapper.Map<EmployeeDto>(entity);
         }
 
+        #endregion
+
+        #region Delete
+
         public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation("Deleting employee ID: {EmployeeId}", id);
@@ -105,7 +115,6 @@ namespace BusinessLogic.Services.Implementations
                 return false;
             }
 
-            // در صورت تمایل به SoftDelete مشروط بر وجود فیلد IsActive (اینجا حذف سخت)
             _unitOfWork.Repository<Employee>().Delete(employee);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -113,55 +122,50 @@ namespace BusinessLogic.Services.Implementations
             return true;
         }
 
+        #endregion
+
+        #region GetById
+
         public async Task<EmployeeDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
         {
-            _logger.LogDebug("Get employee by ID: {EmployeeId}", id);
+            var profile = EmployeeQueryProfile.Profile;
+            var spec = QueryBuilder.BuildSingle(profile, e => e.EmployeeId == id);
 
-            var employee = await _unitOfWork.Repository<Employee>()
-                .GetByIdAsync(id, cancellationToken);
-
-            return employee == null ? null : _mapper.Map<EmployeeDto>(employee);
+            return await _unitOfWork.Repository<Employee>()
+                .FirstOrDefaultAsync(spec, profile.Projection, cancellationToken);
         }
+
+        #endregion
+
+        #region GetByUserId
 
         public async Task<EmployeeDto?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
         {
-            var filter = $"UserId eq {userId}";
-            var spec = new QuerySpecification<Employee, EmployeeDto>(
-                filter,
-                sort: null,
-                skip: null,
-                take: null,
-                projection: GetEmployeeProjection(),
-                allowedFields: AllowedEmployeeFields()
-            );
+            _logger.LogDebug("Get employee by UserId: {UserId}", userId);
+
+            var profile = EmployeeQueryProfile.Profile;
+            var spec = QueryBuilder.BuildSingle(profile, e => e.UserId == userId);
 
             return await _unitOfWork.Repository<Employee>()
-                .FirstOrDefaultAsync<EmployeeDto>(spec, cancellationToken);
+                .FirstOrDefaultAsync(spec, profile.Projection, cancellationToken);
         }
 
+        #endregion
+
+        #region GetAll (Paged)
+
         public async Task<PagedResult<EmployeeDto>> GetAllAsync(
-            string? filter,
-            string? sort,
-            int pageNumber,
-            int pageSize,
-            CancellationToken cancellationToken = default)
+            string? filter, string? sort, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Fetching employees page {Page}", pageNumber);
-
-            var spec = new QuerySpecification<Employee, EmployeeDto>(
-                filter,
-                sort,
-                (pageNumber - 1) * pageSize,
-                pageSize,
-                GetEmployeeProjection(),
-                AllowedEmployeeFields());
-
-            var countSpec = new QueryCountSpecification<Employee>(filter, AllowedEmployeeFields());
+            var query = new QueryContract { Filter = filter, Sort = sort, Page = pageNumber, Size = pageSize };
+            var profile = EmployeeQueryProfile.Profile; // QueryProfile<Employee, EmployeeDto>
+            var spec = QueryBuilder.BuildFromProfile(profile, query); // IQueryProfile<Employee> پذیرفته می‌شود
 
             var items = await _unitOfWork.Repository<Employee>()
-                .ListAsync<EmployeeDto>(spec, cancellationToken);
-            var total = await _unitOfWork.Repository<Employee>()
-                .CountAsync(countSpec, cancellationToken);
+                .ListAsync(spec, profile.Projection, cancellationToken);
+
+            var countSpec = QueryBuilder.BuildForCount(profile, query.Filter);
+            var total = await _unitOfWork.Repository<Employee>().CountAsync(countSpec, cancellationToken);
 
             return new PagedResult<EmployeeDto>
             {
@@ -172,7 +176,9 @@ namespace BusinessLogic.Services.Implementations
             };
         }
 
-        #region Helpers
+        #endregion
+
+        #region Validation
 
         private async Task ValidateEmployeeCreationAsync(CreateEmployeeDto dto, CancellationToken cancellationToken)
         {
@@ -213,30 +219,6 @@ namespace BusinessLogic.Services.Implementations
             if (userAlreadyEmployee)
                 throw new BusinessException("این کاربر از قبل کارمند است.");
         }
-
-        private static System.Linq.Expressions.Expression<System.Func<Employee, EmployeeDto>> GetEmployeeProjection()
-        {
-            return e => new EmployeeDto
-            {
-                EmployeeId = e.EmployeeId,
-                UserId = e.UserId,
-                UserFullName = e.User.FullName,
-                PhoneNumber = e.User.PhoneNumber,
-                EmployeeTypeId = e.EmployeeTypeId,
-                EmployeeTypeName = e.EmployeeType.TypeName,
-                EmployeeNumber = e.EmployeeNumber,
-                HireDate = e.HireDate,
-                TerminationDate = e.TerminationDate,
-                Salary = e.Salary,
-                IsActive = true // یا بر اساس فیلد واقعی
-            };
-        }
-
-        private static string[] AllowedEmployeeFields() => new[]
-        {
-            "EmployeeId", "UserId", "EmployeeTypeId", "EmployeeNumber",
-            "HireDate", "TerminationDate", "Salary"
-        };
 
         #endregion
     }

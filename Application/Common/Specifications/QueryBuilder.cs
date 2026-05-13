@@ -1,5 +1,6 @@
 ﻿using Application.Common.Helpers;
 using Application.Common.Queries;
+using System.Linq.Expressions;
 
 namespace Application.Common.Specifications;
 
@@ -55,6 +56,15 @@ public static class QueryBuilder
         return spec;
     }
 
+    public static Spec<TEntity> ApplyIncludes<TEntity>(
+    Spec<TEntity> spec,
+    IQueryProfile<TEntity> profile) where TEntity : class
+    {
+        foreach (var include in profile.Includes)
+            spec.Include(include);
+        return spec;
+    }
+
     public static Spec<TEntity> BuildForCount<TEntity>(
         IQueryProfile<TEntity> profile,
         string? filter) where TEntity : class
@@ -67,6 +77,22 @@ public static class QueryBuilder
         var filterExpr = QueryInterpreter.ParseFilter<TEntity>(filter, profile.AllowedFields);
         if (filterExpr != null)
             spec.Where(filterExpr);
+
+        return spec;
+    }
+
+    public static Spec<TEntity> BuildSingle<TEntity>(
+    IQueryProfile<TEntity> profile,
+    Expression<Func<TEntity, bool>> predicate) where TEntity : class
+    {
+        var spec = new Spec<TEntity>();
+
+        if (profile.BaseCriteria != null)
+            spec.Where(profile.BaseCriteria);
+
+        spec.Where(predicate);
+
+        ApplyIncludes(spec, profile);
 
         return spec;
     }
