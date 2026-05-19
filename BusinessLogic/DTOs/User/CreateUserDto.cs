@@ -15,8 +15,8 @@ namespace BusinessLogic.DTOs.User
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
         public string Password { get; set; } = null!;
-        public string DateOfBirth { get; set; } = null!;
+        public string? DateOfBirth { get; set; }
         public List<CreateAddressDto>? Addresses { get; set; } = new();
-
+        public string Email { get; internal set; } = null!;
     }
 }

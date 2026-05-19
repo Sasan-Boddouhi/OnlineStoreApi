@@ -15,7 +15,7 @@ namespace BusinessLogic.DTOs.User
         public string PhoneNumber { get; set; } = string.Empty;
         public string FullName => $"{FirstName} {LastName}";
 
-        public string DateOfBirth { get; set; } = string.Empty;
+        public string? DateOfBirth { get; set; }
         public bool IsActive { get; set; }
         public string RoleName { get; set; } = string.Empty;
         public string UserTypeName { get; set; } = string.Empty;

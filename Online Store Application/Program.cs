@@ -75,6 +75,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -130,11 +131,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
 app.UseRouting();
-app.UseMiddleware<QueryMetricsMiddleware>();
 app.UseCors("ReactFrontend");
-
+app.UseMiddleware<QueryMetricsMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 

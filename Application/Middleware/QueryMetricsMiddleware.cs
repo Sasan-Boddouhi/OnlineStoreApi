@@ -2,6 +2,7 @@
 using Application.Interfaces;
 using Application.Models.Metrics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Middleware;
@@ -10,16 +11,14 @@ public class QueryMetricsMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<QueryMetricsMiddleware> _logger;
-    private readonly IQueryMetricsService _metricsService;
+
 
     public QueryMetricsMiddleware(
         RequestDelegate next,
-        ILogger<QueryMetricsMiddleware> logger,
-        IQueryMetricsService metricsService)
+        ILogger<QueryMetricsMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _metricsService = metricsService;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -49,6 +48,8 @@ public class QueryMetricsMiddleware
             {
                 sw.Stop();
 
+                var metricsService = context.RequestServices.GetRequiredService<IQueryMetricsService>();
+
                 string? userId = null;
                 string? userName = null;
                 try
@@ -75,15 +76,15 @@ public class QueryMetricsMiddleware
                     HasException = exceptionThrown,
                     UserId = userId,
                     UserName = userName,
-                    TraceId = context.TraceIdentifier 
+                    TraceId = context.TraceIdentifier
                 };
 
-                await _metricsService.LogAsync(metrics);
+                await metricsService.LogAsync(metrics);
             }
         }
     }
 
-    private int CountConditions(string? filter)
+    private static int CountConditions(string? filter)
     {
         if (string.IsNullOrWhiteSpace(filter))
             return 0;

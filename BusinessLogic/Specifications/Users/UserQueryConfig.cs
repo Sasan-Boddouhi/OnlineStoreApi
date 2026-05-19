@@ -1,4 +1,5 @@
 ﻿using Application.Entities;
+using Application.Helper;
 using BusinessLogic.DTOs.User;
 using System;
 using System.Linq.Expressions;
@@ -8,7 +9,7 @@ namespace BusinessLogic.Specifications.Users;
 public static class UserQueryConfig
 {
     public static readonly string[] AllowedFields =
-    {
+{
         "firstname",
         "lastname",
         "phonenumber",
@@ -16,8 +17,6 @@ public static class UserQueryConfig
         "isactive",
         "employeetype.typename"
     };
-
-    // پروجکشن ساده (بدون نقش)
     public static Expression<Func<User, UserDto>> SimpleProjection =>
         u => new UserDto
         {
@@ -27,10 +26,11 @@ public static class UserQueryConfig
             PhoneNumber = u.PhoneNumber,
             IsActive = u.IsActive,
             Email = u.Email,
-            DateOfBirth = u.DateOfBirth.ToString("yyyy/MM/dd") // فرمت دلخواه
+            DateOfBirth = u.DateOfBirth != DateTime.MinValue
+                ? PersianDateHelper.ToPersian(u.DateOfBirth)
+                : null
         };
 
-    // پروجکشن با نقش (برای نمایش نقش کاربر)
     public static Expression<Func<User, UserDto>> ProjectionWithRole =>
         u => new UserDto
         {
@@ -40,7 +40,9 @@ public static class UserQueryConfig
             PhoneNumber = u.PhoneNumber,
             IsActive = u.IsActive,
             Email = u.Email,
-            DateOfBirth = u.DateOfBirth.ToString("yyyy/MM/dd"),
+            DateOfBirth = u.DateOfBirth != DateTime.MinValue
+                ? PersianDateHelper.ToPersian(u.DateOfBirth)
+                : null,
             RoleName = u.Employee != null && u.Employee.EmployeeType != null
                 ? u.Employee.EmployeeType.TypeName
                 : (u.UserType == UserType.Customer ? "Customer" : "NoRole")

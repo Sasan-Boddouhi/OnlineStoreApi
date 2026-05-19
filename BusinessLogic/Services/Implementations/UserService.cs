@@ -2,6 +2,7 @@
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
+using Application.Helper;
 using Application.Interfaces;
 using Application.Interfaces.Security;
 using AutoMapper;
@@ -191,6 +192,11 @@ public sealed class UserService : IUserService
             user.SecurityStamp = Guid.NewGuid().ToString();
             user.IsActive = true;
 
+            if (!string.IsNullOrWhiteSpace(dto.DateOfBirth))
+            {
+                user.DateOfBirth = PersianDateHelper.ToGregorian(dto.DateOfBirth);
+            }
+
             await _unitOfWork.Repository<User>().AddAsync(user, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -248,6 +254,12 @@ public sealed class UserService : IUserService
         }
 
         _mapper.Map(dto, user);
+
+        if (!string.IsNullOrWhiteSpace(dto.DateOfBirth))
+        {
+            user.DateOfBirth = PersianDateHelper.ToGregorian(dto.DateOfBirth);
+        }
+
         _unitOfWork.Repository<User>().Update(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
