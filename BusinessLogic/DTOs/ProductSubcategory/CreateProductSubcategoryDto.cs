@@ -8,5 +8,7 @@ namespace BusinessLogic.DTOs.ProductSubcategory
 {
     public class CreateProductSubcategoryDto
     {
+        public string? SubcategoryName { get; internal set; }
+        public int CategoryId { get; internal set; }
     }
 }

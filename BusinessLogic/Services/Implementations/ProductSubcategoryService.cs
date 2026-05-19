@@ -1,221 +1,201 @@
-﻿using Application.Common.Specifications;
+﻿using Application.Common.Queries;
+using Application.Common.Specifications;
 using Application.Entities;
+using Application.Exceptions;
 using Application.Interfaces;
 using AutoMapper;
 using BusinessLogic.DTOs.ProductSubcategory;
-using BusinessLogic.DTOs.User;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.ProductSubcategories;
-using BusinessLogic.Specifications.Users;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using static Dapper.SqlMapper;
 
-namespace BusinessLogic.Services.Implementations
+namespace BusinessLogic.Services.Implementations;
+
+public sealed class ProductSubcategoryService : IProductSubcategoryService
 {
-    public class ProductSubcategoryService : IProductSubcategoryService
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<ProductSubcategoryService> _logger;
+
+    public ProductSubcategoryService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ICurrentUserService currentUserService,
+        ILogger<ProductSubcategoryService> logger)
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IMapper _mapper;
-        private readonly ICurrentUserService _currentUserService;
-        private readonly ILogger<ProductSubcategoryService> _logger;
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+        _currentUserService = currentUserService;
+        _logger = logger;
+    }
 
-        public ProductSubcategoryService(IUnitOfWork unitOfWork, IMapper mapper, ICurrentUserService currentUserService,
-            ILogger<ProductSubcategoryService> logger)
+    #region GetByQueryAsync (متد اصلی جستجو)
+
+    public async Task<PagedResult<ProductSubcategoryDto>> GetByQueryAsync(
+        QueryContract<ProductSubcategory> query,
+        CancellationToken cancellationToken = default)
+    {
+        var spec = query.ToSpec();
+
+        // انتخاب پروجکشن بر اساس نیاز (اختیاری: در صورت وجود فیلتر روی CategoryId می‌توان از Projection کامل استفاده کرد)
+        var projection = ProductSubcategoryQueryConfig.Projection;
+
+        var items = await _unitOfWork.Repository<ProductSubcategory>()
+            .ListAsync(spec, projection, cancellationToken);
+
+        var totalCount = await _unitOfWork.Repository<ProductSubcategory>()
+            .CountAsync(spec, cancellationToken);
+
+        int pageNumber, pageSize;
+        if (query.Skip.HasValue || query.Take.HasValue)
         {
-            _unitOfWork = unitOfWork;
-            _mapper = mapper;
-            _currentUserService = currentUserService;
-            _logger = logger;
+            pageSize = query.Take ?? 20;
+            var skip = query.Skip ?? 0;
+            pageNumber = skip / pageSize + 1;
+        }
+        else
+        {
+            pageNumber = query.Page ?? 1;
+            pageSize = query.Size ?? 20;
         }
 
-        public async Task<ProductSubcategoryDto> CreateAsync(CreateProductSubcategoryDto dto, CancellationToken cancellationToken = default)
+        return new PagedResult<ProductSubcategoryDto>
         {
-            try
-            {
-                var Subcategory = _mapper.Map<ProductSubcategory>(dto);
-                Subcategory.CreatedOn = DateTime.Now;
-                Subcategory.CreatedById = _currentUserService.GetCurrentUserId();
+            Items = items,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+    }
 
-                await _unitOfWork.Repository<ProductSubcategory>().AddAsync(Subcategory, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+    #endregion
 
-                _logger.LogInformation("زیردسته‌بندی با Id={Id} و Name={Name} ایجاد شد.", Subcategory.SubcategoryId, Subcategory.SubcategoryName);
-                return _mapper.Map<ProductSubcategoryDto>(Subcategory);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "خطا هنگام ایجاد زیردسته‌بندی");
-                throw;
-            }
+    #region GetByIdAsync
+
+    public async Task<ProductSubcategoryDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<ProductSubcategory>()
+            .Where(ps => ps.SubcategoryId == id)
+            .Where(ps => ps.IsActive);
+
+        return await _unitOfWork.Repository<ProductSubcategory>()
+            .FirstOrDefaultAsync(spec, ProductSubcategoryQueryConfig.Projection, cancellationToken);
+    }
+
+    #endregion
+
+    #region GetCountByCategoryIdAsync
+
+    public async Task<int> GetCountByCategoryIdAsync(int categoryId, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<ProductSubcategory>()
+            .Where(ps => ps.CategoryId == categoryId)
+            .Where(ps => ps.IsActive);
+
+        return await _unitOfWork.Repository<ProductSubcategory>().CountAsync(spec, cancellationToken);
+    }
+
+    #endregion
+
+    #region CreateAsync
+
+    public async Task<ProductSubcategoryDto> CreateAsync(CreateProductSubcategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Creating product subcategory: {SubcategoryName}", dto.SubcategoryName);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await ValidateCreationAsync(dto, cancellationToken);
+            var entity = _mapper.Map<ProductSubcategory>(dto);
+            entity.CreatedOn = DateTime.UtcNow;
+            entity.CreatedById = _currentUserService.GetCurrentUserId();
+
+            await _unitOfWork.Repository<ProductSubcategory>().AddAsync(entity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Product subcategory created with ID: {Id}", entity.SubcategoryId);
+            return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
+                   ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی ایجاد شده");
         }
-
-        public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+        catch (Exception ex)
         {
-            try
-            {
-                var Subcategory = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(id, cancellationToken);
-                if (Subcategory == null || !Subcategory.IsActive)
-                {
-                    _logger.LogWarning("⚠️ Delete failed. Subcategory with Id={Id} not found.", id);
-                    return false;
-                }
-                 
-                _unitOfWork.Repository<ProductSubcategory>().Delete(Subcategory);
-                await _unitOfWork.SaveChangesAsync();
-
-                _logger.LogInformation("🗑 Subcategory deleted successfully. name={name}", Subcategory.SubcategoryName);
-                return true;
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "❌ Error while deleting Subcategory. Id={Id}", id);
-                throw;
-            }
-        }
-
-        public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var subcategory = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(id, cancellationToken);
-                if (subcategory == null || !subcategory.IsActive)
-                {
-                    _logger.LogWarning("Subcategory with Id={Id} not found or inactive.", id);
-                    return false;
-                }
-
-                _logger.LogInformation("Subcategory found. Id={Id}, Name={Name}",
-                    subcategory.SubcategoryId, subcategory.SubcategoryName);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "❌ Error while checking existence of Subcategory with Id={Id}", id);
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<ProductSubcategoryDto>> GetAllAsync(string? search = null, int? includeCategoryId = null, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("Retrieving all ProductSubcategories with search: {Search}", search ?? "<none>");
-
-            try
-            {
-                var filter = string.IsNullOrWhiteSpace(search) ? null : $"SubcategoryName contains '{search}'";
-
-                var spec = new QuerySpecification<ProductSubcategory, ProductSubcategoryDto>(
-                    filter: filter,
-                    sort: null,
-                    skip: null,
-                    take: null,
-                    projection: includeCategoryId != null ? ProductSubcategoryQueryConfig.Projection : ProductSubcategoryQueryConfig.SimpleProjection,
-                    allowedFields: ProductSubcategoryQueryConfig.AllowedFields,
-                    applyDefaultSoftDelete: true
-                );
-
-                var productSubcategories = await _unitOfWork
-                    .Repository<ProductSubcategory>()
-                    .ListAsync<ProductSubcategoryDto>(spec, cancellationToken);
-
-                _logger.LogDebug("Retrieved {Count} productSubcategories", productSubcategories.Count);
-
-                return productSubcategories;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving all productSubcategories");
-                throw;
-            }
-        }
-
-        public async Task<ProductSubcategoryDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Retrieving ProductSubcategory by ID: {ProductSubcategoryId},", id);
-
-            try
-            {
-                var spec = new QuerySpecification<ProductSubcategory, ProductSubcategoryDto>(
-                    filter: $"id eq {id}",
-                    sort: null,
-                    skip: null,
-                    take: null,
-                    projection: ProductSubcategoryQueryConfig.Projection,
-                    allowedFields: ProductSubcategoryQueryConfig.AllowedFields,
-                    applyDefaultSoftDelete: true
-                );
-
-                var productSubcategoryDto = await _unitOfWork
-                    .Repository<ProductSubcategory>()
-                    .FirstOrDefaultAsync<ProductSubcategoryDto>(spec, cancellationToken);
-
-                if (productSubcategoryDto is null)
-                {
-                    _logger.LogDebug("ProductSubcategory not found with ID: {ProductSubcategoryId}", id);
-                    return null;
-                }
-
-                return productSubcategoryDto;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving ProductSubcategory with ID: {ProductSubcategoryId}", id);
-                throw;
-            }
-        }
-
-        public async Task<int> GetCountByCategoryIdAsync(int categoryId, CancellationToken cancellationToken = default)
-        {
-
-            try
-            {
-                var spec = new ProductSubcategoryQueryCountSpecification(categoryId);
-
-                var count = await _unitOfWork.Repository<ProductSubcategory>()
-                    .CountAsync(spec, cancellationToken);
-
-                _logger.LogInformation("Get count={count} Subcategory with CategoryId={CategoryId}", count, categoryId);
-                return count;
-
-            }
-            catch(Exception ex)
-            {
-                _logger.LogError(ex, "❌ Error while getting count of Subcategories for CategoryId={CategoryId}", categoryId);
-                throw;
-            }
-        }
-
-        public async Task<ProductSubcategoryDto> UpdateAsync(UpdateProductSubcategoryDto dto)
-        {
-            try
-            {
-                var Subcategory = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(dto.ProductSubcategoryId);
-                if (Subcategory == null || !Subcategory.IsActive)
-                {
-                    _logger.LogWarning("⚠️ Update failed. Subcategory with Id={Id} not found.", dto.ProductSubcategoryId);
-                    throw new KeyNotFoundException($"زیردسته‌بندی با شناسه {dto.ProductSubcategoryId} یافت نشد");
-                }
-
-                _mapper.Map(dto, Subcategory);
-
-                _unitOfWork.Repository<ProductSubcategory>().Update(Subcategory);
-                await _unitOfWork.SaveChangesAsync();
-
-                _logger.LogInformation("زیردسته‌بندی با Id={Id} به‌روزرسانی شد.", Subcategory.SubcategoryId);
-                return _mapper.Map<ProductSubcategoryDto>(Subcategory);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "خطا هنگام به‌روزرسانی زیردسته‌بندی با Id={Id}", dto.ProductSubcategoryId);
-                throw;
-            }
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to create product subcategory: {SubcategoryName}", dto.SubcategoryName);
+            throw new BusinessException("خطا در ایجاد زیردسته‌بندی", ex);
         }
     }
+
+    #endregion
+
+    #region UpdateAsync
+
+    public async Task<ProductSubcategoryDto> UpdateAsync(UpdateProductSubcategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating product subcategory ID: {Id}", dto.ProductSubcategoryId);
+        var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(dto.ProductSubcategoryId, cancellationToken);
+        if (entity == null || !entity.IsActive)
+            throw new BusinessException("زیردسته‌بندی یافت نشد.");
+
+        _mapper.Map(dto, entity);
+        _unitOfWork.Repository<ProductSubcategory>().Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Product subcategory updated: {Id}", dto.ProductSubcategoryId);
+        return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
+               ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی به‌روز شده");
+    }
+
+    #endregion
+
+    #region DeleteAsync
+
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting product subcategory ID: {Id}", id);
+        var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(id, cancellationToken);
+        if (entity == null || !entity.IsActive)
+            return false;
+
+        _unitOfWork.Repository<ProductSubcategory>().Delete(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Product subcategory deleted: {Id}", id);
+        return true;
+    }
+
+    #endregion
+
+    #region ExistsAsync
+
+    public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<ProductSubcategory>()
+            .Where(ps => ps.SubcategoryId == id)
+            .Where(ps => ps.IsActive);
+        return await _unitOfWork.Repository<ProductSubcategory>().AnyAsync(spec, cancellationToken);
+    }
+
+    #endregion
+
+    #region Validation
+
+    private async Task ValidateCreationAsync(CreateProductSubcategoryDto dto, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dto.SubcategoryName))
+            throw new BusinessException("نام زیردسته‌بندی الزامی است.");
+
+        var exists = await _unitOfWork.Repository<ProductSubcategory>()
+            .AnyAsync(ps => ps.SubcategoryName == dto.SubcategoryName, cancellationToken);
+        if (exists)
+            throw new BusinessException("زیردسته‌بندی با این نام قبلاً ثبت شده است.");
+
+        var categoryExists = await _unitOfWork.Repository<ProductCategory>()
+            .AnyAsync(pc => pc.CategoryId == dto.CategoryId, cancellationToken);
+        if (!categoryExists)
+            throw new BusinessException("دسته‌بندی والد وجود ندارد.");
+    }
+
+    #endregion
 }

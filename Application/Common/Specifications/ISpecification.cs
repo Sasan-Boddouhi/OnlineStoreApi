@@ -1,21 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Linq.Expressions;
 
-namespace Application.Common.Specifications
+namespace Application.Common.Specifications;
+
+public interface ISpecification<TEntity>
+    where TEntity : class
 {
-    public interface ISpecification<TEntity>
-    {
-        IReadOnlyList<Expression<Func<TEntity, object>>> Includes { get; }
-        Expression<Func<TEntity, bool>>? Criteria { get; }
-        IReadOnlyList<(LambdaExpression KeySelector, bool Descending)> OrderExpressions { get; }
-        int? Skip { get; }
-        int? Take { get; }
-        bool IsPagingEnabled { get; }
-        bool IsReadOnly { get; }
-    }
+    Expression<Func<TEntity, bool>>? Criteria { get; }
 
+    List<Expression<Func<TEntity, object>>> Includes { get; }
+
+    List<(LambdaExpression KeySelector, bool Descending)> OrderExpressions { get; }
+
+    int? Skip { get; }
+
+    int? Take { get; }
+
+    bool IsPagingEnabled { get; }
+
+    bool IsReadOnly { get; }
 }

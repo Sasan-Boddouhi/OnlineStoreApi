@@ -23,4 +23,8 @@
     <ProjectReference Include="..\..\Online Store Application\Application\Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Persistence\Specifications\" />
+  </ItemGroup>
+
 </Project>

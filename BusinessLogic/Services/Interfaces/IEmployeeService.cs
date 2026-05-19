@@ -1,4 +1,5 @@
-﻿using BusinessLogic.DTOs.Employee;
+﻿using Application.Entities;
+using BusinessLogic.DTOs.Employee;
 using BusinessLogic.DTOs.Shared;
 using System;
 using System.Collections.Generic;
@@ -10,16 +11,15 @@ namespace BusinessLogic.Services.Interfaces
 {
     public interface IEmployeeService
     {
+        Task<PagedResult<EmployeeDto>> GetByQueryAsync(
+            QueryContract<Employee> query,
+            CancellationToken cancellationToken = default);
+
+        Task<EmployeeDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+        Task<EmployeeDto?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default);
+
         Task<EmployeeDto> CreateAsync(CreateEmployeeDto dto, CancellationToken cancellationToken = default);
         Task<EmployeeDto?> UpdateAsync(UpdateEmployeeDto dto, CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
-        Task<EmployeeDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
-        Task<EmployeeDto?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default);
-        Task<PagedResult<EmployeeDto>> GetAllAsync(
-            string? filter,
-            string? sort,
-            int pageNumber,
-            int pageSize,
-            CancellationToken cancellationToken = default);
     }
 }

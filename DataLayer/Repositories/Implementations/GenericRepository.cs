@@ -1,7 +1,6 @@
 ﻿using Application.Common.Specifications;
 using Application.Interfaces;
 using DataLayer.Context;
-using DataLayer.Persistence.Specifications;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
@@ -99,5 +98,7 @@ namespace DataLayer.Repositories.Implementations
             return await query.ToListAsync(ct);
         }
         #endregion
+
+        public IQueryable<TEntity> Query() => _dbSet.AsQueryable();
     }
 }

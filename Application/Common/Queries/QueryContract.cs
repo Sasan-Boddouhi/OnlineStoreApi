@@ -1,29 +1,19 @@
-﻿namespace Application.Common.Queries;
+﻿using Application.Common.Queries;
+using System.Linq.Expressions;
 
-public class QueryContract
+public sealed class QueryContract<TEntity>
+    where TEntity : class
 {
-    public string? Filter { get; init; }
-    public string? Sort { get; init; }
+    public Expression<Func<TEntity, bool>>? Filter { get; init; }
 
+    public IReadOnlyList<ISortDefinition<TEntity>> Sorts { get; init; }
+        = Array.Empty<ISortDefinition<TEntity>>();
+
+    // Paging Mode 1
     public int? Page { get; init; }
     public int? Size { get; init; }
+
+    // Paging Mode 2
     public int? Skip { get; init; }
     public int? Take { get; init; }
-
-    public Paging ToPaging()
-    {
-        bool hasPage = Page.HasValue || Size.HasValue;
-        bool hasSkip = Skip.HasValue || Take.HasValue;
-
-        if (hasPage && hasSkip)
-            throw new ArgumentException("Cannot use Page/Size with Skip/Take together.");
-
-        if (Skip.HasValue && Take.HasValue)
-            return Paging.FromSkipTake(Skip.Value, Take.Value);
-
-        if (Page.HasValue || Size.HasValue)
-            return Paging.FromPage(Page ?? 1, Size ?? 20);
-
-        return Paging.FromPage(1, 20);
-    }
 }

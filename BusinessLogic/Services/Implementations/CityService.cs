@@ -1,9 +1,13 @@
-﻿using Application.Entities;
-using Application.Interfaces;
+﻿using Application.Common.Queries;
 using Application.Common.Specifications;
+using Application.Entities;
+using Application.Exceptions;
+using Application.Interfaces;
 using AutoMapper;
 using BusinessLogic.DTOs.City;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Specifications.Cities;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
@@ -21,76 +25,138 @@ public sealed class CityService : ICityService
         _logger = logger;
     }
 
-    public async Task<CityDto> CreateAsync(CreateCityDto dto)
-    {
-        var city = _mapper.Map<City>(dto);
-        await _unitOfWork.Repository<City>().AddAsync(city);
-        await _unitOfWork.SaveChangesAsync();
+    #region Query
 
-        _logger.LogInformation("City created with Id={Id}, Name={Name}", city.CityId, city.CityName);
-        return _mapper.Map<CityDto>(city);
+    public async Task<PagedResult<CityDto>> GetByQueryAsync(
+        QueryContract<City> query,
+        CancellationToken cancellationToken = default)
+    {
+        var spec = query.ToSpec();
+        var items = await _unitOfWork.Repository<City>()
+            .ListAsync(spec, CityQueryConfig.Projection, cancellationToken);
+        var totalCount = await _unitOfWork.Repository<City>()
+            .CountAsync(spec, cancellationToken);
+
+        int pageNumber, pageSize;
+        if (query.Skip.HasValue || query.Take.HasValue)
+        {
+            pageSize = query.Take ?? 20;
+            var skip = query.Skip ?? 0;
+            pageNumber = skip / pageSize + 1;
+        }
+        else
+        {
+            pageNumber = query.Page ?? 1;
+            pageSize = query.Size ?? 20;
+        }
+
+        return new PagedResult<CityDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<CityDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        var city = await _unitOfWork.Repository<City>().GetByIdAsync(id);
-        if (city == null) return false;
+        var spec = new Spec<City>().Where(c => c.CityId == id);
+        return await _unitOfWork.Repository<City>()
+            .FirstOrDefaultAsync(spec, CityQueryConfig.Projection, cancellationToken);
+    }
 
-        _unitOfWork.Repository<City>().Delete(city);
-        await _unitOfWork.SaveChangesAsync();
-        _logger.LogInformation("City deleted: {Name}", city.CityName);
+    #endregion
+
+    #region Commands
+
+    public async Task<CityDto> CreateAsync(CreateCityDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Creating city: {CityName}", dto.CityName);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await ValidateCreationAsync(dto, cancellationToken);
+            var entity = _mapper.Map<City>(dto);
+            await _unitOfWork.Repository<City>().AddAsync(entity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("City created with ID: {Id}", entity.CityId);
+            return await GetByIdAsync(entity.CityId, cancellationToken)
+                   ?? throw new BusinessException("خطا در بازیابی شهر ایجاد شده");
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to create city: {CityName}", dto.CityName);
+            throw new BusinessException("خطا در ایجاد شهر", ex);
+        }
+    }
+
+    public async Task<CityDto?> UpdateAsync(UpdateCityDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating city ID: {Id}", dto.CityId);
+        var entity = await _unitOfWork.Repository<City>().GetByIdAsync(dto.CityId, cancellationToken);
+        if (entity == null)
+        {
+            _logger.LogWarning("City not found: {Id}", dto.CityId);
+            return null;
+        }
+
+        if (entity.CityName != dto.CityName)
+        {
+            var exists = await _unitOfWork.Repository<City>()
+                .AnyAsync(c => c.CityName == dto.CityName && c.CityId != dto.CityId, cancellationToken);
+            if (exists)
+                throw new BusinessException("شهری با این نام قبلاً ثبت شده است.");
+        }
+
+        _mapper.Map(dto, entity);
+        _unitOfWork.Repository<City>().Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("City updated: {Id}", dto.CityId);
+        return await GetByIdAsync(entity.CityId, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting city ID: {Id}", id);
+        var entity = await _unitOfWork.Repository<City>().GetByIdAsync(id, cancellationToken);
+        if (entity == null)
+        {
+            _logger.LogWarning("Delete failed: city not found {Id}", id);
+            return false;
+        }
+
+        _unitOfWork.Repository<City>().Delete(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("City deleted: {Id}", id);
         return true;
     }
 
-    public async Task<bool> ExistsAsync(int id)
+    #endregion
+
+    #region Validation
+
+    private async Task ValidateCreationAsync(CreateCityDto dto, CancellationToken cancellationToken)
     {
-        return await _unitOfWork.Repository<City>().AnyAsync(c => c.CityId == id);
+        if (string.IsNullOrWhiteSpace(dto.CityName))
+            throw new BusinessException("نام شهر الزامی است.");
+        if (dto.ProvinceId <= 0)
+            throw new BusinessException("شناسه استان معتبر نیست.");
+
+        var provinceExists = await _unitOfWork.Repository<Province>()
+            .AnyAsync(p => p.ProvinceId == dto.ProvinceId, cancellationToken);
+        if (!provinceExists)
+            throw new BusinessException("استان انتخاب‌شده وجود ندارد.");
+
+        var cityExists = await _unitOfWork.Repository<City>()
+            .AnyAsync(c => c.CityName == dto.CityName, cancellationToken);
+        if (cityExists)
+            throw new BusinessException("شهری با این نام قبلاً ثبت شده است.");
     }
 
-    public async Task<IEnumerable<CityDto>> GetAllAsync()
-    {
-        var spec = new Spec<City>()
-            .OrderByFirst(c => c.CityName);    // مرتب‌سازی صعودی پیش‌فرض
-
-        var cities = await _unitOfWork.Repository<City>().ListAsync(spec);
-        return _mapper.Map<IEnumerable<CityDto>>(cities);
-    }
-
-    public async Task<IEnumerable<CityDto>> GetAllByProvinceIdAsync(int provinceId)
-    {
-        var spec = new Spec<City>()
-            .Where(c => c.ProvinceId == provinceId)
-            .OrderByFirst(c => c.CityName);
-
-        var cities = await _unitOfWork.Repository<City>().ListAsync(spec);
-        return _mapper.Map<IEnumerable<CityDto>>(cities);
-    }
-
-    public async Task<CityDto?> GetByIdAsync(int id)
-    {
-        var city = await _unitOfWork.Repository<City>().GetByIdAsync(id);
-        return city == null ? null : _mapper.Map<CityDto>(city);
-    }
-
-    public async Task<CityDto?> GetByNameAsync(string name)
-    {
-        var spec = new Spec<City>()
-            .Where(c => c.CityName == name);
-
-        var city = await _unitOfWork.Repository<City>().FirstOrDefaultAsync(spec);
-        return city == null ? null : _mapper.Map<CityDto>(city);
-    }
-
-    public async Task<CityDto> UpdateAsync(UpdateCityDto dto)
-    {
-        var city = await _unitOfWork.Repository<City>().GetByIdAsync(dto.CityId)
-            ?? throw new KeyNotFoundException($"City with Id={dto.CityId} not found.");
-
-        _mapper.Map(dto, city);
-        _unitOfWork.Repository<City>().Update(city);
-        await _unitOfWork.SaveChangesAsync();
-
-        _logger.LogInformation("City updated: {Id}", city.CityId);
-        return _mapper.Map<CityDto>(city);
-    }
+    #endregion
 }

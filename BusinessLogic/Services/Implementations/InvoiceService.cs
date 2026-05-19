@@ -21,9 +21,9 @@ namespace BusinessLogic.Services.Implementations
             _logger = logger;
         }
 
-        public async Task<InvoiceDto> CreateInvoiceAsync(int orderId, decimal taxAmount = 0, decimal discountAmount = 0)
+        public async Task<InvoiceDto> CreateInvoiceAsync(int orderId, decimal taxAmount = 0, decimal discountAmount = 0, CancellationToken cancellationToken = default)
         {
-            var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId);
+            var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
 
             if (order == null) throw new BusinessException("سفارش یافت نشد.");
 

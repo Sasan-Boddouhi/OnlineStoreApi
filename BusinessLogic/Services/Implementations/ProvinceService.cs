@@ -1,89 +1,164 @@
-﻿using Application.Entities;
+﻿using Application.Common.Queries;
+using Application.Common.Specifications;
+using Application.Entities;
+using Application.Exceptions;
 using Application.Interfaces;
 using AutoMapper;
+using BusinessLogic.DTOs.Province;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
+using BusinessLogic.Specifications.Provinces;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static Dapper.SqlMapper;
 
-namespace BusinessLogic.Services.Implementations
+namespace BusinessLogic.Services.Implementations;
+
+public sealed class ProvinceService : IProvinceService
 {
-    public class ProvinceService : IProvinceService
-    {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly ILogger<ProvinceService> _logger;
-        private readonly ICurrentUserService _currentUserService;
-        private readonly IMapper _mapper;
-        public ProvinceService(IUnitOfWork unitOfWork, ILogger<ProvinceService> logger, ICurrentUserService currentUserService, IMapper mapper)
-        {
-            _unitOfWork = unitOfWork;
-            _logger = logger;
-            _currentUserService = currentUserService;
-            _mapper = mapper;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+    private readonly ILogger<ProvinceService> _logger;
 
+    public ProvinceService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<ProvinceService> logger)
+    {
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+        _logger = logger;
+    }
+
+    #region GetByQueryAsync
+
+    public async Task<PagedResult<ProvinceDto>> GetByQueryAsync(
+        QueryContract<Province> query,
+        CancellationToken cancellationToken = default)
+    {
+        var spec = query.ToSpec();
+        var items = await _unitOfWork.Repository<Province>()
+            .ListAsync(spec, ProvinceQueryConfig.Projection, cancellationToken);
+        var totalCount = await _unitOfWork.Repository<Province>()
+            .CountAsync(spec, cancellationToken);
+
+        int pageNumber, pageSize;
+        if (query.Skip.HasValue || query.Take.HasValue)
+        {
+            pageSize = query.Take ?? 20;
+            var skip = query.Skip ?? 0;
+            pageNumber = skip / pageSize + 1;
+        }
+        else
+        {
+            pageNumber = query.Page ?? 1;
+            pageSize = query.Size ?? 20;
         }
 
-        //public async Task<ProvinceDto> CreateAsync(CreateProvinceDto dto)
-        //{
-        //    try
-        //    {
-        //        var province = _mapper.Map<Province>(dto);
-
-        //        await _unitOfWork.Province.AddAsync(province);
-        //        await _unitOfWork.SaveChangesAsync();
-
-        //        _logger.LogInformation("استان با Id={Id} و Name={Name} ایجاد شد.", province.ProvinceId, province.ProvinceName);
-        //        return _mapper.Map<ProvinceDto>(province);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "خطا هنگام ایجاد استان");
-        //        throw;
-        //    }
-        //}
-
-        //public async Task<IEnumerable<ProvinceDto>> GetAllAsync()
-        //{
-        //    try
-        //    {
-        //        var provinces = await _unitOfWork.Province.GetAllAsync();
-        //        var countOfProvince = provinces.Count();
-
-        //        _logger.LogInformation("{Count} provinces fetched by {User} at {Time}.",
-        //            countOfProvince, _currentUserService.GetCurrentUserName(), DateTime.Now);
-
-        //        return _mapper.Map<IEnumerable<ProvinceDto>>(provinces);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error while fetching provinces by {User} at {Time}.",
-        //            _currentUserService.GetCurrentUserName(), DateTime.Now);
-        //        throw;
-        //    }
-        //}
-
-        //public async Task<ProvinceDto?> GetByNameAsync(string provinceName)
-        //{
-        //    try
-        //    {
-        //        var province = await _unitOfWork.Province.Query()
-        //            .FirstOrDefaultAsync(p => p.ProvinceName == provinceName);
-
-        //        _logger.LogInformation("Province fetched by {User} at {Time}. {@Province}",
-        //            _currentUserService.GetCurrentUserName(), DateTime.Now, province);
-        //        return _mapper.Map<ProvinceDto>(province);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error while fetching Province ProvinceName={ProvinceName} by {User} at {Time}",
-        //            provinceName, _currentUserService.GetCurrentUserName(), DateTime.Now);
-        //        throw;
-        //    }
-        //}
+        return new PagedResult<ProvinceDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
     }
+
+    #endregion
+
+    #region GetByIdAsync
+
+    public async Task<ProvinceDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<Province>().Where(p => p.ProvinceId == id);
+        return await _unitOfWork.Repository<Province>()
+            .FirstOrDefaultAsync(spec, ProvinceQueryConfig.Projection, cancellationToken);
+    }
+
+    #endregion
+
+    #region CreateAsync
+
+    public async Task<ProvinceDto> CreateAsync(CreateProvinceDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Creating province: {ProvinceName}", dto.ProvinceName);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await ValidateCreationAsync(dto, cancellationToken);
+            var entity = _mapper.Map<Province>(dto);
+            await _unitOfWork.Repository<Province>().AddAsync(entity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Province created with ID: {Id}", entity.ProvinceId);
+            return await GetByIdAsync(entity.ProvinceId, cancellationToken)
+                   ?? throw new BusinessException("خطا در بازیابی استان ایجاد شده");
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to create province: {ProvinceName}", dto.ProvinceName);
+            throw new BusinessException("خطا در ایجاد استان", ex);
+        }
+    }
+
+    #endregion
+
+    #region UpdateAsync
+
+    public async Task<ProvinceDto?> UpdateAsync(UpdateProvinceDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating province ID: {Id}", dto.ProvinceId);
+        var entity = await _unitOfWork.Repository<Province>().GetByIdAsync(dto.ProvinceId, cancellationToken);
+        if (entity == null)
+        {
+            _logger.LogWarning("Province not found: {Id}", dto.ProvinceId);
+            return null;
+        }
+
+        if (entity.ProvinceName != dto.ProvinceName)
+        {
+            var exists = await _unitOfWork.Repository<Province>()
+                .AnyAsync(p => p.ProvinceName == dto.ProvinceName && p.ProvinceId != dto.ProvinceId, cancellationToken);
+            if (exists)
+                throw new BusinessException("استانی با این نام قبلاً ثبت شده است.");
+        }
+
+        _mapper.Map(dto, entity);
+        _unitOfWork.Repository<Province>().Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Province updated: {Id}", dto.ProvinceId);
+        return await GetByIdAsync(entity.ProvinceId, cancellationToken);
+    }
+
+    #endregion
+
+    #region DeleteAsync
+
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting province ID: {Id}", id);
+        var entity = await _unitOfWork.Repository<Province>().GetByIdAsync(id, cancellationToken);
+        if (entity == null)
+            return false;
+
+        _unitOfWork.Repository<Province>().Delete(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Province deleted: {Id}", id);
+        return true;
+    }
+
+    #endregion
+
+    #region Validation
+
+    private async Task ValidateCreationAsync(CreateProvinceDto dto, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dto.ProvinceName))
+            throw new BusinessException("نام استان الزامی است.");
+
+        var exists = await _unitOfWork.Repository<Province>()
+            .AnyAsync(p => p.ProvinceName == dto.ProvinceName, cancellationToken);
+        if (exists)
+            throw new BusinessException("استانی با این نام قبلاً ثبت شده است.");
+    }
+
+    #endregion
 }

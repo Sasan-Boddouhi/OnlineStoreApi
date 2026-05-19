@@ -8,5 +8,7 @@ namespace BusinessLogic.DTOs.City
 {
     public class CreateCityDto
     {
+        public string? CityName { get; internal set; }
+        public int ProvinceId { get; internal set; }
     }
 }

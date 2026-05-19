@@ -1,10 +1,11 @@
 ﻿using Application.Common.Specifications;
 using Application.Entities;
 using BusinessLogic.DTOs.Employee;
+using System.Linq.Expressions;
 
 namespace BusinessLogic.Specifications.Employees;
 
-public static class EmployeeQueryProfile
+public static class EmployeeQueryConfig
 {
     public static readonly string[] AllowedFields =
     {
@@ -12,15 +13,8 @@ public static class EmployeeQueryProfile
         "HireDate", "TerminationDate", "Salary"
     };
 
-    public static QueryProfile<Employee, EmployeeDto> Profile { get; } = new()
-    {
-        Includes =
-        {
-            e => e.User,
-            e => e.EmployeeType
-        },
-        AllowedFields = AllowedFields,
-        Projection = e => new EmployeeDto
+    public static Expression<Func<Employee, EmployeeDto>> Projection =>
+        e => new EmployeeDto
         {
             EmployeeId = e.EmployeeId,
             UserId = e.UserId,
@@ -32,6 +26,5 @@ public static class EmployeeQueryProfile
             HireDate = e.HireDate,
             TerminationDate = e.TerminationDate,
             Salary = e.Salary
-        }
-    };
+        };
 }

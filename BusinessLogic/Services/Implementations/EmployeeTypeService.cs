@@ -10,134 +10,138 @@ using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.EmployeeTypes;
 using Microsoft.Extensions.Logging;
 
-namespace BusinessLogic.Services.Implementations
+namespace BusinessLogic.Services.Implementations;
+
+public sealed class EmployeeTypeService : IEmployeeTypeService
 {
-    public sealed class EmployeeTypeService : IEmployeeTypeService
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+    private readonly ILogger<EmployeeTypeService> _logger;
+
+    public EmployeeTypeService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<EmployeeTypeService> logger)
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IMapper _mapper;
-        private readonly ILogger<EmployeeTypeService> _logger;
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+        _logger = logger;
+    }
 
-        public EmployeeTypeService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<EmployeeTypeService> logger)
+    #region Query
+
+    public async Task<PagedResult<EmployeeTypeDto>> GetByQueryAsync(
+        QueryContract<EmployeeType> query,
+        CancellationToken cancellationToken = default)
+    {
+        var spec = query.ToSpec();
+        var items = await _unitOfWork.Repository<EmployeeType>()
+            .ListAsync(spec, EmployeeTypeQueryConfig.Projection, cancellationToken);
+        var totalCount = await _unitOfWork.Repository<EmployeeType>()
+            .CountAsync(spec, cancellationToken);
+
+        int pageNumber, pageSize;
+        if (query.Skip.HasValue || query.Take.HasValue)
         {
-            _unitOfWork = unitOfWork;
-            _mapper = mapper;
-            _logger = logger;
+            pageSize = query.Take ?? 20;
+            var skip = query.Skip ?? 0;
+            pageNumber = skip / pageSize + 1;
+        }
+        else
+        {
+            pageNumber = query.Page ?? 1;
+            pageSize = query.Size ?? 20;
         }
 
-        public async Task<EmployeeTypeDto> CreateAsync(CreateEmployeeTypeDto dto, CancellationToken cancellationToken = default)
+        return new PagedResult<EmployeeTypeDto>
         {
-            _logger.LogInformation("Creating employee type: {TypeName}", dto.TypeName);
+            Items = items,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+    }
 
-            if (string.IsNullOrWhiteSpace(dto.TypeName))
-                throw new BusinessException("نوع کارمند الزامی است.");
+    public async Task<EmployeeTypeDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<EmployeeType>().Where(et => et.EmployeeTypeId == id);
+        return await _unitOfWork.Repository<EmployeeType>()
+            .FirstOrDefaultAsync(spec, EmployeeTypeQueryConfig.Projection, cancellationToken);
+    }
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-            try
-            {
-                var nameExists = await _unitOfWork.Repository<EmployeeType>()
-                    .AnyAsync(et => et.TypeName == dto.TypeName, cancellationToken);
-                if (nameExists)
-                    throw new BusinessException("این نوع کارمند قبلاً ثبت شده است.");
+    #endregion
 
-                var entity = _mapper.Map<EmployeeType>(dto);
+    #region Commands
 
-                await _unitOfWork.Repository<EmployeeType>().AddAsync(entity, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                _logger.LogInformation("Employee type created with ID: {Id}", entity.EmployeeTypeId);
-                return _mapper.Map<EmployeeTypeDto>(entity);
-            }
-            catch (BusinessException)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                _logger.LogError(ex, "Failed to create employee type '{TypeName}'", dto.TypeName);
-                throw new BusinessException("خطا در ایجاد نوع کارمند", ex);
-            }
-        }
-
-        public async Task<EmployeeTypeDto?> UpdateAsync(UpdateEmployeeTypeDto dto, CancellationToken cancellationToken = default)
+    public async Task<EmployeeTypeDto> CreateAsync(CreateEmployeeTypeDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Creating employee type: {TypeName}", dto.TypeName);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
         {
-            _logger.LogInformation("Updating employee type ID: {Id}", dto.EmployeeTypeId);
-
-            var entity = await _unitOfWork.Repository<EmployeeType>().GetByIdAsync(dto.EmployeeTypeId, cancellationToken);
-            if (entity == null)
-            {
-                _logger.LogWarning("Employee type not found: {Id}", dto.EmployeeTypeId);
-                return null;
-            }
-
-            if (!string.IsNullOrWhiteSpace(dto.TypeName) && dto.TypeName != entity.TypeName)
-            {
-                var nameExists = await _unitOfWork.Repository<EmployeeType>()
-                    .AnyAsync(et => et.TypeName == dto.TypeName && et.EmployeeTypeId != entity.EmployeeTypeId, cancellationToken);
-                if (nameExists)
-                    throw new BusinessException("این نام برای نوع کارمند تکراری است.");
-            }
-
-            _mapper.Map(dto, entity);
-            _unitOfWork.Repository<EmployeeType>().Update(entity);
+            await ValidateCreationAsync(dto, cancellationToken);
+            var entity = _mapper.Map<EmployeeType>(dto);
+            await _unitOfWork.Repository<EmployeeType>().AddAsync(entity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-            _logger.LogInformation("Employee type updated: {Id}", dto.EmployeeTypeId);
-            return _mapper.Map<EmployeeTypeDto>(entity);
+            _logger.LogInformation("Employee type created with ID: {Id}", entity.EmployeeTypeId);
+            return await GetByIdAsync(entity.EmployeeTypeId, cancellationToken)
+                   ?? throw new BusinessException("خطا در بازیابی نوع کارمند ایجاد شده");
         }
-
-        public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+        catch (Exception ex)
         {
-            _logger.LogInformation("Deleting employee type ID: {Id}", id);
-
-            var entity = await _unitOfWork.Repository<EmployeeType>().GetByIdAsync(id, cancellationToken);
-            if (entity == null)
-                return false;
-
-            // ممکن است نخواهیم نوع کارمندی که در حال استفاده است حذف شود
-            var used = await _unitOfWork.Repository<Employee>()
-                .AnyAsync(e => e.EmployeeTypeId == id, cancellationToken);
-            if (used)
-                throw new BusinessException("این نوع کارمند به کارمندانی تخصیص داده شده و قابل حذف نیست.");
-
-            _unitOfWork.Repository<EmployeeType>().Delete(entity);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("Employee type deleted: {Id}", id);
-            return true;
-        }
-
-        public async Task<EmployeeTypeDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
-        {
-            var entity = await _unitOfWork.Repository<EmployeeType>().GetByIdAsync(id, cancellationToken);
-            return entity == null ? null : _mapper.Map<EmployeeTypeDto>(entity);
-        }
-
-        public async Task<PagedResult<EmployeeTypeDto>> GetAllAsync(
-            string? filter, string? sort, int pageNumber, int pageSize,
-            CancellationToken cancellationToken = default)
-        {
-            var query = new QueryContract { Filter = filter, Sort = sort, Page = pageNumber, Size = pageSize };
-            var profile = EmployeeTypeQueryProfile.Profile; // QueryProfile<EmployeeType, EmployeeTypeDto>
-            var spec = QueryBuilder.BuildFromProfile(profile, query);
-
-            var items = await _unitOfWork.Repository<EmployeeType>()
-                .ListAsync(spec, profile.Projection, cancellationToken);
-
-            var countSpec = QueryBuilder.BuildForCount(profile, query.Filter);
-            var total = await _unitOfWork.Repository<EmployeeType>()
-                .CountAsync(countSpec, cancellationToken);
-
-            return new PagedResult<EmployeeTypeDto>
-            {
-                Items = items,
-                TotalCount = total,
-                PageNumber = pageNumber,
-                PageSize = pageSize
-            };
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to create employee type: {TypeName}", dto.TypeName);
+            throw new BusinessException("خطا در ایجاد نوع کارمند", ex);
         }
     }
+
+    public async Task<EmployeeTypeDto?> UpdateAsync(UpdateEmployeeTypeDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating employee type ID: {Id}", dto.EmployeeTypeId);
+        var entity = await _unitOfWork.Repository<EmployeeType>().GetByIdAsync(dto.EmployeeTypeId, cancellationToken);
+        if (entity == null)
+        {
+            _logger.LogWarning("Employee type not found: {Id}", dto.EmployeeTypeId);
+            return null;
+        }
+
+        _mapper.Map(dto, entity);
+        _unitOfWork.Repository<EmployeeType>().Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Employee type updated: {Id}", dto.EmployeeTypeId);
+        return await GetByIdAsync(entity.EmployeeTypeId, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting employee type ID: {Id}", id);
+        var entity = await _unitOfWork.Repository<EmployeeType>().GetByIdAsync(id, cancellationToken);
+        if (entity == null)
+        {
+            _logger.LogWarning("Delete failed: employee type not found {Id}", id);
+            return false;
+        }
+
+        _unitOfWork.Repository<EmployeeType>().Delete(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Employee type deleted: {Id}", id);
+        return true;
+    }
+
+    #endregion
+
+    #region Validation
+
+    private async Task ValidateCreationAsync(CreateEmployeeTypeDto dto, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dto.TypeName))
+            throw new BusinessException("نام نوع کارمند الزامی است.");
+
+        var exists = await _unitOfWork.Repository<EmployeeType>()
+            .AnyAsync(et => et.TypeName == dto.TypeName, cancellationToken);
+        if (exists)
+            throw new BusinessException("نوع کارمند با این نام قبلاً ثبت شده است.");
+    }
+
+    #endregion
 }

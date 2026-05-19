@@ -1,249 +1,209 @@
-﻿using Application.Entities;
-using Application.Interfaces;
+﻿using Application.Common.Queries;
 using Application.Common.Specifications;
+using Application.Entities;
+using Application.Exceptions;
+using Application.Interfaces;
 using AutoMapper;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
-using Microsoft.Extensions.Logging;
 using BusinessLogic.Specifications.Products;
-using Application.Exceptions;
-using Application.Common.Helpers;
+using Microsoft.Extensions.Logging;
 
-namespace BusinessLogic.Services.Implementations
+namespace BusinessLogic.Services.Implementations;
+
+public sealed class ProductService : IProductService
 {
-    public sealed class ProductService : IProductService
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<ProductService> _logger;
+
+    public ProductService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ICurrentUserService currentUserService,
+        ILogger<ProductService> logger)
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IMapper _mapper;
-        private readonly ICurrentUserService _currentUserService;
-        private readonly ILogger<ProductService> _logger;
-
-        public ProductService(
-            IUnitOfWork unitOfWork,
-            IMapper mapper,
-            ICurrentUserService currentUserService,
-            ILogger<ProductService> logger)
-        {
-            _unitOfWork = unitOfWork;
-            _mapper = mapper;
-            _currentUserService = currentUserService;
-            _logger = logger;
-        }
-
-        #region Public Methods
-
-        public async Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("Creating new product with name: {ProductName}", dto.Name);
-
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-            try
-            {
-                await EnsureValidProductCreationAsync(dto, cancellationToken);
-
-                var entity = _mapper.Map<Product>(dto);
-
-                await _unitOfWork.Repository<Product>().AddAsync(entity, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                _logger.LogInformation("Product created successfully with ID: {ProductId}", entity.ProductId);
-                return _mapper.Map<ProductDto>(entity);
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                _logger.LogError(ex, "Failed to create product with name: {ProductName}", dto.Name);
-                throw new BusinessException("خطا در ایجاد محصول", ex);
-            }
-        }
-
-        public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("Attempting to delete product with ID: {ProductId}", id);
-
-            try
-            {
-                var product = await _unitOfWork.Repository<Product>().GetByIdAsync(id, cancellationToken);
-                if (product == null || !product.IsActive)
-                {
-                    _logger.LogWarning("Delete failed: Product not found or inactive with ID: {ProductId}", id);
-                    return false;
-                }
-
-                // Soft Delete
-                product.IsActive = false;
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                _logger.LogInformation("Product deleted successfully: {ProductId}", id);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error deleting product with ID: {ProductId}", id);
-                throw;
-            }
-        }
-
-        public async Task<PagedResult<ProductDto>> GetByQueryAsync(
-            string? filter,
-            string? sort,
-            int pageNumber,
-            int pageSize,
-            CancellationToken cancellationToken = default)
-        {
-            // اعمال محدودیت‌های امنیتی
-            QueryGuard.EnsureValid(filter, sort);
-
-            _logger.LogInformation(
-                "Retrieving products. Filter: {Filter}, Sort: {Sort}, Page: {Page}",
-                filter, sort, pageNumber);
-
-            try
-            {
-                var skip = (pageNumber - 1) * pageSize;
-
-                // Specification برای داده‌ها
-                var dataSpec = new QuerySpecification<Product, ProductDto>(
-                    filter,
-                    sort,
-                    skip,
-                    pageSize,
-                    ProductQueryConfig.Projection,
-                    ProductQueryConfig.AllowedFields);
-
-                // استفاده از QueryCountSpecification برای شمارش
-                var countSpec = new QueryCountSpecification<Product>(
-                    filter,
-                    ProductQueryConfig.AllowedFields);
-
-                var items = await _unitOfWork
-                    .Repository<Product>()
-                    .ListAsync<ProductDto>(dataSpec, cancellationToken);
-
-                var totalCount = await _unitOfWork
-                    .Repository<Product>()
-                    .CountAsync(countSpec, cancellationToken);
-
-                return new PagedResult<ProductDto>
-                {
-                    Items = items,
-                    TotalCount = totalCount,
-                    PageNumber = pageNumber,
-                    PageSize = pageSize
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving products");
-                throw;
-            }
-        }
-
-        public async Task<ProductDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
-        {
-            _logger.LogDebug("Retrieving product by ID: {ProductId}", id);
-
-            try
-            {
-                var spec = new QuerySpecification<Product, ProductDto>(
-                    filter: $"id eq {id}",
-                    sort: null,
-                    skip: null,
-                    take: null,
-                    projection: ProductQueryConfig.Projection,
-                    allowedFields: ProductQueryConfig.AllowedFields,
-                    applyDefaultSoftDelete: true
-                );
-
-                // ذکر صریح نوع خروجی برای رفع ابهام
-                var product = await _unitOfWork
-                    .Repository<Product>()
-                    .FirstOrDefaultAsync<ProductDto>(spec, cancellationToken);
-
-                if (product == null)
-                    _logger.LogDebug("Product not found with ID: {ProductId}", id);
-
-                return product;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving product with ID: {ProductId}", id);
-                throw;
-            }
-        }
-
-        public async Task<ProductDto?> UpdateAsync(UpdateProductDto dto, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("Updating product with ID: {ProductId}", dto.ProductId);
-
-            try
-            {
-                var entity = await _unitOfWork.Repository<Product>().GetByIdAsync(dto.ProductId, cancellationToken);
-
-                if (entity == null)
-                {
-                    _logger.LogWarning("Update failed: Product not found with ID: {ProductId}", dto.ProductId);
-                    return null;
-                }
-
-                // Optional: check for duplicate name if changed
-                if (!string.Equals(entity.Name, dto.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    var nameExists = await _unitOfWork.Repository<Product>()
-                        .AnyAsync(p => p.Name == dto.Name && p.ProductId != dto.ProductId, cancellationToken);
-                    if (nameExists)
-                    {
-                        _logger.LogWarning("Update failed: Duplicate product name '{ProductName}' for ID: {ProductId}", dto.Name, dto.ProductId);
-                        throw new Exception("محصولی با این نام قبلاً ثبت شده است");
-                    }
-                }
-
-                _logger.LogDebug("Mapping UpdateProductDto to existing product entity");
-                _mapper.Map(dto, entity);
-
-                _unitOfWork.Repository<Product>().Update(entity);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                _logger.LogInformation("Product updated successfully: {ProductId}", dto.ProductId);
-                return _mapper.Map<ProductDto>(entity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating product with ID: {ProductId}", dto.ProductId);
-                throw;
-            }
-        }
-
-        #endregion
-
-        #region Private Methods
-
-        private async Task EnsureValidProductCreationAsync(CreateProductDto dto, CancellationToken cancellationToken)
-        {
-            // ۱. فیلدهای اجباری (DTO خودش Required دارد، اما باز هم بررسی کنیم)
-            if (string.IsNullOrWhiteSpace(dto.Name))
-                throw new BusinessException("نام محصول الزامی است.");
-
-            if (dto.Price <= 0)
-                throw new BusinessException("قیمت محصول باید بزرگتر از صفر باشد.");
-
-            if (dto.SubcategoryId <= 0)
-                throw new BusinessException("ابتدا زیردسته‌بندی را انتخاب کنید.");
-
-            var subcategoryExists = await _unitOfWork.Repository<ProductSubcategory>()
-                .AnyAsync(sc => sc.SubcategoryId == dto.SubcategoryId, cancellationToken);
-            if (!subcategoryExists)
-                throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.");
-
-            var nameExists = await _unitOfWork.Repository<Product>()
-                .AnyAsync(p => p.Name == dto.Name, cancellationToken);
-            if (nameExists)
-                throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.");
-        }
-
-        #endregion
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+        _currentUserService = currentUserService;
+        _logger = logger;
     }
+
+    #region Query
+
+    public async Task<PagedResult<ProductDto>> GetByQueryAsync(
+        QueryContract<Product> query,
+        CancellationToken cancellationToken = default)
+    {
+        var spec = query.ToSpec();
+
+        var items = await _unitOfWork.Repository<Product>()
+            .ListAsync(spec, ProductQueryConfig.Projection, cancellationToken);
+
+        var totalCount = await _unitOfWork.Repository<Product>()
+            .CountAsync(spec, cancellationToken);
+
+        int pageNumber, pageSize;
+        if (query.Skip.HasValue || query.Take.HasValue)
+        {
+            pageSize = query.Take ?? 20;
+            var skip = query.Skip ?? 0;
+            pageNumber = skip / pageSize + 1;
+        }
+        else
+        {
+            pageNumber = query.Page ?? 1;
+            pageSize = query.Size ?? 20;
+        }
+
+        return new PagedResult<ProductDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<ProductDto?> GetByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<Product>().Where(p => p.ProductId == id);
+
+        return await _unitOfWork.Repository<Product>()
+            .FirstOrDefaultAsync(spec, ProductQueryConfig.Projection, cancellationToken);
+    }
+
+    #endregion
+
+    #region Commands
+
+    public async Task<ProductDto> CreateAsync(
+        CreateProductDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Creating product with name: {ProductName}", dto.Name);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await EnsureValidProductCreationAsync(dto, cancellationToken);
+            var entity = _mapper.Map<Product>(dto);
+            await _unitOfWork.Repository<Product>().AddAsync(entity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Product created successfully with ID: {ProductId}", entity.ProductId);
+            return await GetByIdAsync(entity.ProductId, cancellationToken)
+                   ?? throw new BusinessException("خطا در بازیابی محصول ایجاد شده");
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);
+            throw new BusinessException("خطا در ایجاد محصول", ex);
+        }
+    }
+
+    public async Task<ProductDto?> UpdateAsync(
+        UpdateProductDto dto,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating product with ID: {ProductId}", dto.ProductId);
+
+        try
+        {
+            var entity = await _unitOfWork.Repository<Product>().GetByIdAsync(dto.ProductId, cancellationToken);
+            if (entity == null)
+            {
+                _logger.LogWarning("Product not found: {ProductId}", dto.ProductId);
+                return null;
+            }
+
+            if (!string.Equals(entity.Name, dto.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var exists = await _unitOfWork.Repository<Product>()
+                    .AnyAsync(x => x.Name == dto.Name && x.ProductId != dto.ProductId, cancellationToken);
+                if (exists)
+                    throw new BusinessException("محصولی با این نام قبلاً ثبت شده است");
+            }
+
+            _mapper.Map(dto, entity);
+            _unitOfWork.Repository<Product>().Update(entity);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Product updated successfully: {ProductId}", dto.ProductId);
+            return await GetByIdAsync(entity.ProductId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating product: {ProductId}", dto.ProductId);
+            throw;
+        }
+    }
+
+    public async Task<bool> DeleteAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting product: {ProductId}", id);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var entity = await _unitOfWork.Repository<Product>().GetByIdAsync(id, cancellationToken);
+            if (entity == null || !entity.IsActive)
+            {
+                _logger.LogWarning("Product not found or inactive: {ProductId}", id);
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return false;
+            }
+
+            entity.IsActive = false;
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Product soft deleted successfully: {ProductId}", id);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Error deleting product: {ProductId}", id);
+            throw;
+        }
+    }
+
+    #endregion
+
+    #region Validation
+
+    private async Task EnsureValidProductCreationAsync(
+        CreateProductDto dto,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            throw new BusinessException("نام محصول الزامی است.");
+
+        if (dto.Price <= 0)
+            throw new BusinessException("قیمت محصول باید بیشتر از صفر باشد.");
+
+        if (dto.SubcategoryId <= 0)
+            throw new BusinessException("زیردسته‌بندی نامعتبر است.");
+
+        var subcategoryExists = await _unitOfWork.Repository<ProductSubcategory>()
+            .AnyAsync(x => x.SubcategoryId == dto.SubcategoryId, cancellationToken);
+        if (!subcategoryExists)
+            throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.");
+
+        var duplicateName = await _unitOfWork.Repository<Product>()
+            .AnyAsync(x => x.Name == dto.Name, cancellationToken);
+        if (duplicateName)
+            throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.");
+    }
+
+    #endregion
 }

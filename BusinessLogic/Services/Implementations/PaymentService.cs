@@ -21,9 +21,10 @@ namespace BusinessLogic.Services.Implementations
             _logger = logger;
         }
 
-        public async Task<PaymentDto> RecordPaymentAsync(int invoiceId, decimal amount, string transactionId)
+        public async Task<PaymentDto> RecordPaymentAsync(int invoiceId, decimal amount, string transactionId, CancellationToken cancellationToken = default)
         {
-            var invoice = await _unitOfWork.Repository<Invoice>().GetByIdAsync(invoiceId);
+            var invoice = await _unitOfWork.Repository<Invoice>().GetByIdAsync(invoiceId, cancellationToken);
+
             if (invoice == null) throw new BusinessException("Invoice یافت نشد.");
 
             var payment = new Payment

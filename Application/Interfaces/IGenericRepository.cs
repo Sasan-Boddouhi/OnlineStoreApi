@@ -32,4 +32,6 @@ public interface IGenericRepository<TEntity> where TEntity : class
         Spec<TEntity> spec,
         Expression<Func<TEntity, TResult>> selector,
         CancellationToken ct = default) where TResult : class;
+
+    IQueryable<TEntity> Query();
 }

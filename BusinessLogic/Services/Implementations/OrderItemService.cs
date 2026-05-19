@@ -22,9 +22,9 @@ namespace BusinessLogic.Services.Implementations
         }
 
         #region AddOrderItemAsync
-        public async Task<OrderItemDto> AddOrderItemAsync(int orderId, CreateOrderItemDto dto)
+        public async Task<OrderItemDto> AddOrderItemAsync(int orderId, CreateOrderItemDto dto, CancellationToken cancellationToken = default)
         {
-            var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId);
+            var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
             if (order == null) throw new BusinessException("سفارش یافت نشد.");
 
             var item = new OrderItem(

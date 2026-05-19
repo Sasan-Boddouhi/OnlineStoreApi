@@ -1450,6 +1450,7 @@
       "Application/1.0.0": {
         "dependencies": {
           "Microsoft.AspNetCore.Http.Abstractions": "2.3.9",
+          "Microsoft.Data.SqlClient": "5.2.2",
           "Microsoft.EntityFrameworkCore": "8.0.4"
         },
         "runtime": {
