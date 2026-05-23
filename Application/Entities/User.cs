@@ -26,7 +26,7 @@ namespace Application.Entities
         [Required]
         public required UserType UserType { get; set; }
 
-        public DateTime DateOfBirth { get; set; }
+        public DateTime? DateOfBirth { get; set; }
 
         public bool IsActive { get; set; } = true;
 

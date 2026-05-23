@@ -1,4 +1,5 @@
 ﻿using Application.Entities;
+using Application.Helper;
 using AutoMapper;
 using BusinessLogic.DTOs.User;
 using System;
@@ -29,7 +30,10 @@ namespace BusinessLogic.Profiles
                             : "بدون نقش"))
 
                 .ForMember(dest => dest.Addresses,
-                    opt => opt.MapFrom(src => src.Addresses));
+                    opt => opt.MapFrom(src => src.Addresses))
+
+                .ForMember(dest => dest.DateOfBirthPersian,
+                    opt => opt.Ignore());
 
             CreateMap<CreateUserDto, User>()
                 .ForMember(dest => dest.PasswordHash, opt => opt.Ignore())

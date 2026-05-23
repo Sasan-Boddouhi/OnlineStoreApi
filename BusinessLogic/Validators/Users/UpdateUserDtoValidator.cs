@@ -2,6 +2,7 @@
 using FluentValidation;
 using BusinessLogic.DTOs.User;
 using System.Globalization;
+using BusinessLogic.Common.Validation;
 
 namespace BusinessLogic.Validators.Users;
 
@@ -30,36 +31,7 @@ public class UpdateUserDtoValidator : AbstractValidator<UpdateUserDto>
 
         // اعتبارسنجی تاریخ شمسی (اختیاری)
         RuleFor(x => x.DateOfBirth)
-            .Must(BeValidPersianDate).When(x => !string.IsNullOrEmpty(x.DateOfBirth))
+            .Must(PersianDateValidator.IsValid).When(x => !string.IsNullOrEmpty(x.DateOfBirth))
             .WithMessage("فرمت تاریخ تولد باید YYYY/MM/DD باشد و تاریخ معتبری باشد");
-    }
-
-    private bool BeValidPersianDate(string? persianDate)
-    {
-        if (string.IsNullOrWhiteSpace(persianDate))
-            return true; // در صورت خالی بودن، اعتبارسنجی نمی‌شود (اختیاری)
-
-        if (!System.Text.RegularExpressions.Regex.IsMatch(persianDate, @"^\d{4}/\d{2}/\d{2}$"))
-            return false;
-
-        var parts = persianDate.Split('/');
-        if (!int.TryParse(parts[0], out int year) ||
-            !int.TryParse(parts[1], out int month) ||
-            !int.TryParse(parts[2], out int day))
-            return false;
-
-        if (year < 1300 || year > 1500)
-            return false;
-
-        try
-        {
-            var pc = new PersianCalendar();
-            pc.ToDateTime(year, month, day, 0, 0, 0, 0);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 }

@@ -56,31 +56,46 @@ public sealed class UserService : IUserService
         QueryContract<User> query,
         CancellationToken cancellationToken = default)
     {
-        // تبدیل QueryContract به Spec
         var spec = query.ToSpec();
 
-        // پروجکشن بر اساس نیاز به نقش
-        var projection = query.Sorts.Any(s => s.KeySelector.ToString().Contains("Role")) || query.Filter?.ToString().Contains("Role") == true
-            ? UserQueryConfig.ProjectionWithRole
-            : UserQueryConfig.SimpleProjection;
+        var items = await _unitOfWork
+            .Repository<User>()
+            .ListAsync(
+                spec,
+                UserQueryConfig.Projection,
+                cancellationToken);
 
-        var items = await _unitOfWork.Repository<User>()
-            .ListAsync(spec, projection, cancellationToken);
+        foreach (var item in items)
+        {
+            if (item.DateOfBirth.HasValue)
+            {
+                item.DateOfBirthPersian =
+                    PersianDateHelper.ToPersian(
+                        item.DateOfBirth.Value);
+            }
+        }
 
-        var totalCount = await _unitOfWork.Repository<User>()
-            .CountAsync(spec, cancellationToken);
+        var totalCount = await _unitOfWork
+            .Repository<User>()
+            .CountAsync(
+                spec,
+                cancellationToken);
 
-        // محاسبه صفحه و اندازه از QueryContract
-        int pageNumber, pageSize;
+        int pageNumber;
+        int pageSize;
+
         if (query.Skip.HasValue || query.Take.HasValue)
         {
             pageSize = query.Take ?? 20;
+
             var skip = query.Skip ?? 0;
-            pageNumber = skip / pageSize + 1;
+
+            pageNumber = (skip / pageSize) + 1;
         }
         else
         {
             pageNumber = query.Page ?? 1;
+
             pageSize = query.Size ?? 20;
         }
 
@@ -115,12 +130,8 @@ public sealed class UserService : IUserService
             .Where(u => u.UserId == id)
             .Where(u => u.IsActive);
 
-        var projection = includeRoles
-            ? UserQueryConfig.ProjectionWithRole
-            : UserQueryConfig.SimpleProjection;
-
         var userDto = await _unitOfWork.Repository<User>()
-            .FirstOrDefaultAsync(spec, projection, cancellationToken);
+            .FirstOrDefaultAsync(spec, UserQueryConfig.Projection, cancellationToken);
 
         if (userDto is null)
         {
@@ -151,7 +162,7 @@ public sealed class UserService : IUserService
             .Where(u => u.IsActive);
 
         return await _unitOfWork.Repository<User>()
-            .FirstOrDefaultAsync(spec, UserQueryConfig.SimpleProjection, cancellationToken);
+            .FirstOrDefaultAsync(spec, UserQueryConfig.Projection, cancellationToken);
     }
 
     #endregion
