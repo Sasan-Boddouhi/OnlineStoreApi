@@ -10,5 +10,7 @@ namespace BusinessLogic.DTOs.Product
     {
         public int ProductId { get; set; }
         public string? Name { get; internal set; }
+        public decimal Price { get; internal set; }
+        public int SubcategoryId { get; internal set; }
     }
 }
