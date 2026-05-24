@@ -16,11 +16,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{27A8EC83-4150-4293-8F70-2865CA1D5138}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{418F5682-EFD1-4242-B8EE-8BF2F4E44620}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{9E2AE8A0-4ABF-4614-8D6F-217A54384272}"
 	ProjectSection(SolutionItems) = preProject
-		C:\Users\AMUPC\Desktop\swagger.png = C:\Users\AMUPC\Desktop\swagger.png
+		images\swagger.png = images\swagger.png
 	EndProjectSection
 EndProject
 Global
@@ -50,7 +48,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{418F5682-EFD1-4242-B8EE-8BF2F4E44620} = {27A8EC83-4150-4293-8F70-2865CA1D5138}
+		{9E2AE8A0-4ABF-4614-8D6F-217A54384272} = {5FD55A6D-E56D-43E1-89D2-64019440459D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7B2BE40D-3A4E-4363-827A-055C32CF1039}
