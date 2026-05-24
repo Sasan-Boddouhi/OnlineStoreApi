@@ -51,13 +51,13 @@ A modern online store API built with ASP.NET Core, Clean Architecture, Specifica
                      ▼
 ┌─────────────────────────────────────────┐
 │               Application               │
-│  Entities, Interfaces, Specifications  │
+│  Entities, Interfaces, Specifications   │
 └────────────────────┬────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────┐
 │                DataLayer                │
-│  DbContext, Repository, UnitOfWork     │
+│  DbContext, Repository, UnitOfWork      │
 └─────────────────────────────────────────┘
 ```
 
