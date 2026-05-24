@@ -9,6 +9,12 @@ A modern online store API built with ASP.NET Core, Clean Architecture, Specifica
 
 ---
 
+# 📸 Swagger Preview
+
+![Swagger UI](docs/images/swagger.png)
+
+---
+
 # 🚀 Features
 
 - Clean Architecture
