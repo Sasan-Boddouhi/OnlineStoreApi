@@ -45,7 +45,7 @@ A modern online store API built with ASP.NET Core, Clean Architecture, Specifica
                      ▼
 ┌─────────────────────────────────────────┐
 │              BusinessLogic              │
-│  Services, Mappings, DTOs, Validations │
+│  Services, Mappings, DTOs, Validations  │
 └────────────────────┬────────────────────┘
                      │
                      ▼
