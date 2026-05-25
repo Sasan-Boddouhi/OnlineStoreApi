@@ -136,13 +136,14 @@ Integration tests cover critical user scenarios and ensure system stability.
 
 ## Test Results
 
-```text
+```text{
 OnlineStore.Tests.Integration
   Tests in group: 29
   Total Duration: 5.5 sec
 
 Outcomes: ✅ 29 Passed
-
+}
+```
 ---
 
 # 🔒 Security
