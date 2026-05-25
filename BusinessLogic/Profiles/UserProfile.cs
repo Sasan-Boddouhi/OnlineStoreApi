@@ -33,7 +33,12 @@ namespace BusinessLogic.Profiles
                     opt => opt.MapFrom(src => src.Addresses))
 
                 .ForMember(dest => dest.DateOfBirthPersian,
-                    opt => opt.Ignore());
+                    opt => opt.MapFrom(src => src.DateOfBirth.HasValue
+                        ? PersianDateHelper.ToPersian(src.DateOfBirth.Value)
+                        : null))
+
+                .ForMember(dest => dest.DateOfBirth,
+                    opt => opt.MapFrom(src => src.DateOfBirth));
 
             CreateMap<CreateUserDto, User>()
                 .ForMember(dest => dest.PasswordHash, opt => opt.Ignore())

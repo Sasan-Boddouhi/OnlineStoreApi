@@ -130,6 +130,21 @@ GET /api/products?filter=price gt 1000 and category.name eq 'electronics'&sort=-
 
 ---
 
+# 🧪 Testing
+
+Integration tests cover critical user scenarios and ensure system stability.
+
+## Test Results
+
+```text
+OnlineStore.Tests.Integration
+  Tests in group: 29
+  Total Duration: 5.5 sec
+
+Outcomes: ✅ 29 Passed
+
+---
+
 # 🔒 Security
 
 - JWT Authentication

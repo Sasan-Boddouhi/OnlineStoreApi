@@ -1,5 +1,6 @@
 ﻿using Application.Common.Queries;
 using Application.Entities;
+using Application.Exceptions;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Products;
@@ -87,36 +88,37 @@ public class ProductsController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "Admin,Employee")]
-    public async Task<ActionResult<ProductDto>> CreateProduct(
-        CreateProductDto dto)
+    public async Task<ActionResult<ProductDto>> CreateProduct(CreateProductDto dto)
     {
-        var created = await _productService.CreateAsync(dto);
-
-        return CreatedAtAction(
-            nameof(GetProduct),
-            new { id = created.ProductId },
-            created);
+        try
+        {
+            var created = await _productService.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetProduct), new { id = created.ProductId }, created);
+        }
+        catch (BusinessException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPut("{id:int}")]
     [Authorize(Roles = "Admin,Employee")]
-    public async Task<ActionResult<ProductDto>> UpdateProduct(
-        int id,
-        UpdateProductDto dto)
+    public async Task<ActionResult<ProductDto>> UpdateProduct(int id, UpdateProductDto dto)
     {
         if (id != dto.ProductId)
+            return BadRequest("ID mismatch");
+
+        try
         {
-            return BadRequest();
+            var updated = await _productService.UpdateAsync(dto);
+            if (updated == null)
+                return NotFound();
+            return Ok(updated);
         }
-
-        var updated = await _productService.UpdateAsync(dto);
-
-        if (updated == null)
+        catch (BusinessException ex)
         {
-            return NotFound();
+            return BadRequest(ex.Message);
         }
-
-        return Ok(updated);
     }
 
     [HttpDelete("{id:int}")]

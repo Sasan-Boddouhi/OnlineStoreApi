@@ -145,3 +145,6 @@ Log.Information("Online Store API started successfully");
 Console.WriteLine("Application is running...");
 
 app.Run();
+
+
+public partial class Program { }

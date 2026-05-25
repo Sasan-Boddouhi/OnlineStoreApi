@@ -9,8 +9,9 @@ namespace BusinessLogic.DTOs.Product
     public class UpdateProductDto
     {
         public int ProductId { get; set; }
-        public string? Name { get; internal set; }
-        public decimal Price { get; internal set; }
-        public int SubcategoryId { get; internal set; }
+        public string Name { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public int SubcategoryId { get; set; }
+        public string Description { get; set; } = string.Empty;
     }
 }

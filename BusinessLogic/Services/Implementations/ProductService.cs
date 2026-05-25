@@ -71,7 +71,7 @@ public sealed class ProductService : IProductService
         int id,
         CancellationToken cancellationToken = default)
     {
-        var spec = new Spec<Product>().Where(p => p.ProductId == id);
+        var spec = new Spec<Product>().Where(p => p.ProductId == id).Where(p => p.IsActive);
 
         return await _unitOfWork.Repository<Product>()
             .FirstOrDefaultAsync(spec, ProductQueryConfig.Projection, cancellationToken);
@@ -81,9 +81,7 @@ public sealed class ProductService : IProductService
 
     #region Commands
 
-    public async Task<ProductDto> CreateAsync(
-        CreateProductDto dto,
-        CancellationToken cancellationToken = default)
+    public async Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Creating product with name: {ProductName}", dto.Name);
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -97,10 +95,10 @@ public sealed class ProductService : IProductService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogInformation("Product created successfully with ID: {ProductId}", entity.ProductId);
-            return await GetByIdAsync(entity.ProductId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی محصول ایجاد شده");
+
+            return _mapper.Map<ProductDto>(entity);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not BusinessException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);

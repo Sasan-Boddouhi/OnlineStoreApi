@@ -27,4 +27,10 @@
     <ProjectReference Include="..\..\Online Store Application\DataLayer\DataLayer.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>OnlineStore.Tests.Integration</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>
