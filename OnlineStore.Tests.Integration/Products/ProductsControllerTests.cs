@@ -13,6 +13,7 @@ using Application.Entities;
 using Microsoft.EntityFrameworkCore;
 using BusinessLogic.DTOs.Shared;
 using DataLayer.Context;
+using OnlineStore.Tests.Integration.Builders;
 
 namespace OnlineStore.Tests.Integration.Products;
 
@@ -32,42 +33,32 @@ public class ProductsControllerTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // تولید توکن ادمین
         using var scope = _fixture.Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
         var adminUser = await db.User.FirstOrDefaultAsync(u => u.PhoneNumber == "09120000000");
         if (adminUser == null)
-        {
-            // در DatabaseFixture قبلاً کاربر تست ایجاد نشده، بنابراین یکی می‌سازیم
-            var passwordHasher = scope.ServiceProvider.GetRequiredService<Application.Interfaces.Security.IPasswordHasher>();
-            adminUser = new User
-            {
-                FirstName = "Admin",
-                LastName = "Test",
-                PhoneNumber = "09120000000",
-                PasswordHash = passwordHasher.Hash("Test@123456"),
-                UserType = UserType.Employee,
-                IsActive = true,
-                SecurityStamp = Guid.NewGuid().ToString()
-            };
-            db.User.Add(adminUser);
-            await db.SaveChangesAsync();
-
-            var adminType = await db.EmployeeType.FirstAsync(et => et.TypeName == "Admin");
-            var employee = new Employee
-            {
-                UserId = adminUser.UserId,
-                EmployeeNumber = "ADMIN001",
-                Salary = 10000,
-                HireDate = DateTime.UtcNow,
-                EmployeeTypeId = adminType.EmployeeTypeId
-            };
-            db.Employee.Add(employee);
-            await db.SaveChangesAsync();
-        }
+            throw new Exception("Admin user not seeded. Check TestSeedData.");
 
         _testSubcategoryId = _fixture.TestSubcategoryId;
         _adminToken = GenerateJwtToken(adminUser.UserId, "Admin", adminUser.SecurityStamp);
+
+        // ایجاد داده‌های اولیه برای تست فیلتر (اگر نیاز باشد)
+        if (!await db.Product.AnyAsync(p => p.Price > 500))
+        {
+            var cheapProduct = new ProductBuilder()
+                .WithName("Cheap Product")
+                .WithPrice(300)
+                .WithSubcategoryId(_testSubcategoryId)
+                .Build();
+            var expensiveProduct = new ProductBuilder()
+                .WithName("Expensive Product")
+                .WithPrice(800)
+                .WithSubcategoryId(_testSubcategoryId)
+                .Build();
+            db.Product.AddRange(cheapProduct, expensiveProduct);
+            await db.SaveChangesAsync();
+        }
     }
 
     private string GenerateJwtToken(int userId, string role, string securityStamp)
@@ -97,13 +88,15 @@ public class ProductsControllerTests : IAsyncLifetime
         using var scope = _fixture.Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        // حذف محصولات ایجاد شده در تست‌ها (با شناسه‌هایی که در طول تست ذخیره شده‌اند)
-        // اما چون شناسه‌ها را ذخیره نمی‌کنیم، می‌توانیم بر اساس الگوی نام حذف کنیم
         var testProducts = await db.Product
-            .Where(p => p.Name.StartsWith("To Delete") || p.Name == "Test Product" || p.Name.StartsWith("Unique"))
+            .Where(p => p.Name.StartsWith("To Delete") ||
+                        p.Name == "Test Product" ||
+                        p.Name.StartsWith("Unique") ||
+                        p.Name == "Cheap Product" ||
+                        p.Name == "Expensive Product")
             .ToListAsync();
-        db.Product.RemoveRange(testProducts);
 
+        db.Product.RemoveRange(testProducts);
         await db.SaveChangesAsync();
     }
 
@@ -148,14 +141,15 @@ public class ProductsControllerTests : IAsyncLifetime
     public async Task CreateProduct_DuplicateName_ReturnsBadRequest()
     {
         _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _adminToken);
+        var uniqueName = $"Duplicate {Guid.NewGuid()}";
         var dto = new CreateProductDto
         {
-            Name = "Duplicate Product",
+            Name = uniqueName,
             Price = 100,
             SubcategoryId = _testSubcategoryId
         };
-        await _client.PostAsJsonAsync("/api/products", dto);
-        var response = await _client.PostAsJsonAsync("/api/products", dto);
+        await _client.PostAsJsonAsync("/api/products", dto); // اولین درخواست موفق
+        var response = await _client.PostAsJsonAsync("/api/products", dto); // دومین درخواست تکراری
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var error = await response.Content.ReadAsStringAsync();
         error.Should().Contain("نام");

@@ -95,10 +95,15 @@ public sealed class ProductService : IProductService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogInformation("Product created successfully with ID: {ProductId}", entity.ProductId);
-
             return _mapper.Map<ProductDto>(entity);
         }
-        catch (Exception ex) when (ex is not BusinessException)
+        catch (BusinessException)
+        {
+            // اگر خطای تجاری است، فقط rollback و دوباره پرتاب کن (بدون تغییر پیام)
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+        catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);
@@ -143,9 +148,7 @@ public sealed class ProductService : IProductService
         }
     }
 
-    public async Task<bool> DeleteAsync(
-        int id,
-        CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Deleting product: {ProductId}", id);
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -161,11 +164,17 @@ public sealed class ProductService : IProductService
             }
 
             entity.IsActive = false;
+            _unitOfWork.Repository<Product>().Update(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogInformation("Product soft deleted successfully: {ProductId}", id);
             return true;
+        }
+        catch (BusinessException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
         }
         catch (Exception ex)
         {

@@ -24,21 +24,22 @@ namespace BusinessLogic.Profiles
                                 : null))
                         .ForMember(dest => dest.Barcode, opt => opt.MapFrom(src => src.Barcode))
                         .ForMember(dest => dest.SubcategoryId, opt => opt.MapFrom(src => src.SubcategoryId))
-                        .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description));
+                        .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                        .ForMember(dest => dest.ExpirationDate, opt => opt.MapFrom(src => src.ExpirationDate));
 
             CreateMap<CreateProductDto, Product>()
                 .ForMember(dest => dest.Subcategory, opt => opt.Ignore())
                 .ForMember(dest => dest.Inventories, opt => opt.Ignore())
                 .ForMember(dest => dest.ProductId, opt => opt.Ignore())
                 .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => true))
-                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description ?? string.Empty));
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description));
 
             CreateMap<UpdateProductDto, Product>()
                 .ForMember(dest => dest.ProductId, opt => opt.MapFrom(src => src.ProductId))
                 .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
                 .ForMember(dest => dest.Price, opt => opt.MapFrom(src => src.Price))
                 .ForMember(dest => dest.SubcategoryId, opt => opt.MapFrom(src => src.SubcategoryId))
-                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description ?? string.Empty))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.IsActive, opt => opt.Ignore());
         }
     }

@@ -13,7 +13,8 @@ public static class ProductQueryConfig
         "price",
         "description",
         "subcategory.subcategoryname",
-        "isactive"
+        "isactive",
+        "ExpirationDate"
     };
 
     // پروجکشن کامل (با دسته‌بندی و زیردسته‌بندی)

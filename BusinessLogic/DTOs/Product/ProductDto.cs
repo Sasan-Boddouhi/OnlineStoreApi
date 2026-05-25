@@ -19,5 +19,6 @@ namespace BusinessLogic.DTOs.Product
         public required string CategoryName { get; set; }
         public string? Barcode { get; set; }
         public string? ImageUrl { get; set; }
+        public DateTime? ExpirationDate { get; set; }
     }
 }
