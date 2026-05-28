@@ -2,9 +2,9 @@
 using Application.Interfaces;
 using Application.Common.Specifications;
 using AutoMapper;
-using BusinessLogic.DTOs.Address;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
+using BusinessLogic.DTOs.Address;
 
 namespace BusinessLogic.Services.Implementations;
 
@@ -26,56 +26,41 @@ public sealed class AddressService : IAddressService
 
     public async Task<AddressDto> CreateAsync(int userId, CreateAddressDto dto)
     {
-        await _unitOfWork.BeginTransactionAsync();
+        var address = _mapper.Map<Address>(dto);
 
-        try
+        address.UserId = userId;
+
+        if (dto.IsDefault)
         {
-            var address = _mapper.Map<Address>(dto);
-            address.UserId = userId;
-
-            if (dto.IsDefault)
-            {
-                await EnsureSingleDefaultAsync(userId);
-            }
-            else
-            {
-                var hasAnyAddress = await _unitOfWork
-                    .Repository<Address>()
-                    .AnyAsync(a => a.UserId == userId);
-
-                if (!hasAnyAddress)
-                    address.IsDefault = true;
-            }
-
-            await _unitOfWork.Repository<Address>().AddAsync(address);
-            await _unitOfWork.SaveChangesAsync();
-            await _unitOfWork.CommitTransactionAsync();
-
-            return _mapper.Map<AddressDto>(address);
+            await ResetDefaultAddresses(userId);
         }
-        catch
+        else
         {
-            await _unitOfWork.RollbackTransactionAsync();
-            throw;
+            var hasAny = await _unitOfWork.Repository<Address>()
+                .AnyAsync(a => a.UserId == userId);
+
+            if (!hasAny)
+                address.IsDefault = true;
         }
+
+        await _unitOfWork.Repository<Address>().AddAsync(address);
+        await _unitOfWork.SaveChangesAsync();
+
+        return _mapper.Map<AddressDto>(address);
     }
 
-    private async Task EnsureSingleDefaultAsync(int userId)
+    private async Task ResetDefaultAddresses(int userId)
     {
         var spec = new Spec<Address>()
             .Where(a => a.UserId == userId && a.IsDefault)
-            .AsTracking();                     // نیاز به ویرایش
+            .AsTracking();
 
-        var defaultAddresses = await _unitOfWork
-            .Repository<Address>()
+        var addresses = await _unitOfWork.Repository<Address>()
             .ListAsync(spec);
 
-        foreach (var address in defaultAddresses)
+        foreach (var item in addresses)
         {
-            address.IsDefault = false;
+            item.IsDefault = false;
         }
-
-        if (defaultAddresses.Any())
-            _unitOfWork.Repository<Address>().UpdateRange(defaultAddresses);
     }
 }

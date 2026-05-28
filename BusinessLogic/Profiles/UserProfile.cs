@@ -2,53 +2,76 @@
 using Application.Helper;
 using AutoMapper;
 using BusinessLogic.DTOs.User;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class UserProfile : Profile
 {
-    public class UserProfile : Profile
+    public UserProfile()
     {
-        public UserProfile()
-        {
-            CreateMap<User, UserDto>()
-                .ForMember(dest => dest.UserTypeName,
-                    opt => opt.MapFrom(src => src.UserType.ToString()))
+        // =========================
+        // Entity -> DTO
+        // =========================
 
-                .ForMember(dest => dest.FullName,
-                    opt => opt.MapFrom(src => (src.FirstName ?? "") + " " + (src.LastName ?? "")))
+        CreateMap<User, UserDto>()
+            .ForMember(d => d.FullName,
+                opt => opt.MapFrom(s => $"{s.FirstName} {s.LastName}"))
 
-                .ForMember(dest => dest.RoleName,
-                    opt => opt.MapFrom(src =>
-                        src.Employee != null &&
-                        src.Employee.EmployeeType != null
-                            ? src.Employee.EmployeeType.TypeName
-                            : "بدون نقش"))
+            .ForMember(d => d.EmployeeTypeId,
+                opt => opt.MapFrom(s => s.Employee != null ? s.Employee.EmployeeTypeId : (int?)null))
 
-                .ForMember(dest => dest.Addresses,
-                    opt => opt.MapFrom(src => src.Addresses))
+            .ForMember(d => d.EmployeeTypeName,
+                opt => opt.MapFrom(s => s.Employee != null ? s.Employee.EmployeeType.TypeName : null))
 
-                .ForMember(dest => dest.DateOfBirthPersian,
-                    opt => opt.MapFrom(src => src.DateOfBirth.HasValue
-                        ? PersianDateHelper.ToPersian(src.DateOfBirth.Value)
-                        : null))
+            .ForMember(d => d.EmployeeTypeDisplayName,
+                opt => opt.MapFrom(s => s.Employee != null ? s.Employee.EmployeeType.DisplayName : null))
 
-                .ForMember(dest => dest.DateOfBirth,
-                    opt => opt.MapFrom(src => src.DateOfBirth));
+            .ForMember(d => d.DateOfBirthPersian,
+                opt => opt.MapFrom(s => s.DateOfBirth.HasValue ? PersianDateHelper.ToPersian(s.DateOfBirth.Value) : null));
 
-            CreateMap<CreateUserDto, User>()
-                .ForMember(dest => dest.PasswordHash, opt => opt.Ignore())
-                .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => true))
-                .ForMember(dest => dest.UserType,
-                    opt => opt.MapFrom(src => (UserType)src.UserType))
-                .ForMember(dest => dest.Addresses, opt => opt.Ignore());
+        // =========================
+        // Create DTO -> Entity
+        // =========================
 
-            CreateMap<UpdateUserDto, User>();
-        }
+        CreateMap<CreateUserDto, User>()
+            .ConfigureDbDestination()
+
+            .ForMember(d => d.UserId, opt => opt.Ignore())
+
+            // security/internal
+            .ForMember(d => d.PasswordHash, opt => opt.Ignore())
+            .ForMember(d => d.SecurityStamp, opt => opt.Ignore())
+            .ForMember(d => d.FailedLoginAttempts, opt => opt.Ignore())
+            .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
+
+            // computed
+            .ForMember(d => d.FullName, opt => opt.Ignore())
+
+            // defaults
+            .ForMember(d => d.IsActive, opt => opt.MapFrom(_ => true))
+            .ForMember(d => d.UserType, opt => opt.MapFrom(_ => UserType.Customer));
+
+        // =========================
+        // Update DTO -> Entity
+        // =========================
+
+        CreateMap<UpdateUserDto, User>()
+            .ConfigureDbDestination()
+
+            // immutable/security
+            .ForMember(d => d.PasswordHash, opt => opt.Ignore())
+            .ForMember(d => d.UserType, opt => opt.Ignore())
+            .ForMember(d => d.SecurityStamp, opt => opt.Ignore())
+            .ForMember(d => d.FailedLoginAttempts, opt => opt.Ignore())
+            .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
+            .ForMember(d => d.IsActive, opt => opt.Ignore())
+
+            // computed
+            .ForMember(d => d.FullName, opt => opt.Ignore())
+
+            // null ignore
+            .ForAllMembers(opts =>
+                opts.Condition((src, dest, srcMember) => srcMember != null));
     }
-
 }

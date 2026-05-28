@@ -20,30 +20,20 @@ public static class UserQueryConfig
         u => new UserDto
         {
             UserId = u.UserId,
-
             FirstName = u.FirstName,
-
             LastName = u.LastName,
-
             PhoneNumber = u.PhoneNumber,
-
-            IsActive = u.IsActive,
-
             Email = u.Email,
+            IsActive = u.IsActive,
+            DateOfBirth = u.DateOfBirth,
+            UserType = u.UserType,
 
-            DateOfBirth =
-                u.DateOfBirth == DateTime.MinValue
-                    ? null
-                    : u.DateOfBirth,
+            EmployeeTypeId = u.Employee != null
+                ? u.Employee.EmployeeTypeId
+                : null,
 
-            RoleName =
-                u.Employee != null &&
-                u.Employee.EmployeeType != null
-                    ? u.Employee.EmployeeType.TypeName
-                    : (u.UserType == UserType.Customer
-                        ? "Customer"
-                        : "NoRole"),
-
-            UserTypeName = u.UserType.ToString()
+            EmployeeTypeName = u.Employee != null && u.Employee.EmployeeType != null
+                ? u.Employee.EmployeeType.TypeName
+                : null
         };
 }

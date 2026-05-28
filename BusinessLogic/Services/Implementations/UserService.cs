@@ -230,7 +230,7 @@ public sealed class UserService : IUserService
             _logger.LogInformation("User created successfully with ID: {UserId}", user.UserId);
             _cache.Remove($"{ALL_USERS_FULL_CACHE_KEY}_all");
 
-            return MapToSimpleUserDto(user);
+            return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken) ?? throw new Exception("User creation failed");
         }
         catch (Exception ex) when (ex is not BusinessException)
         {

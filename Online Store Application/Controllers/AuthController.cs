@@ -75,12 +75,12 @@ namespace WebApi.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
-            // گرفتن UserId از توکن
-            var userId = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
+            var sessionId = User.FindFirstValue("SessionId");
+
+            if (!Guid.TryParse(sessionId, out var sid))
                 return Unauthorized();
 
-            await _authService.LogoutAllAsync(Convert.ToInt32(userId));
+            await _authService.LogoutSessionAsync(sid);
 
             return NoContent();
         }

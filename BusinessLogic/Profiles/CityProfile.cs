@@ -1,20 +1,25 @@
 ﻿using Application.Entities;
 using AutoMapper;
+using BusinessLogic.DTOs.City;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class CityProfile : Profile
 {
-    public class CityProfile : Profile
+    public CityProfile()
     {
-        public CityProfile()
-        {
+        CreateMap<City, CityDto>()
+            .ForMember(dest => dest.ProvinceName, opt => opt.MapFrom(src => src.Province != null ? src.Province.ProvinceName : null));
 
-            //CreateMap<City, CityDto>()
-            //    .ForMember(dest => dest.ProvinceName, opt => opt.MapFrom(src => src.Province.ProvinceName));
+        CreateMap<CreateCityDto, City>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.CityId, opt => opt.Ignore());
 
-            //CreateMap<CreateCityDto, City>();
+        CreateMap<City, UpdateCityDto>();
 
-            //CreateMap<City, UpdateCityDto>()
-            //    .ReverseMap();
-        }
+        CreateMap<UpdateCityDto, City>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.ProvinceId, opt => opt.Ignore());
     }
 }

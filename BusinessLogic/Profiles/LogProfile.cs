@@ -1,18 +1,19 @@
 ﻿using Application.Entities;
 using AutoMapper;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BusinessLogic.DTOs.Log;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class LogProfile : Profile
 {
-    public class LogProfile : Profile
+    public LogProfile()
     {
-        public LogProfile()
-        {
-            //CreateMap<Logs, LogEntryDto>().ReverseMap();
-        }
+        CreateMap<Logs, LogEntryDto>();
+
+        CreateMap<LogEntryDto, Logs>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.MessageTemplate, opt => opt.Ignore())
+            .ForMember(d => d.Properties, opt => opt.Ignore());
     }
 }

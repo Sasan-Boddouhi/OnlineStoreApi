@@ -1,37 +1,27 @@
 ﻿using Application.Entities;
 using AutoMapper;
+using BusinessLogic.DTOs.ProductSubcategory;
+using BusinessLogic.Common.Mapping;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+namespace BusinessLogic.Profiles;
 
-namespace BusinessLogic.Profiles
-{   
-    public class ProductSubcategoryProfile : Profile
+public class ProductSubcategoryProfile : Profile
+{
+    public ProductSubcategoryProfile()
     {
-        public ProductSubcategoryProfile()
-        {
-            // ProductSubcategory -> ProductSubcategoryDto (برای نمایش)
-            //CreateMap<ProductSubcategory, ProductSubcategoryDto>()
-            //    .ForMember(dest => dest.ProductCategoryId, opt => opt.MapFrom(src => src.CategoryId))
-            //    .ForMember(dest => dest.ProductSubcategoryId, opt => opt.MapFrom(src => src.SubcategoryId))
-            //    .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.SubcategoryName))
-            //    .ForMember(dest => dest.ProductCategoryName, opt => opt.MapFrom(src => src.Category.CategoryName));
+        CreateMap<ProductSubcategory, ProductSubcategoryDto>()
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null));
 
-            //CreateMap<CreateProductSubcategoryDto, ProductSubcategory>()
-            //    .ForMember(dest => dest.SubcategoryName, opt => opt.MapFrom(src => src.Name))
-            //    .ForMember(dest => dest.CategoryId, opt => opt.MapFrom(src => src.ProductCategoryId))
-            //    .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => true));
+        CreateMap<CreateProductSubcategoryDto, ProductSubcategory>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.SubcategoryId, opt => opt.Ignore())
+            .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => true));
 
-            //CreateMap<ProductSubcategory, UpdateProductSubcategoryDto>()
-            //    .ForMember(dest => dest.ProductSubcategoryId, opt => opt.MapFrom(src => src.SubcategoryId))
-            //    .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.SubcategoryName))
-            //    .ForMember(dest => dest.ProductCategoryId, opt => opt.MapFrom(src => src.CategoryId))
-            //    .ForMember(dest => dest.ProductCategoryName, opt => opt.MapFrom(src => src.Category.CategoryName))
-            //    .ReverseMap();
+        CreateMap<ProductSubcategory, UpdateProductSubcategoryDto>()
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null));
 
-        }
+        CreateMap<UpdateProductSubcategoryDto, ProductSubcategory>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.IsActive, opt => opt.Ignore());
     }
 }

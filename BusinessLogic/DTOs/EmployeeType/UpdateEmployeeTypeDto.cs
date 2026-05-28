@@ -5,11 +5,12 @@ namespace BusinessLogic.DTOs.EmployeeType
     public class UpdateEmployeeTypeDto
     {
         public int EmployeeTypeId { get; set; }
+        public string TypeName { get; set; } = string.Empty;
 
-        [MaxLength(50)]
-        public string? TypeName { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
 
-        [MaxLength(200)]
         public string? Description { get; set; }
+
+        public bool IsActive { get; set; }
     }
 }

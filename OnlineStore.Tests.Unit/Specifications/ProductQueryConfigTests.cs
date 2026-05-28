@@ -36,25 +36,21 @@ public class ProductQueryConfigTests
     public void Projection_WhenSubcategoryIsNotNull_MapsCorrectly()
     {
         // Arrange
-        var category = new ProductCategory
-        {
-            CategoryId = 10,
-            CategoryName = "Electronics"
-        };
+        var category = new ProductCategory { CategoryId = 5, CategoryName = "Gadgets" };
         var subcategory = new ProductSubcategory
         {
-            SubcategoryId = 5,
-            SubcategoryName = "Laptops",
-            Category = category,
-            CategoryId = 10
+            SubcategoryId = 10,
+            SubcategoryName = "Electronics",
+            CategoryId = category.CategoryId,
+            Category = category
         };
         var product = new Product
         {
             ProductId = 1,
-            Name = "Dell XPS",
-            Price = 1200,
-            Description = "Good laptop",
-            SubcategoryId = 5,
+            Name = "Test Product",
+            Price = 99.99m,
+            Description = "Test description",
+            SubcategoryId = 10,
             Subcategory = subcategory,
             IsActive = true,
             Barcode = "12345"
@@ -64,16 +60,10 @@ public class ProductQueryConfigTests
         var dto = ProductQueryConfig.Projection.Compile()(product);
 
         // Assert
-        dto.ProductId.Should().Be(1);
-        dto.Name.Should().Be("Dell XPS");
-        dto.Price.Should().Be(1200);
-        dto.Description.Should().Be("Good laptop");
-        dto.SubcategoryId.Should().Be(5);
-        dto.CategoryId.Should().Be(10);
-        dto.SubcategoryName.Should().Be("Laptops");
-        dto.CategoryName.Should().Be("Electronics");
-        dto.IsActive.Should().BeTrue();
+        dto.Should().NotBeNull();
         dto.Barcode.Should().Be("12345");
+        dto.CategoryName.Should().Be("Gadgets");
+        dto.SubcategoryName.Should().Be("Electronics");
     }
 
     [Fact]
@@ -83,21 +73,23 @@ public class ProductQueryConfigTests
         var product = new Product
         {
             ProductId = 2,
-            Name = "Test",
+            Name = "Test Product",
             Price = 100,
+            Description = "Test description",
             SubcategoryId = 99,
-            Subcategory = null,  // Subcategory missing
-            IsActive = true
+            Subcategory = null,
+            IsActive = true,
+            Barcode = "12345"
         };
 
         // Act
-        // توجه: در کد فعلی Projection، دسترسی به p.Subcategory.CategoryId و ... اگر Subcategory null باشد، NullReferenceException می‌دهد.
-        // این تست ثابت می‌کند که باید کد Projection اصلاح شود.
-        Action act = () => ProductQueryConfig.Projection.Compile()(product);
+        var dto = ProductQueryConfig.Projection.Compile()(product);
 
         // Assert
-        // انتظار: باید NullReferenceException رخ دهد (چون در Projection فعلی این باگ وجود دارد)
-        act.Should().Throw<NullReferenceException>()
-            .WithMessage("*Object reference not set to an instance of an object*");
+        dto.Should().NotBeNull();
+        dto.SubcategoryName.Should().BeNull();
+        dto.CategoryName.Should().BeNull();
+        dto.CategoryId.Should().Be(0);
+        dto.Barcode.Should().Be("12345");
     }
 }

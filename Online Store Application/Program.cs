@@ -13,6 +13,7 @@ using Application.Interfaces.Security;
 using BusinessLogic.Services.Interfaces;
 using DataLayer.Context;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -77,28 +78,64 @@ builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new TokenValidationParameters
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(
+        Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
+
+        RoleClaimType = ClaimTypes.Role,
+        NameClaimType = ClaimTypes.NameIdentifier
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
+            var unitOfWork = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
 
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            var userId = context.Principal!.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var sessionId = context.Principal!.FindFirst("SessionId")?.Value;
 
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
-            ),
+            if (!int.TryParse(userId, out var uid) ||
+                !Guid.TryParse(sessionId, out var sid))
+            {
+                context.Fail("Invalid token claims");
+                return;
+            }
 
-            ClockSkew = TimeSpan.Zero
-        };
-    });
+            var isActive = await unitOfWork.Repository<UserSession>()
+                .AnyAsync(x =>
+                    x.UserId == uid &&
+                    x.Id == sid &&
+                    x.Status == UserSession.SessionStatus.Active);
 
-builder.Services.AddAuthorization();
+            if (!isActive)
+            {
+                context.Fail("Session revoked");
+            }
+        }
+    };
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanManageCatalog", policy =>
+        policy.RequireRole("Admin", "Manager"));
+});
 
 builder.Services.AddCors(options =>
 {
@@ -121,7 +158,11 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    context.Database.Migrate();
+
+    if (!app.Environment.IsEnvironment("Testing"))
+    {
+        context.Database.Migrate();
+    }
 }
 
 // pipeline

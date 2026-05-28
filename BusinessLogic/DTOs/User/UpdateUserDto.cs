@@ -1,18 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace BusinessLogic.DTOs.User;
 
-namespace BusinessLogic.DTOs.User
+public class UpdateUserDto
 {
-    public class UpdateUserDto
-    {
-        public int UserId { get; set; }
-        public string PhoneNumber { get; set; }
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string? DateOfBirth { get; set; }
-        public string Email { get; internal set; } = null!;
-    }
+    public int UserId { get; set; }
+
+    public string PhoneNumber { get; set; } = null!;
+    public string FirstName { get; set; } = null!;
+    public string LastName { get; set; } = null!;
+    public string? DateOfBirth { get; set; }
+
+    public string? Email { get; set; }
+
+    public int? EmployeeTypeId { get; set; } 
 }

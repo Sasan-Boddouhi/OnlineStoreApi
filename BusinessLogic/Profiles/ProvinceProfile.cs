@@ -1,23 +1,23 @@
 ﻿using Application.Entities;
 using AutoMapper;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BusinessLogic.DTOs.Province;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class ProvinceProfile : Profile
 {
-    public class ProvinceProfile : Profile
+    public ProvinceProfile()
     {
-        public ProvinceProfile()
-        {
-            //CreateMap<Province, ProvinceDto>();
+        CreateMap<Province, ProvinceDto>();
 
-            //CreateMap<CreateProvinceDto, Province>();
+        CreateMap<CreateProvinceDto, Province>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.ProvinceId, opt => opt.Ignore());
 
-            //CreateMap<Province, UpdateProvinceDto>()
-            //    .ReverseMap();
-        }
+        CreateMap<Province, UpdateProvinceDto>();
+
+        CreateMap<UpdateProvinceDto, Province>()
+            .ConfigureDbDestination();
     }
 }

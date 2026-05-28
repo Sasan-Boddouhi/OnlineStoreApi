@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.Entities
 {
@@ -19,11 +14,17 @@ namespace Application.Entities
         [StringLength(50)]
         public required string TypeName { get; set; }
 
+        [Required]
+        [StringLength(100)]
+        public required string DisplayName { get; set; }
+
+        public bool IsSystem { get; set; }
+
+        public bool IsActive { get; set; } = true;
+
         [StringLength(200)]
         public string? Description { get; set; }
 
-        // Navigation property
         public virtual ICollection<Employee> Employees { get; set; } = new HashSet<Employee>();
-
     }
 }

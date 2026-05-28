@@ -70,46 +70,71 @@ public sealed class EmployeeTypeService : IEmployeeTypeService
 
     #region Commands
 
-    public async Task<EmployeeTypeDto> CreateAsync(CreateEmployeeTypeDto dto, CancellationToken cancellationToken = default)
+    public async Task<EmployeeTypeDto> CreateAsync(
+    CreateEmployeeTypeDto dto,
+    CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Creating employee type: {TypeName}", dto.TypeName);
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
         try
         {
             await ValidateCreationAsync(dto, cancellationToken);
+
             var entity = _mapper.Map<EmployeeType>(dto);
-            await _unitOfWork.Repository<EmployeeType>().AddAsync(entity, cancellationToken);
+
+            await _unitOfWork.Repository<EmployeeType>()
+                .AddAsync(entity, cancellationToken);
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-            _logger.LogInformation("Employee type created with ID: {Id}", entity.EmployeeTypeId);
-            return await GetByIdAsync(entity.EmployeeTypeId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی نوع کارمند ایجاد شده");
+            _logger.LogInformation("Employee type created: {Id}", entity.EmployeeTypeId);
+
+            var result = await _unitOfWork.Repository<EmployeeType>()
+                .FirstOrDefaultAsync(
+                    new Spec<EmployeeType>()
+                        .Where(x => x.EmployeeTypeId == entity.EmployeeTypeId),
+                    EmployeeTypeQueryConfig.Projection,
+                    cancellationToken);
+
+            return result!;
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to create employee type: {TypeName}", dto.TypeName);
+
+            _logger.LogError(ex, "Failed to create employee type");
+
             throw new BusinessException("خطا در ایجاد نوع کارمند", ex);
         }
     }
 
-    public async Task<EmployeeTypeDto?> UpdateAsync(UpdateEmployeeTypeDto dto, CancellationToken cancellationToken = default)
+    public async Task<EmployeeTypeDto?> UpdateAsync(
+    UpdateEmployeeTypeDto dto,
+    CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Updating employee type ID: {Id}", dto.EmployeeTypeId);
-        var entity = await _unitOfWork.Repository<EmployeeType>().GetByIdAsync(dto.EmployeeTypeId, cancellationToken);
-        if (entity == null)
-        {
-            _logger.LogWarning("Employee type not found: {Id}", dto.EmployeeTypeId);
+
+        var entity = await _unitOfWork.Repository<EmployeeType>()
+            .GetByIdAsync(dto.EmployeeTypeId, cancellationToken);
+
+        if (entity is null)
             return null;
-        }
 
         _mapper.Map(dto, entity);
+
         _unitOfWork.Repository<EmployeeType>().Update(entity);
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Employee type updated: {Id}", dto.EmployeeTypeId);
-        return await GetByIdAsync(entity.EmployeeTypeId, cancellationToken);
+        return await _unitOfWork.Repository<EmployeeType>()
+            .FirstOrDefaultAsync(
+                new Spec<EmployeeType>()
+                    .Where(x => x.EmployeeTypeId == entity.EmployeeTypeId),
+                EmployeeTypeQueryConfig.Projection,
+                cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)

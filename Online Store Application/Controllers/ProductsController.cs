@@ -27,7 +27,9 @@ public class ProductsController : ControllerBase
         _productService = productService;
     }
 
+    // ================= GET ALL =================
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetProducts(
         [FromQuery] string? filter,
         [FromQuery] string? sort,
@@ -67,70 +69,75 @@ public class ProductsController : ControllerBase
             });
         }
 
-        var result = await _productService
-            .GetByQueryAsync(validation.Value!);
-
+        var result = await _productService.GetByQueryAsync(validation.Value!);
         return Ok(result);
     }
 
+    // ================= GET BY ID =================
     [HttpGet("{id:int}")]
+    [AllowAnonymous]
     public async Task<ActionResult<ProductDto>> GetProduct(int id)
     {
         var product = await _productService.GetByIdAsync(id);
 
-        if (product == null)
-        {
+        if (product is null)
             return NotFound();
-        }
 
         return Ok(product);
     }
 
+    // ================= CREATE =================
     [HttpPost]
-    [Authorize(Roles = "Admin,Employee")]
+    [Authorize(Policy = "CanManageCatalog")]
     public async Task<ActionResult<ProductDto>> CreateProduct(CreateProductDto dto)
     {
         try
         {
             var created = await _productService.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetProduct), new { id = created.ProductId }, created);
+
+            return CreatedAtAction(
+                nameof(GetProduct),
+                new { id = created.ProductId },
+                created);
         }
         catch (BusinessException ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(new { message = ex.Message });
         }
     }
 
+    // ================= UPDATE =================
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "Admin,Employee")]
+    [Authorize(Policy = "CanManageCatalog")]
     public async Task<ActionResult<ProductDto>> UpdateProduct(int id, UpdateProductDto dto)
     {
         if (id != dto.ProductId)
-            return BadRequest("ID mismatch");
+            return BadRequest(new { message = "ID mismatch" });
 
         try
         {
             var updated = await _productService.UpdateAsync(dto);
-            if (updated == null)
+
+            if (updated is null)
                 return NotFound();
+
             return Ok(updated);
         }
         catch (BusinessException ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(new { message = ex.Message });
         }
     }
 
+    // ================= DELETE =================
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin,Employee")]
+    [Authorize(Policy = "CanManageCatalog")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
         var success = await _productService.DeleteAsync(id);
 
         if (!success)
-        {
             return NotFound();
-        }
 
         return NoContent();
     }

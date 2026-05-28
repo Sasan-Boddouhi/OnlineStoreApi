@@ -1,32 +1,20 @@
 ﻿using Application.Entities;
 using AutoMapper;
 using BusinessLogic.DTOs.Address;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class AddressProfile : Profile
 {
-    public class AddressProfile : Profile
+    public AddressProfile()
     {
-        public AddressProfile()
-        {
-            //CreateMap<Address, AddressDto>()
-            //    .ForMember(dest => dest.CityName, opt => opt.MapFrom(src => src.City.CityName))
-            //    .ForMember(dest => dest.ProvinceName, opt => opt.MapFrom(src => src.City.Province.ProvinceName));
+        CreateMap<CreateAddressDto, Address>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.AddressId, opt => opt.Ignore())
+            .ForMember(d => d.UserId, opt => opt.Ignore()); // فقط شناسه‌های اصلی که کلاس یا لیست نیستند باقی می‌مانند
 
-            CreateMap<CreateAddressDto, Address>()
-                .ForMember(dest => dest.AddressId, opt => opt.Ignore())
-                .ForMember(dest => dest.UserId, opt => opt.Ignore())
-                .ForMember(dest => dest.User, opt => opt.Ignore())
-                .ForMember(dest => dest.Warehouses, opt => opt.Ignore());
-
-            //CreateMap<UpdateAddressDto, Address>();
-
-            //CreateMap<CreateAddressDto, AddressDto>();
-            //CreateMap<UpdateAddressDto, AddressDto>();
-        }
+        CreateMap<Address, AddressDto>()
+            .ForMember(d => d.CityName, opt => opt.MapFrom(s => s.City != null ? s.City.CityName : null));
     }
 }

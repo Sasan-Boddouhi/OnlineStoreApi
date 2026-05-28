@@ -9,9 +9,9 @@ namespace BusinessLogic.DTOs.Auth
 {
     public class LoginDto
     {
-        public string PhoneNumber { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
-        public string DeviceId { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = null!;
+        public string Password { get; set; } = null!;
+        public string? DeviceId { get; set; }
         public string? DeviceName { get; set; }
         public string? IpAddress { get; set; }
         public string? UserAgent { get; set; }

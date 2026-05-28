@@ -1,20 +1,17 @@
-﻿using Application.Entities;
+﻿using Application.Common.Specifications;
+using Application.Entities;
 using Application.Exceptions;
 using Application.Helper;
 using Application.Interfaces;
 using Application.Interfaces.Security;
-using Application.Common.Specifications;   // ← Spec<T>
 using AutoMapper;
 using BusinessLogic.DTOs.Auth;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-
-namespace BusinessLogic.Services.Implementations;
 
 public sealed class AuthService : IAuthService
 {
@@ -41,16 +38,15 @@ public sealed class AuthService : IAuthService
         _logger = logger;
     }
 
-    #region Register
-
-    public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken cancellationToken = default)
+    // ================= REGISTER =================
+    public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
     {
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        await _unitOfWork.BeginTransactionAsync(ct);
+
         try
         {
-            var exists = await _unitOfWork
-                .Repository<User>()
-                .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, cancellationToken);
+            var exists = await _unitOfWork.Repository<User>()
+                .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, ct);
 
             if (exists)
                 throw new BusinessException("شماره تماس تکراری است.");
@@ -68,250 +64,166 @@ public sealed class AuthService : IAuthService
                 SecurityStamp = Guid.NewGuid().ToString()
             };
 
-            await _unitOfWork.Repository<User>().AddAsync(user, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.Repository<User>().AddAsync(user, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
 
-            var session = new UserSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.UserId,
-                DeviceId = dto.DeviceId ?? "Register",
-                DeviceName = dto.DeviceName,
-                IpAddress = dto.IpAddress,
-                UserAgent = dto.UserAgent,
-                CreatedAtUtc = DateTime.UtcNow,
-                LastActivityUtc = DateTime.UtcNow,
-                AbsoluteExpiryUtc = DateTime.UtcNow.Add(AbsoluteExpirationPeriod),
-                Status = UserSession.SessionStatus.Active
-            };
+            var session = CreateSession(user.UserId, dto);
 
-            await _unitOfWork.Repository<UserSession>().AddAsync(session, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.Repository<UserSession>().AddAsync(session, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
 
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(ct);
 
-            _logger.LogInformation("User registered successfully with ID: {UserId}", user.UserId);
-            return await CreateAuthResultAsync(user.UserId, session.Id, session.CreatedAtUtc, cancellationToken);
+            return await CreateAuthResultAsync(user, session, ct);
         }
         catch
         {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            await _unitOfWork.RollbackTransactionAsync(ct);
             throw;
         }
     }
 
-    #endregion
-
-    #region Login
-
-    public async Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken cancellationToken = default)
+    // ================= LOGIN =================
+    public async Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken ct = default)
     {
-        const int maxFailedAttempts = 5;
-        const int lockoutMinutes = 15;
+        const int maxFailed = 5;
+        const int lockMinutes = 15;
 
-        _logger.LogInformation("Login attempt for phone: {PhoneNumber}", dto.PhoneNumber);
+        var user = await _unitOfWork.Repository<User>()
+            .FirstOrDefaultAsync(
+                new Spec<User>()
+                    .Where(u => u.PhoneNumber == dto.PhoneNumber)
+                    .Where(u => u.IsActive)
+                    .Include(u => u.Employee)
+                    .Include(u => u.Employee.EmployeeType)
+                    .AsTracking(),
+                ct);
 
-        try
+        if (user is null)
+            return null;
+
+        if (user.LockoutEnd.HasValue && user.LockoutEnd > DateTime.UtcNow)
+            return null;
+
+        if (!_passwordHasher.Verify(dto.Password, user.PasswordHash))
         {
-            // ساختن Spec به صورت فلوئنت و فعال کردن Tracking برای ذخیره‌سازی تغییرات
-            var spec = new Spec<User>()
-                .Where(u => u.PhoneNumber == dto.PhoneNumber)
-                .Where(u => u.IsActive)          // فقط کاربران فعال
-                .AsTracking();                   // مطمئن می‌شویم تغییرات ذخیره شوند
+            user.FailedLoginAttempts++;
 
-            var user = await _unitOfWork
-                .Repository<User>()
-                .FirstOrDefaultAsync(spec, cancellationToken);
+            if (user.FailedLoginAttempts >= maxFailed)
+                user.LockoutEnd = DateTime.UtcNow.AddMinutes(lockMinutes);
 
-            if (user is null)
-            {
-                _logger.LogWarning("Login failed: user not found or inactive for phone: {PhoneNumber}", dto.PhoneNumber);
-                return null;
-            }
-
-            if (user.LockoutEnd.HasValue && user.LockoutEnd > DateTime.UtcNow)
-            {
-                _logger.LogWarning("Login failed: account locked for user {UserId} until {LockoutEnd}", user.UserId, user.LockoutEnd);
-                return null;
-            }
-
-            if (user.LockoutEnd.HasValue && user.LockoutEnd <= DateTime.UtcNow)
-            {
-                user.FailedLoginAttempts = 0;
-                user.LockoutEnd = null;
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-
-            bool passwordValid = _passwordHasher.Verify(dto.Password, user.PasswordHash);
-
-            if (!passwordValid)
-            {
-                user.FailedLoginAttempts++;
-                if (user.FailedLoginAttempts >= maxFailedAttempts)
-                {
-                    user.LockoutEnd = DateTime.UtcNow.AddMinutes(lockoutMinutes);
-                    _logger.LogWarning("User {UserId} locked out due to too many failed attempts", user.UserId);
-                }
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                return null;
-            }
-
-            user.FailedLoginAttempts = 0;
-            user.LockoutEnd = null;
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            var session = new UserSession
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.UserId,
-                DeviceId = dto.DeviceId,
-                DeviceName = dto.DeviceName,
-                IpAddress = dto.IpAddress,
-                UserAgent = dto.UserAgent,
-                CreatedAtUtc = DateTime.UtcNow,
-                LastActivityUtc = DateTime.UtcNow,
-                AbsoluteExpiryUtc = DateTime.UtcNow.Add(AbsoluteExpirationPeriod),
-                Status = UserSession.SessionStatus.Active
-            };
-
-            await _unitOfWork.Repository<UserSession>().AddAsync(session, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation("User logged in successfully: {UserId}", user.UserId);
-            return await CreateAuthResultAsync(user.UserId, session.Id, session.CreatedAtUtc, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return null;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during login for phone: {PhoneNumber}", dto.PhoneNumber);
-            throw;
-        }
+
+        user.FailedLoginAttempts = 0;
+        user.LockoutEnd = null;
+
+        var session = CreateSession(user.UserId, dto);
+
+        await _unitOfWork.Repository<UserSession>().AddAsync(session, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return await CreateAuthResultAsync(user, session, ct);
     }
 
-    #endregion
-
-    #region Refresh
-
-    public async Task<AuthResultDto?> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+    // ================= REFRESH =================
+    public async Task<AuthResultDto?> RefreshTokenAsync(string refreshToken, CancellationToken ct = default)
     {
         var identifier = ComputeSha256Hash(refreshToken);
-        var spec = new Spec<RefreshTokenEntity>()
-            .Where(t => t.TokenIdentifier == identifier)
-            .Include(t => t.Session)
-            .Include(t => t.User)
-            .AsTracking();                      // نیاز به به‌روزرسانی توکن
 
-        var token = await _unitOfWork
-            .Repository<RefreshTokenEntity>()
-            .FirstOrDefaultAsync(spec, cancellationToken);
+        var token = await _unitOfWork.Repository<RefreshTokenEntity>()
+            .FirstOrDefaultAsync(
+                new Spec<RefreshTokenEntity>()
+                    .Where(t => t.TokenIdentifier == identifier)
+                    .Include(t => t.Session)
+                    .Include(t => t.User)
+                    .Include(t => t.User.Employee)
+                    .Include(t => t.User.Employee.EmployeeType)
+                    .AsTracking(),
+                ct);
 
         if (token is null)
-        {
-            _logger.LogWarning("Refresh token not found for identifier");
             return null;
-        }
 
         if (!_passwordHasher.Verify(refreshToken, token.TokenHash))
+            return null;
+
+        if (token.IsRevoked || token.Session.Status != UserSession.SessionStatus.Active)
+            return null;
+
+        if (token.Session.IsIdleExpired(IdleTimeout) || token.Session.IsAbsoluteExpired())
         {
-            _logger.LogWarning("Refresh token hash verification failed");
+            token.Session.Status = UserSession.SessionStatus.Expired;
+            await _unitOfWork.SaveChangesAsync(ct);
             return null;
         }
 
-        if (token.Session.Status != UserSession.SessionStatus.Active || token.Session.IsAbsoluteExpired())
-        {
-            _logger.LogInformation("Session not active or absolute expired");
-            return null;
-        }
+        await _unitOfWork.BeginTransactionAsync(ct);
 
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            if (token.Session.IsIdleExpired(IdleTimeout))
-            {
-                token.Session.Status = UserSession.SessionStatus.Expired;
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-                _logger.LogInformation("Session expired due to idle timeout");
-                return null;
-            }
-
-            if (token.IsRevoked || token.ExpiryDate <= DateTime.UtcNow)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                _logger.LogInformation("Token already revoked or expired");
-                return null;
-            }
-
             token.IsRevoked = true;
             token.RevokedAtUtc = DateTime.UtcNow;
             token.Session.LastActivityUtc = DateTime.UtcNow;
 
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(ct);
 
-            var result = await CreateAuthResultAsync(
-                token.UserId,
-                token.SessionId,
-                token.Session.CreatedAtUtc,
-                cancellationToken);
+            var result = await CreateAuthResultAsync(token.User, token.Session, ct);
 
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(ct);
+
             return result;
         }
-        catch (DbUpdateConcurrencyException ex)
+        catch
         {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            _logger.LogWarning(ex, "Concurrency conflict during refresh token for user {UserId}", token.UserId);
-            return null;
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
         }
     }
 
-    #endregion
-
-    #region Logout
-
-    public async Task LogoutSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    // ================= LOGOUT =================
+    public async Task LogoutSessionAsync(Guid sessionId, CancellationToken ct = default)
     {
-        var session = await _unitOfWork
-            .Repository<UserSession>()
-            .GetByIdAsync(sessionId, cancellationToken);
+        var session = await _unitOfWork.Repository<UserSession>()
+            .GetByIdAsync(sessionId, ct);
 
-        if (session is null)
-            return;
+        if (session is null) return;
 
         session.Status = UserSession.SessionStatus.Revoked;
         session.RevokedAtUtc = DateTime.UtcNow;
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(ct);
     }
 
-    public async Task LogoutAllAsync(int userId, CancellationToken cancellationToken = default)
+    public async Task LogoutAllAsync(int userId, CancellationToken ct = default)
     {
-        var spec = new Spec<UserSession>()
-            .Where(s => s.UserId == userId && s.Status == UserSession.SessionStatus.Active)
-            .AsTracking();                     // می‌خواهیم تغییر دهیم
+        var sessions = await _unitOfWork.Repository<UserSession>()
+            .ListAsync(
+                new Spec<UserSession>()
+                    .Where(x => x.UserId == userId && x.Status == UserSession.SessionStatus.Active)
+                    .AsTracking(),
+                ct);
 
-        var sessions = await _unitOfWork
-            .Repository<UserSession>()
-            .ListAsync(spec, cancellationToken);
-
-        foreach (var session in sessions)
+        foreach (var s in sessions)
         {
-            session.Status = UserSession.SessionStatus.Revoked;
-            session.RevokedAtUtc = DateTime.UtcNow;
+            s.Status = UserSession.SessionStatus.Revoked;
+            s.RevokedAtUtc = DateTime.UtcNow;
         }
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _unitOfWork.SaveChangesAsync(ct);
     }
 
-    #endregion
-
-    #region Core Auth Logic
-
-    private async Task<AuthResultDto> CreateAuthResultAsync(
-        int userId,
-        Guid sessionId,
-        DateTime sessionCreatedAtUtc,
-        CancellationToken cancellationToken)
+    // ================= CORE =================
+    private async Task<AuthResultDto> CreateAuthResultAsync(User user, UserSession session, CancellationToken ct)
     {
-        var (user, accessToken) = await GenerateAccessTokenAsync(userId, cancellationToken);
-        var refreshToken = await CreateRefreshTokenAsync(userId, sessionId, sessionCreatedAtUtc, cancellationToken);
+        var accessToken = GenerateAccessToken(user, session.Id);
+
+        var refreshToken = await CreateRefreshTokenAsync(
+            user.UserId,
+            session.Id,
+            session.CreatedAtUtc,
+            ct);
 
         return new AuthResultDto
         {
@@ -321,66 +233,72 @@ public sealed class AuthService : IAuthService
         };
     }
 
-    private async Task<(User user, string accessToken)> GenerateAccessTokenAsync(int userId, CancellationToken cancellationToken)
+    private UserSession CreateSession(int userId, dynamic dto)
     {
-        var spec = new Spec<User>()
-            .Where(u => u.UserId == userId)
-            .Include(u => u.Employee.EmployeeType)
-            .AsTracking();                     // خواندن برای ساختن Claims، Tracking لازم نیست ولی بی‌ضرر است
-
-        var user = await _unitOfWork
-            .Repository<User>()
-            .FirstOrDefaultAsync(spec, cancellationToken);
-
-        if (user is null)
-            throw new BusinessException("User not found.");
-
-        string role = user.Employee?.EmployeeType?.TypeName ??
-                      (user.UserType == UserType.Customer ? "Customer" : "NoRole");
-
-        var claims = new List<Claim>
+        return new UserSession
         {
-            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-            new Claim(ClaimTypes.Role, role),
-            new Claim("FullName", user.FullName),
-            new Claim("PhoneNumber", user.PhoneNumber),
-            new Claim("SecurityStamp", user.SecurityStamp)
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            DeviceId = string.IsNullOrWhiteSpace(dto.DeviceId) ? Guid.NewGuid().ToString() : dto.DeviceId,
+            DeviceName = dto.DeviceName,
+            IpAddress = dto.IpAddress,
+            UserAgent = dto.UserAgent,
+            CreatedAtUtc = DateTime.UtcNow,
+            LastActivityUtc = DateTime.UtcNow,
+            AbsoluteExpiryUtc = DateTime.UtcNow.Add(AbsoluteExpirationPeriod),
+            Status = UserSession.SessionStatus.Active
         };
-
-        var accessToken = _jwtTokenService.GenerateToken(claims);
-        return (user, accessToken);
     }
 
-    private async Task<string> CreateRefreshTokenAsync(
-        int userId,
-        Guid sessionId,
-        DateTime sessionCreatedAt,
-        CancellationToken cancellationToken)
+    private string GenerateAccessToken(User user, Guid sessionId)
     {
-        var refreshToken = _jwtTokenService.GenerateRefreshToken();
+        var role = user.Employee?.EmployeeType?.TypeName;
+
+        if (string.IsNullOrEmpty(role))
+        {
+            role = user.UserType == UserType.Employee
+                ? "Employee"
+                : "Customer";
+        }
+
+        var claims = new List<Claim>
+    {
+        new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+        new("SessionId", sessionId.ToString()),
+        new(ClaimTypes.Role, role),
+        new("FullName", user.FullName ?? ""),
+        new("PhoneNumber", user.PhoneNumber),
+        new("SecurityStamp", user.SecurityStamp)
+    };
+
+        return _jwtTokenService.GenerateToken(claims);
+    }
+
+    private async Task<string> CreateRefreshTokenAsync(int userId, Guid sessionId, DateTime createdAt, CancellationToken ct)
+    {
+        var token = _jwtTokenService.GenerateRefreshToken();
+
         var entity = new RefreshTokenEntity
         {
             UserId = userId,
             SessionId = sessionId,
-            TokenHash = _passwordHasher.Hash(refreshToken),
-            TokenIdentifier = ComputeSha256Hash(refreshToken),
-            AbsoluteExpiry = sessionCreatedAt.Add(AbsoluteExpirationPeriod),
+            TokenHash = _passwordHasher.Hash(token),
+            TokenIdentifier = ComputeSha256Hash(token),
+            AbsoluteExpiry = createdAt.Add(AbsoluteExpirationPeriod),
             ExpiryDate = DateTime.UtcNow.AddDays(7),
             CreatedAt = DateTime.UtcNow,
             IsRevoked = false
         };
 
-        await _unitOfWork.Repository<RefreshTokenEntity>().AddAsync(entity, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        return refreshToken;
+        await _unitOfWork.Repository<RefreshTokenEntity>().AddAsync(entity, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return token;
     }
 
-    private static string ComputeSha256Hash(string rawData)
+    private static string ComputeSha256Hash(string raw)
     {
-        using var sha256 = SHA256.Create();
-        byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(rawData));
-        return Convert.ToBase64String(bytes);
+        using var sha = SHA256.Create();
+        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(raw)));
     }
-
-    #endregion
 }

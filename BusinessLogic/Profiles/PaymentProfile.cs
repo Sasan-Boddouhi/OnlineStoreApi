@@ -1,21 +1,28 @@
-﻿using Application.DTOs.Order;
-using Application.Entities;
+﻿using Application.Entities;
 using AutoMapper;
-using BusinessLogic.DTOs.OrderItem;
 using BusinessLogic.DTOs.Payment;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class PaymentProfile : Profile
 {
-    public class PaymentProfile : Profile
+    public PaymentProfile()
     {
-        public PaymentProfile()
-        {
-            CreateMap<Payment, PaymentDto>();
-        }
+        // ۱. موجودیت به دی‌تی‌او خروجی
+        CreateMap<Payment, PaymentDto>();
+
+        // ۲. ساخت تراکنش جدید (اضافه شدن خط IsActive برای رفع خطای لاگ)
+        CreateMap<CreatePaymentDto, Payment>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.PaymentId, opt => opt.Ignore())
+            .ForMember(d => d.IsActive, opt => opt.MapFrom(_ => true)); // تنظیم مقدار پیش‌فرض فعال
+
+        // ۳. ویرایش تراکنش
+        CreateMap<UpdatePaymentDto, Payment>()
+            .ConfigureDbDestination()
+            .ForMember(d => d.PaymentId, opt => opt.Ignore())
+            .ForAllMembers(opts =>
+                opts.Condition((src, dest, srcMember) => srcMember != null));
     }
 }

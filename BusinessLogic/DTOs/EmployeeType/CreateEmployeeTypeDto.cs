@@ -4,11 +4,10 @@ namespace BusinessLogic.DTOs.EmployeeType
 {
     public class CreateEmployeeTypeDto
     {
-        [Required(ErrorMessage = "نوع کارمند الزامی است.")]
-        [MaxLength(50)]
-        public string TypeName { get; set; } = null!;
+        public string TypeName { get; set; } = string.Empty;
 
-        [MaxLength(200)]
+        public string DisplayName { get; set; } = string.Empty;
+
         public string? Description { get; set; }
     }
 }

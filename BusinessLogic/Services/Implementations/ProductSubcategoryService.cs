@@ -134,8 +134,8 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
     public async Task<ProductSubcategoryDto> UpdateAsync(UpdateProductSubcategoryDto dto, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Updating product subcategory ID: {Id}", dto.ProductSubcategoryId);
-        var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(dto.ProductSubcategoryId, cancellationToken);
+        _logger.LogInformation("Updating product subcategory ID: {Id}", dto.SubcategoryId);
+        var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(dto.SubcategoryId, cancellationToken);
         if (entity == null || !entity.IsActive)
             throw new BusinessException("زیردسته‌بندی یافت نشد.");
 
@@ -143,7 +143,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         _unitOfWork.Repository<ProductSubcategory>().Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Product subcategory updated: {Id}", dto.ProductSubcategoryId);
+        _logger.LogInformation("Product subcategory updated: {Id}", dto.SubcategoryId);
         return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
                ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی به‌روز شده");
     }

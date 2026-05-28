@@ -1,30 +1,32 @@
 ﻿using Application.Entities;
 using AutoMapper;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BusinessLogic.DTOs.ProductCategory;
+using BusinessLogic.Common.Mapping;
 
-namespace BusinessLogic.Profiles
+namespace BusinessLogic.Profiles;
+
+public class ProductCategoryProfile : Profile
 {
-    public class ProductCategoryProfile : Profile
+    public ProductCategoryProfile()
     {
-        public ProductCategoryProfile()
-        {
-            //CreateMap<ProductCategory, ProductCategoryDto>()
-            //    .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.CategoryName))
-            //    .ForMember(dest => dest.ProductCategoryId, opt => opt.MapFrom(src => src.CategoryId));
+        CreateMap<ProductCategory, ProductCategoryDto>()
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.CategoryName))
+            .ForMember(dest => dest.ProductCategoryId, opt => opt.MapFrom(src => src.CategoryId));
 
-            //CreateMap<CreateProductCategoryDto, ProductCategory>()
-            //    .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Name));
+        CreateMap<CreateProductCategoryDto, ProductCategory>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.CategoryId, opt => opt.Ignore())
+            .ForMember(dest => dest.Description, opt => opt.Ignore())
+            .ForMember(dest => dest.IsActive, opt => opt.Ignore())
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Name));
 
-            //CreateMap<UpdateProductCategoryDto, ProductCategory>()
-            //    .ForMember(dest => dest.CategoryId, opt => opt.MapFrom(src => src.ProductCategoryId))
-            //    .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Name))
-            //    .ReverseMap();
+        CreateMap<UpdateProductCategoryDto, ProductCategory>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.Description, opt => opt.Ignore())
+            .ForMember(dest => dest.IsActive, opt => opt.Ignore())
+            .ForMember(dest => dest.CategoryId, opt => opt.MapFrom(src => src.ProductCategoryId))
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Name));
 
-            //CreateMap<ProductCategoryDto, UpdateProductCategoryDto>().ReverseMap();
-        }
+        CreateMap<ProductCategoryDto, UpdateProductCategoryDto>().ReverseMap();
     }
 }
