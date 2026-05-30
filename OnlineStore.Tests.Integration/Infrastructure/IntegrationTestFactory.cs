@@ -1,4 +1,5 @@
-﻿using DataLayer.Context;
+﻿using Application.Interfaces;
+using DataLayer.Context;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -50,6 +51,7 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
 
             // Interceptor
             services.AddScoped<ISaveChangesInterceptor, SqliteRowVersionFixInterceptor>();
+            services.AddScoped<ICurrentUserService, FakeCurrentUserService>();
 
             // ثبت دستی DbContextOptions و AppDbContext -> TestAppDbContext
             var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
