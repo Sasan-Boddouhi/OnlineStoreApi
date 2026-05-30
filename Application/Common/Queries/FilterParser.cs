@@ -104,20 +104,38 @@ public sealed class FilterParser
             throw new Exception(msg);
     }
 
+    private static readonly (Func<Token, Type, bool> Condition, Func<Token, Type, string> Message)[] MismatchRules =
+    {
+    (
+        (t, type) => t.Type == TokenType.String && type != typeof(string),
+        (t, type) => $"Cannot compare string with non-string field of type '{type.Name}'."
+    ),
+    (
+        (t, type) => t.Type == TokenType.Number && type == typeof(string),
+        (t, type) => "Cannot compare number with string field. Use quotes for string values."
+    ),
+    (
+        (t, type) => t.Type == TokenType.Boolean && type != typeof(bool),
+        (t, type) => "Cannot compare boolean with non-boolean field."
+    ),
+    (
+        (t, type) => t.Type == TokenType.Identifier && type != typeof(string),
+        (t, type) => $"Unquoted identifier '{t.Value}' is not allowed. Use quotes for strings or 'null' for null."
+    ),
+};
+
     private static bool IsTypeMismatch(Token token, Type target, out string message)
     {
+        foreach (var (condition, msgFunc) in MismatchRules)
+        {
+            if (condition(token, target))
+            {
+                message = msgFunc(token, target);
+                return true;
+            }
+        }
         message = string.Empty;
-        if (token.Type == TokenType.String && target != typeof(string))
-            message = $"Cannot compare string with non-string field of type '{target.Name}'.";
-        else if (token.Type == TokenType.Number && target == typeof(string))
-            message = "Cannot compare number with string field. Use quotes for string values.";
-        else if (token.Type == TokenType.Boolean && target != typeof(bool))
-            message = "Cannot compare boolean with non-boolean field.";
-        else if (token.Type == TokenType.Identifier && target != typeof(string))
-            message = $"Unquoted identifier '{token.Value}' is not allowed. Use quotes for strings or 'null' for null.";
-        else
-            return false;
-        return true;
+        return false;
     }
 
     private static readonly Dictionary<string, Func<Expression, Expression, Expression>> OperatorFactories = new()
@@ -148,17 +166,24 @@ public sealed class FilterParser
         return Expression.AndAlso(notNull, call);
     }
 
+    private static readonly Dictionary<Type, Func<string, object>> TypeConverters = new()
+    {
+        [typeof(string)] = raw => raw,
+        [typeof(int)] = raw => int.Parse(raw, CultureInfo.InvariantCulture),
+        [typeof(long)] = raw => long.Parse(raw, CultureInfo.InvariantCulture),
+        [typeof(decimal)] = raw => decimal.Parse(raw, CultureInfo.InvariantCulture),
+        [typeof(double)] = raw => double.Parse(raw, CultureInfo.InvariantCulture),
+        [typeof(float)] = raw => float.Parse(raw, CultureInfo.InvariantCulture),
+        [typeof(bool)] = raw => bool.Parse(raw),
+        [typeof(Guid)] = raw => Guid.Parse(raw),
+        [typeof(DateTime)] = raw => DateTime.Parse(raw, CultureInfo.InvariantCulture)
+    };
+
     private static object? ConvertValue(string raw, Type type)
     {
-        if (type == typeof(string)) return raw;
-        if (type == typeof(int)) return int.Parse(raw, CultureInfo.InvariantCulture);
-        if (type == typeof(long)) return long.Parse(raw, CultureInfo.InvariantCulture);
-        if (type == typeof(decimal)) return decimal.Parse(raw, CultureInfo.InvariantCulture);
-        if (type == typeof(double)) return double.Parse(raw, CultureInfo.InvariantCulture);
-        if (type == typeof(float)) return float.Parse(raw, CultureInfo.InvariantCulture);
-        if (type == typeof(bool)) return bool.Parse(raw);
-        if (type == typeof(Guid)) return Guid.Parse(raw);
-        if (type == typeof(DateTime)) return DateTime.Parse(raw, CultureInfo.InvariantCulture);
+        if (TypeConverters.TryGetValue(type, out var converter))
+            return converter(raw);
+
         return Convert.ChangeType(raw, type, CultureInfo.InvariantCulture);
     }
 

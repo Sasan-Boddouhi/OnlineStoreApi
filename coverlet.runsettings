@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByFile>**/Migrations/**</ExcludeByFile>
+          <ExcludeByFile>**/DTOs/**</ExcludeByFile>
+          <ExcludeByFile>**/Profiles/**</ExcludeByFile>
+          <ExcludeByFile>**/Validators/**</ExcludeByFile>
+          <Exclude>[*]Online_Store_Application.Program</Exclude>
+          <Exclude>[*]DataLayer.Context.DesignTimeDbContextFactory</Exclude>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -224,10 +224,10 @@ var assemblies = [
       { "name": "Application.Common.Helpers.ExpressionBuilder", "rp": "Application_ExpressionBuilder.html", "cl": 0, "ucl": 16, "cal": 16, "tl": 32, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.ExpressionCache<T>", "rp": "Application_ExpressionCache_1.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.FilterLexer", "rp": "Application_FilterLexer.html", "cl": 78, "ucl": 32, "cal": 110, "tl": 158, "cb": 29, "tb": 48, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Helpers.PredicateBuilder", "rp": "Application_PredicateBuilder.html", "cl": 0, "ucl": 20, "cal": 20, "tl": 50, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Helpers.PredicateBuilder", "rp": "Application_PredicateBuilder.html", "cl": 0, "ucl": 20, "cal": 20, "tl": 50, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.Token", "rp": "Application_Token.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 158, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Queries.FilterParser", "rp": "Application_FilterParser.html", "cl": 29, "ucl": 87, "cal": 116, "tl": 166, "cb": 4, "tb": 58, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Queries.Internal.LambdaSortDefinition<T>", "rp": "Application_LambdaSortDefinition_1.html", "cl": 0, "ucl": 7, "cal": 7, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Queries.FilterParser", "rp": "Application_FilterParser.html", "cl": 29, "ucl": 109, "cal": 138, "tl": 191, "cb": 4, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Queries.Internal.LambdaSortDefinition<T>", "rp": "Application_LambdaSortDefinition_1.html", "cl": 5, "ucl": 2, "cal": 7, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.Paging", "rp": "Application_Paging.html", "cl": 0, "ucl": 3, "cal": 3, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.PagingResult", "rp": "Application_PagingResult.html", "cl": 0, "ucl": 4, "cal": 4, "tl": 9, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.ParseError", "rp": "Application_ParseError.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -237,14 +237,14 @@ var assemblies = [
       { "name": "Application.Common.Queries.QueryParseContext<T>", "rp": "Application_QueryParseContext_1.html", "cl": 4, "ucl": 0, "cal": 4, "tl": 12, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.QueryPolicy", "rp": "Application_QueryPolicy.html", "cl": 24, "ucl": 17, "cal": 41, "tl": 70, "cb": 15, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.SortDefinition<T>", "rp": "Application_SortDefinition_1.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 10, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Queries.SortParser", "rp": "Application_SortParser.html", "cl": 0, "ucl": 64, "cal": 64, "tl": 103, "cb": 0, "tb": 36, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Queries.SortParser", "rp": "Application_SortParser.html", "cl": 61, "ucl": 3, "cal": 64, "tl": 103, "cb": 31, "tb": 36, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.StringQueryParser", "rp": "Application_StringQueryParser.html", "cl": 32, "ucl": 14, "cal": 46, "tl": 78, "cb": 6, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Specifications.QueryContractMapper", "rp": "Application_QueryContractMapper.html", "cl": 13, "ucl": 7, "cal": 20, "tl": 34, "cb": 7, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Specifications.QueryContractMapper", "rp": "Application_QueryContractMapper.html", "cl": 13, "ucl": 7, "cal": 20, "tl": 34, "cb": 6, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.ReplaceExpressionVisitor", "rp": "Application_ReplaceExpressionVisitor.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 23, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.Spec<T>", "rp": "Application_Spec_1.html", "cl": 39, "ucl": 10, "cal": 49, "tl": 92, "cb": 4, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.SpecificationEvaluator<T>", "rp": "Application_SpecificationEvaluator_1.html", "cl": 16, "ucl": 37, "cal": 53, "tl": 90, "cb": 9, "tb": 26, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.Address", "rp": "Application_Address.html", "cl": 13, "ucl": 0, "cal": 13, "tl": 51, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Entities.AuditableEntity", "rp": "Application_AuditableEntity.html", "cl": 2, "ucl": 2, "cal": 4, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Entities.AuditableEntity", "rp": "Application_AuditableEntity.html", "cl": 4, "ucl": 0, "cal": 4, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.City", "rp": "Application_City.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.Customer", "rp": "Application_Customer.html", "cl": 10, "ucl": 2, "cal": 12, "tl": 44, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.Employee", "rp": "Application_Employee.html", "cl": 8, "ucl": 1, "cal": 9, "tl": 39, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -264,7 +264,7 @@ var assemblies = [
       { "name": "Application.Entities.Warehouse", "rp": "Application_Warehouse.html", "cl": 0, "ucl": 5, "cal": 5, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Exceptions.BusinessException", "rp": "Application_BusinessException.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Helper.PersianDateHelper", "rp": "Application_PersianDateHelper.html", "cl": 14, "ucl": 0, "cal": 14, "tl": 28, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Middleware.QueryMetricsMiddleware", "rp": "Application_QueryMetricsMiddleware.html", "cl": 63, "ucl": 1, "cal": 64, "tl": 93, "cb": 12, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Middleware.QueryMetricsMiddleware", "rp": "Application_QueryMetricsMiddleware.html", "cl": 63, "ucl": 1, "cal": 64, "tl": 93, "cb": 10, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Models.Metrics.QueryMetrics", "rp": "Application_QueryMetrics.html", "cl": 11, "ucl": 0, "cal": 11, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "UserSession", "rp": "Application_UserSession.html", "cl": 20, "ucl": 1, "cal": 21, "tl": 52, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -274,7 +274,7 @@ var assemblies = [
       { "name": "Application.DTOs.Order.OrderDto", "rp": "BusinessLogic_OrderDto.html", "cl": 7, "ucl": 0, "cal": 7, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "AuthService", "rp": "BusinessLogic_AuthService.html", "cl": 192, "ucl": 10, "cal": 202, "tl": 304, "cb": 55, "tb": 64, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Common.Mapping.AutoMapperExtensions", "rp": "BusinessLogic_AutoMapperExtensions.html", "cl": 22, "ucl": 0, "cal": 22, "tl": 37, "cb": 20, "tb": 20, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Common.Validation.PersianDateValidator", "rp": "BusinessLogic_PersianDateValidator.html", "cl": 0, "ucl": 31, "cal": 31, "tl": 52, "cb": 0, "tb": 16, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Common.Validation.PersianDateValidator", "rp": "BusinessLogic_PersianDateValidator.html", "cl": 29, "ucl": 2, "cal": 31, "tl": 52, "cb": 13, "tb": 16, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Address.AddressDto", "rp": "BusinessLogic_AddressDto.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 24, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Auth.AuthResultDto", "rp": "BusinessLogic_AuthResultDto.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Auth.LoginDto", "rp": "BusinessLogic_LoginDto.html", "cl": 6, "ucl": 0, "cal": 6, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -362,14 +362,14 @@ var assemblies = [
       { "name": "BusinessLogic.Specifications.Users.UserQueryConfig", "rp": "BusinessLogic_UserQueryConfig.html", "cl": 19, "ucl": 9, "cal": 28, "tl": 39, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Auth.LoginDtoValidator", "rp": "BusinessLogic_LoginDtoValidator.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 21, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Auth.RegisterDtoValidator", "rp": "BusinessLogic_RegisterDtoValidator.html", "cl": 21, "ucl": 0, "cal": 21, "tl": 35, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.Cities.CreateCityDtoValidator", "rp": "BusinessLogic_CreateCityDtoValidator.html", "cl": 0, "ucl": 8, "cal": 8, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.Employees.CreateEmployeeDtoValidator", "rp": "BusinessLogic_CreateEmployeeDtoValidator.html", "cl": 0, "ucl": 17, "cal": 17, "tl": 33, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.Cities.CreateCityDtoValidator", "rp": "BusinessLogic_CreateCityDtoValidator.html", "cl": 8, "ucl": 0, "cal": 8, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.Employees.CreateEmployeeDtoValidator", "rp": "BusinessLogic_CreateEmployeeDtoValidator.html", "cl": 17, "ucl": 0, "cal": 17, "tl": 33, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Products.CreateProductDtoValidator", "rp": "BusinessLogic_CreateProductDtoValidator.html", "cl": 16, "ucl": 0, "cal": 16, "tl": 28, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Products.UpdateProductDtoValidator", "rp": "BusinessLogic_UpdateProductDtoValidator.html", "cl": 12, "ucl": 0, "cal": 12, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.ProductSubcategories.CreateProductSubcategoryDtoValidator", "rp": "BusinessLogic_CreateProductSubcategoryDtoValidator.html", "cl": 0, "ucl": 10, "cal": 10, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.ProductSubcategories.UpdateProductSubcategoryDtoValidator", "rp": "BusinessLogic_UpdateProductSubcategoryDtoValidator.html", "cl": 0, "ucl": 12, "cal": 12, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.Users.CreateUserDtoValidator", "rp": "BusinessLogic_CreateUserDtoValidator.html", "cl": 0, "ucl": 21, "cal": 21, "tl": 38, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.Users.UpdateUserDtoValidator", "rp": "BusinessLogic_UpdateUserDtoValidator.html", "cl": 0, "ucl": 20, "cal": 20, "tl": 37, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.ProductSubcategories.CreateProductSubcategoryDtoValidator", "rp": "BusinessLogic_CreateProductSubcategoryDtoValidator.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.ProductSubcategories.UpdateProductSubcategoryDtoValidator", "rp": "BusinessLogic_UpdateProductSubcategoryDtoValidator.html", "cl": 12, "ucl": 0, "cal": 12, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.Users.CreateUserDtoValidator", "rp": "BusinessLogic_CreateUserDtoValidator.html", "cl": 21, "ucl": 0, "cal": 21, "tl": 38, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.Users.UpdateUserDtoValidator", "rp": "BusinessLogic_UpdateUserDtoValidator.html", "cl": 20, "ucl": 0, "cal": 20, "tl": 37, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "CreateAddressDto", "rp": "BusinessLogic_CreateAddressDto.html", "cl": 8, "ucl": 0, "cal": 8, "tl": 15, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "EnumExtensions", "rp": "BusinessLogic_EnumExtensions.html", "cl": 0, "ucl": 6, "cal": 6, "tl": 13, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -384,9 +384,9 @@ var assemblies = [
       { "name": "DataLayer.Migrations.InitialCreate", "rp": "DataLayer_InitialCreate.html", "cl": 0, "ucl": 1888, "cal": 1888, "tl": 2045, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Migrations.MakeUserDateOfBirthNullable", "rp": "DataLayer_MakeUserDateOfBirthNullable.html", "cl": 0, "ucl": 1205, "cal": 1205, "tl": 1292, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Migrations.UpdateEmployeeType", "rp": "DataLayer_UpdateEmployeeType.html", "cl": 0, "ucl": 1228, "cal": 1228, "tl": 1318, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "DataLayer.Repositories.Implementations.AuditInterceptor", "rp": "DataLayer_AuditInterceptor.html", "cl": 0, "ucl": 35, "cal": 35, "tl": 68, "cb": 0, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "DataLayer.Repositories.Implementations.AuditInterceptor", "rp": "DataLayer_AuditInterceptor.html", "cl": 31, "ucl": 4, "cal": 35, "tl": 68, "cb": 12, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Repositories.Implementations.GenericRepository<T>", "rp": "DataLayer_GenericRepository_1.html", "cl": 48, "ucl": 0, "cal": 48, "tl": 104, "cb": 3, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "DataLayer.Repositories.UnitOfWork", "rp": "DataLayer_UnitOfWork.html", "cl": 51, "ucl": 3, "cal": 54, "tl": 110, "cb": 8, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "DataLayer.Repositories.UnitOfWork", "rp": "DataLayer_UnitOfWork.html", "cl": 51, "ucl": 3, "cal": 54, "tl": 110, "cb": 6, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Security.BcryptPasswordHasher", "rp": "DataLayer_BcryptPasswordHasher.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 21, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Services.SqlQueryService", "rp": "DataLayer_SqlQueryService.html", "cl": 0, "ucl": 16, "cal": 16, "tl": 41, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -399,7 +399,7 @@ var assemblies = [
       { "name": "Online_Store_Application.Controllers.OrdersController", "rp": "Online_Store_Application_API__OrdersController.html", "cl": 0, "ucl": 7, "cal": 7, "tl": 26, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Online_Store_Application.Controllers.ProductsController", "rp": "Online_Store_Application_API__ProductsController.html", "cl": 65, "ucl": 10, "cal": 75, "tl": 144, "cb": 10, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Online_Store_Application.Controllers.UsersController", "rp": "Online_Store_Application_API__UsersController.html", "cl": 0, "ucl": 99, "cal": 99, "tl": 178, "cb": 0, "tb": 28, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Online_Store_Application.Services.CurrentUserService", "rp": "Online_Store_Application_API__CurrentUserService.html", "cl": 0, "ucl": 30, "cal": 30, "tl": 57, "cb": 0, "tb": 40, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Online_Store_Application.Services.CurrentUserService", "rp": "Online_Store_Application_API__CurrentUserService.html", "cl": 25, "ucl": 5, "cal": 30, "tl": 57, "cb": 21, "tb": 40, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Program", "rp": "Online_Store_Application_API__Program.html", "cl": 115, "ucl": 34, "cal": 149, "tl": 192, "cb": 3, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "WebApi.Controllers.AuthController", "rp": "Online_Store_Application_API__AuthController.html", "cl": 39, "ucl": 1, "cal": 40, "tl": 89, "cb": 8, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -421,54 +421,6 @@ var riskHotspotMetrics = [
 
 var riskHotspots = [
   {
-    "assembly": "Application", "class": "Application.Common.Queries.FilterParser", "reportPath": "Application_FilterParser.html", "methodName": "ConvertValue(System.String,System.Type)", "methodShortName": "ConvertValue(...)", "fileIndex": 0, "line": 152,
-    "metrics": [
-      { "value": 342, "exceeded": true },
-      { "value": 18, "exceeded": true },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.FilterParser", "reportPath": "Application_FilterParser.html", "methodName": "IsTypeMismatch(Application.Common.Helpers.Token,System.Type,System.String&)", "methodShortName": "IsTypeMismatch(...)", "fileIndex": 0, "line": 108,
-    "metrics": [
-      { "value": 272, "exceeded": true },
-      { "value": 16, "exceeded": true },
-    ]},
-  {
-    "assembly": "BusinessLogic", "class": "BusinessLogic.Common.Validation.PersianDateValidator", "reportPath": "BusinessLogic_PersianDateValidator.html", "methodName": "IsValid(System.String)", "methodShortName": "IsValid(...)", "fileIndex": 0, "line": 9,
-    "metrics": [
-      { "value": 272, "exceeded": true },
-      { "value": 16, "exceeded": true },
-    ]},
-  {
-    "assembly": "DataLayer", "class": "DataLayer.Repositories.Implementations.AuditInterceptor", "reportPath": "DataLayer_AuditInterceptor.html", "methodName": "ApplyAudit(Microsoft.EntityFrameworkCore.DbContext)", "methodShortName": "ApplyAudit(...)", "fileIndex": 0, "line": 40,
-    "metrics": [
-      { "value": 210, "exceeded": true },
-      { "value": 14, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Services.CurrentUserService", "reportPath": "Online_Store_Application_API__CurrentUserService.html", "methodName": "GetCurrentUserId()", "methodShortName": "GetCurrentUserId()", "fileIndex": 0, "line": 36,
-    "metrics": [
-      { "value": 210, "exceeded": true },
-      { "value": 14, "exceeded": false },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.SortParser", "reportPath": "Application_SortParser.html", "methodName": "ParseParts(System.String[],System.Collections.Generic.HashSet`1<System.String>)", "methodShortName": "ParseParts(...)", "fileIndex": 0, "line": 38,
-    "metrics": [
-      { "value": 156, "exceeded": true },
-      { "value": 12, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Services.CurrentUserService", "reportPath": "Online_Store_Application_API__CurrentUserService.html", "methodName": "TryGetCurrentUserId()", "methodShortName": "TryGetCurrentUserId()", "fileIndex": 0, "line": 22,
-    "metrics": [
-      { "value": 156, "exceeded": true },
-      { "value": 12, "exceeded": false },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.SortParser", "reportPath": "Application_SortParser.html", "methodName": "ParseFieldAndDirection(System.String,System.Collections.Generic.List`1<Application.Common.Queries.ParseError>)", "methodShortName": "ParseFieldAndDirection(...)", "fileIndex": 0, "line": 68,
-    "metrics": [
-      { "value": 110, "exceeded": true },
-      { "value": 10, "exceeded": false },
-    ]},
-  {
     "assembly": "Application", "class": "Application.Common.Helpers.FilterLexer", "reportPath": "Application_FilterLexer.html", "methodName": "ReadNumber()", "methodShortName": "ReadNumber()", "fileIndex": 0, "line": 107,
     "metrics": [
       { "value": 72, "exceeded": true },
@@ -476,6 +428,12 @@ var riskHotspots = [
     ]},
   {
     "assembly": "Application", "class": "Application.Common.Queries.FilterParser", "reportPath": "Application_FilterParser.html", "methodName": "BuildNullComparison(System.Linq.Expressions.ParameterExpression,System.Linq.Expressions.Expression,System.String,System.String)", "methodShortName": "BuildNullComparison(...)", "fileIndex": 0, "line": 86,
+    "metrics": [
+      { "value": 72, "exceeded": true },
+      { "value": 8, "exceeded": false },
+    ]},
+  {
+    "assembly": "Application", "class": "Application.Common.Queries.FilterParser", "reportPath": "Application_FilterParser.html", "methodName": ".cctor()", "methodShortName": ".cctor()", "fileIndex": 0, "line": 107,
     "metrics": [
       { "value": 72, "exceeded": true },
       { "value": 8, "exceeded": false },
@@ -493,12 +451,6 @@ var riskHotspots = [
       { "value": 8, "exceeded": false },
     ]},
   {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Services.CurrentUserService", "reportPath": "Online_Store_Application_API__CurrentUserService.html", "methodName": "GetCurrentUserName()", "methodShortName": "GetCurrentUserName()", "fileIndex": 0, "line": 16,
-    "metrics": [
-      { "value": 72, "exceeded": true },
-      { "value": 8, "exceeded": false },
-    ]},
-  {
     "assembly": "Application", "class": "Application.Common.Helpers.FilterLexer", "reportPath": "Application_FilterLexer.html", "methodName": "Tokenize()", "methodShortName": "Tokenize()", "fileIndex": 0, "line": 34,
     "metrics": [
       { "value": 60.86, "exceeded": true },
@@ -509,12 +461,6 @@ var riskHotspots = [
     "metrics": [
       { "value": 44.06, "exceeded": true },
       { "value": 22, "exceeded": true },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.SortParser", "reportPath": "Application_SortParser.html", "methodName": "BuildAllowedSet(Application.Common.Queries.QueryParseContext`1<TEntity>)", "methodShortName": "BuildAllowedSet(...)", "fileIndex": 0, "line": 27,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
     ]},
   {
     "assembly": "Application", "class": "Application.Common.Specifications.SpecificationEvaluator<T>", "reportPath": "Application_SpecificationEvaluator_1.html", "methodName": "ApplyOrdering(System.Linq.IQueryable`1<TEntity>,System.Linq.Expressions.LambdaExpression,System.Boolean,System.Boolean)", "methodShortName": "ApplyOrdering(...)", "fileIndex": 0, "line": 58,
@@ -548,12 +494,6 @@ var riskHotspots = [
     ]},
   {
     "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Controllers.UsersController", "reportPath": "Online_Store_Application_API__UsersController.html", "methodName": "UpdateUser()", "methodShortName": "UpdateUser()", "fileIndex": 0, "line": 114,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Services.CurrentUserService", "reportPath": "Online_Store_Application_API__CurrentUserService.html", "methodName": "GetCurrentUserRole()", "methodShortName": "GetCurrentUserRole()", "fileIndex": 0, "line": 50,
     "metrics": [
       { "value": 42, "exceeded": true },
       { "value": 6, "exceeded": false },
@@ -593,6 +533,12 @@ var riskHotspots = [
     "metrics": [
       { "value": 23.65, "exceeded": false },
       { "value": 18, "exceeded": true },
+    ]},
+  {
+    "assembly": "BusinessLogic", "class": "BusinessLogic.Common.Validation.PersianDateValidator", "reportPath": "BusinessLogic_PersianDateValidator.html", "methodName": "IsValid(System.String)", "methodShortName": "IsValid(...)", "fileIndex": 0, "line": 9,
+    "metrics": [
+      { "value": 16.07, "exceeded": false },
+      { "value": 16, "exceeded": true },
     ]},
 ];
 
