@@ -1,18 +1,15 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http.Json;
-using FluentAssertions;
+﻿using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using OnlineStore.Tests.Integration.Infrastructure;
 
 namespace OnlineStore.Tests.Integration.Fixtures;
 
-[Collection("DatabaseCollection")]
 public abstract class BaseIntegrationTest
     : IClassFixture<IntegrationTestFactory<Program>>, IAsyncLifetime
 {
     protected readonly IntegrationTestFactory<Program> Factory;
     protected readonly HttpClient Client;
-
-    private IServiceScope _scope = null!;
+    private IServiceScope? _scope;
 
     protected BaseIntegrationTest(IntegrationTestFactory<Program> factory)
     {
@@ -20,10 +17,11 @@ public abstract class BaseIntegrationTest
         Client = factory.CreateClient();
     }
 
+    protected IServiceProvider Services =>
+        _scope?.ServiceProvider ?? throw new InvalidOperationException("Scope not initialized");
+
     protected T GetService<T>() where T : notnull
-    {
-        return _scope.ServiceProvider.GetRequiredService<T>();
-    }
+        => Services.GetRequiredService<T>();
 
     public async Task InitializeAsync()
     {
@@ -33,13 +31,10 @@ public abstract class BaseIntegrationTest
 
     public async Task DisposeAsync()
     {
-        _scope?.Dispose();
-        await Task.CompletedTask;
-    }
-
-    protected async Task<T?> ReadAsync<T>(HttpResponseMessage response)
-    {
-        response.IsSuccessStatusCode.Should().BeTrue();
-        return await response.Content.ReadFromJsonAsync<T>();
+        if (_scope is IAsyncDisposable asyncScope)
+            await asyncScope.DisposeAsync();
+        else
+            _scope?.Dispose();
+        _scope = null;
     }
 }

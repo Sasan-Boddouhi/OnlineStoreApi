@@ -1,4 +1,5 @@
-﻿using Application.Entities;
+﻿using Application.Common.Queries;
+using Application.Entities;
 using BusinessLogic.DTOs.EmployeeType;
 using BusinessLogic.DTOs.Shared;
 

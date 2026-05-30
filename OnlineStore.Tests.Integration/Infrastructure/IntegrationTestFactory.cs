@@ -1,24 +1,26 @@
-﻿using Application.Entities;
-using Application.Helper;
-using Application.Interfaces.Security;
-using DataLayer.Context;
+﻿using DataLayer.Context;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Data.Common;
 
 namespace OnlineStore.Tests.Integration.Infrastructure;
 
 public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
     where TProgram : class
 {
-    private IConfiguration _configuration = null!;
+    private readonly DbConnection _connection = CreateInMemoryConnection();
+
+    private static SqliteConnection CreateInMemoryConnection()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        return connection;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -26,88 +28,54 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
 
         builder.ConfigureAppConfiguration((context, config) =>
         {
-            var projectDir = Directory.GetCurrentDirectory();
-
-            config.SetBasePath(projectDir)
-                  .AddJsonFile("appsettings.Test.json", optional: false, reloadOnChange: true);
+            config.AddJsonFile("appsettings.Testing.json", optional: true);
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Key"] = "THIS_IS_A_VERY_SECRET_TEST_KEY_1234567890",
+                ["Jwt:Issuer"] = "OnlineStoreApi",
+                ["Jwt:Audience"] = "OnlineStoreClient",
+                ["Jwt:ExpireMinutes"] = "60"
+            });
         });
 
         builder.ConfigureServices(services =>
         {
-            // ================= REMOVE REAL DB =================
-            var descriptor = services.SingleOrDefault(
+            var dbContextDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            if (dbContextDescriptor != null) services.Remove(dbContextDescriptor);
 
-            if (descriptor != null)
-                services.Remove(descriptor);
+            var appDbDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(AppDbContext));
+            if (appDbDescriptor != null) services.Remove(appDbDescriptor);
 
-            // ================= ADD TEST DB =================
-            var sp = services.BuildServiceProvider();
-            _configuration = sp.GetRequiredService<IConfiguration>();
+            // Interceptor
+            services.AddScoped<ISaveChangesInterceptor, SqliteRowVersionFixInterceptor>();
 
-            var connectionString = _configuration.GetConnectionString("SQLServer");
+            // ثبت دستی DbContextOptions و AppDbContext -> TestAppDbContext
+            var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+            optionsBuilder.UseSqlite(_connection);
+            optionsBuilder.EnableSensitiveDataLogging();
+            optionsBuilder.EnableDetailedErrors();
+            services.AddScoped(_ => optionsBuilder.Options);
 
-            services.AddDbContext<AppDbContext>(options =>
-            {
-                options.UseSqlServer(connectionString);
-                options.EnableSensitiveDataLogging();
-                options.LogTo(Console.WriteLine, LogLevel.Information);
-            });
+            services.AddScoped<AppDbContext, TestAppDbContext>();
         });
     }
 
-    // ================= INIT DATABASE =================
     public async Task InitializeDatabaseAsync()
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
 
-        await db.Database.MigrateAsync();
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+
         await TestDataSeed.SeedAsync(db);
+    }
 
-        // ================= ADMIN USER =================
-        // استفاده از یک شماره موبایل واقعی 11 رقمی
-        string adminPhone = "09123456789";
-        if (!db.User.Any(u => u.PhoneNumber == adminPhone))
-        {
-            var admin = new User
-            {
-                PhoneNumber = adminPhone,
-                PasswordHash = hasher.Hash("123456"),
-                IsActive = true,
-                UserType = UserType.Employee,
-                SecurityStamp = Guid.NewGuid().ToString(),
-                FirstName = "Admin",
-                LastName = "System"
-            };
-
-            db.User.Add(admin);
-            await db.SaveChangesAsync();
-
-            var adminType = db.EmployeeType.FirstOrDefault(x => x.TypeName == "Admin");
-            if (adminType == null)
-            {
-                adminType = new EmployeeType
-                {
-                    TypeName = "Admin",
-                    DisplayName = "ادمین",
-                    IsSystem = true,
-                    IsActive = true
-                };
-                db.EmployeeType.Add(adminType);
-                await db.SaveChangesAsync();
-            }
-
-            db.Employee.Add(new Employee
-            {
-                UserId = admin.UserId,
-                EmployeeTypeId = adminType.EmployeeTypeId,
-                EmployeeNumber = "ADMIN001",   // کوتاه‌تر
-                HireDate = DateTime.UtcNow
-            });
-
-            await db.SaveChangesAsync();
-        }
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        _connection?.Dispose();
     }
 }

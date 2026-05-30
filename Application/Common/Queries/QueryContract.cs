@@ -1,6 +1,7 @@
 ﻿using Application.Common.Queries;
 using System.Linq.Expressions;
 
+namespace  Application.Common.Queries;
 public sealed class QueryContract<TEntity>
     where TEntity : class
 {

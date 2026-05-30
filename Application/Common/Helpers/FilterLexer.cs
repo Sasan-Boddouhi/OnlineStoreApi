@@ -120,34 +120,38 @@ namespace Application.Common.Helpers
             };
         }
 
+        private static readonly Dictionary<string, TokenType> KeywordMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["and"] = TokenType.And,
+            ["or"] = TokenType.Or,
+            ["not"] = TokenType.Not,
+            ["eq"] = TokenType.Eq,
+            ["ne"] = TokenType.Ne,
+            ["gt"] = TokenType.Gt,
+            ["ge"] = TokenType.Ge,
+            ["lt"] = TokenType.Lt,
+            ["le"] = TokenType.Le,
+            ["contains"] = TokenType.Contains,
+            ["startswith"] = TokenType.StartsWith,
+            ["endswith"] = TokenType.EndsWith,
+            ["true"] = TokenType.Boolean,
+            ["false"] = TokenType.Boolean
+        };
+
         private Token ReadIdentifierOrKeyword()
         {
-            var start = _position;
+            int start = _position;
             var sb = new StringBuilder();
-            while (_position < _input.Length && (char.IsLetterOrDigit(_input[_position]) || _input[_position] == '_' || _input[_position] == '.'))
+            while (_position < _input.Length &&
+                   (char.IsLetterOrDigit(_input[_position]) || _input[_position] == '_' || _input[_position] == '.'))
             {
                 sb.Append(_input[_position]);
                 _position++;
             }
-            var value = sb.ToString();
-            var type = value.ToLower() switch
-            {
-                "and" => TokenType.And,
-                "or" => TokenType.Or,
-                "not" => TokenType.Not,
-                "eq" => TokenType.Eq,
-                "ne" => TokenType.Ne,
-                "gt" => TokenType.Gt,
-                "ge" => TokenType.Ge,
-                "lt" => TokenType.Lt,
-                "le" => TokenType.Le,
-                "contains" => TokenType.Contains,
-                "startswith" => TokenType.StartsWith,
-                "endswith" => TokenType.EndsWith,
-                "true" => TokenType.Boolean,
-                "false" => TokenType.Boolean,
-                _ => TokenType.Identifier
-            };
+
+            string value = sb.ToString();
+            TokenType type = KeywordMap.TryGetValue(value, out var kw) ? kw : TokenType.Identifier;
+
             return new Token { Type = type, Value = value, Position = start };
         }
     }

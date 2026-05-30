@@ -14,6 +14,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{5FD55A6D-E56D-43E1-89D2-64019440459D}"
 	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
+		RunCoverage.ps1 = RunCoverage.ps1
+		TESTING.md = TESTING.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "images", "images", "{9E2AE8A0-4ABF-4614-8D6F-217A54384272}"
@@ -25,7 +27,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OnlineStore.Tests.Integrati
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OnlineStore.Tests.Unit", "OnlineStore.Tests.Unit\OnlineStore.Tests.Unit.csproj", "{90B94A8E-C36B-49A6-9FF5-1CA9C7834117}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OnlineStore.Tests.Shared", "OnlineStore.Tests.Shared\OnlineStore.Tests.Shared.csproj", "{2AA08DB2-97A5-4EFB-9372-493CCF55349E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OnlineStore.Tests.Shared", "OnlineStore.Tests.Shared\OnlineStore.Tests.Shared.csproj", "{2AA08DB2-97A5-4EFB-9372-493CCF55349E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
