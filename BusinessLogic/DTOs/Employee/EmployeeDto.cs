@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BusinessLogic.DTOs.Employee
 {
@@ -10,20 +6,14 @@ namespace BusinessLogic.DTOs.Employee
     {
         public int EmployeeId { get; set; }
         public int UserId { get; set; }
-
-        public string UserFullName { get; set; }
-        public string PhoneNumber { get; set; }
-
+        public string UserFullName { get; set; } = null!;
+        public string PhoneNumber { get; set; } = null!;
         public int EmployeeTypeId { get; set; }
-        public string EmployeeTypeName { get; set; }
-
-        public string EmployeeNumber { get; set; }
-
+        public string EmployeeTypeName { get; set; } = null!;
+        public string EmployeeNumber { get; set; } = null!;
         public DateTime HireDate { get; set; }
         public DateTime? TerminationDate { get; set; }
-
         public decimal Salary { get; set; }
-
         public bool IsActive { get; set; }
     }
 }

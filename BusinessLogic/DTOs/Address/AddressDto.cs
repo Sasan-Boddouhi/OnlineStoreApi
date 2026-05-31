@@ -3,22 +3,13 @@
 public class AddressDto
 {
     public int AddressId { get; set; }
-
     public int CityId { get; set; }
-
-    public string CityName { get; set; } 
-
-    public int UserId { get; set; } 
-
-    public string Plaque { get; set; }
-
-    public string Unit { get; set; }
-
-    public string PostalCode { get; set; }
-
-    public string RecipientFirstName { get; set; }
-
-    public string RecipientLastName { get; set; }
-
+    public string CityName { get; set; } = null!;
+    public int UserId { get; set; }
+    public string Plaque { get; set; } = null!;
+    public string Unit { get; set; } = null!;
+    public string PostalCode { get; set; } = null!;
+    public string RecipientFirstName { get; set; } = null!;
+    public string RecipientLastName { get; set; } = null!;
     public bool IsDefault { get; set; }
 }

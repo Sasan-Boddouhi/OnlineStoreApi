@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace BusinessLogic.DTOs.City
+﻿namespace BusinessLogic.DTOs.City
 {
     public class UpdateCityDto
     {
         public int CityId { get; set; }
-        public string CityName { get; internal set; }
+        public string CityName { get; internal set; } = null!;
     }
 }
