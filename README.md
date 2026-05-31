@@ -90,7 +90,7 @@ The project demonstrates enterprise-grade backend development practices includin
                      ▼
 ┌─────────────────────────────────────────┐
 │              Application                │
-│ Entities, Contracts, Specifications      │
+│ Entities, Contracts, Specifications     │
 └────────────────────┬────────────────────┘
                      │
                      ▼

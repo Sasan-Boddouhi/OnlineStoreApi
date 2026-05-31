@@ -34,7 +34,7 @@ namespace Application.Common.Queries
                 }
                 else
                 {
-                    filterExpr = filterResult.Value;
+                    filterExpr = filterResult.Value!;
                 }
             }
 
@@ -51,7 +51,7 @@ namespace Application.Common.Queries
                 }
                 else
                 {
-                    sortDefs = sortResult.Value;
+                    sortDefs = sortResult.Value!;
                 }
             }
 
