@@ -5,10 +5,7 @@ Get-ChildItem -Recurse -Directory -Filter "TestResults" |
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "Running tests with coverage..." -ForegroundColor Cyan
-dotnet test `
-    /p:CollectCoverage=true `
-    /p:CoverletOutputFormat=cobertura `
-    /p:Exclude="[DataLayer.Migrations]*[OnlineStore.Tests.Shared]*"
+dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
 Write-Host "Generating report..." -ForegroundColor Cyan
 reportgenerator `

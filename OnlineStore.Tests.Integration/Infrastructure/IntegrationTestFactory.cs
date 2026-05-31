@@ -1,6 +1,7 @@
 ﻿using Application.Interfaces;
 using DataLayer.Context;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -61,6 +62,9 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
             services.AddScoped(_ => optionsBuilder.Options);
 
             services.AddScoped<AppDbContext, TestAppDbContext>();
+
+            services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
+
         });
     }
 

@@ -5,12 +5,8 @@
       <DataCollector friendlyName="XPlat code coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <ExcludeByFile>**/Migrations/**</ExcludeByFile>
-          <ExcludeByFile>**/DTOs/**</ExcludeByFile>
-          <ExcludeByFile>**/Profiles/**</ExcludeByFile>
-          <ExcludeByFile>**/Validators/**</ExcludeByFile>
-          <Exclude>[*]Online_Store_Application.Program</Exclude>
-          <Exclude>[*]DataLayer.Context.DesignTimeDbContextFactory</Exclude>
+          <ExcludeByFile>**/Migrations/**.cs</ExcludeByFile>
+          <ExcludeAssemblies>OnlineStore.Tests.Shared</ExcludeAssemblies>
         </Configuration>
       </DataCollector>
     </DataCollectors>

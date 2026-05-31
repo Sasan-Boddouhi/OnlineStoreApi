@@ -22,6 +22,3 @@ D:\source\Online Store Application\Application\obj\Debug\net8.0\Application.dll
 D:\source\Online Store Application\Application\obj\Debug\net8.0\refint\Application.dll
 D:\source\Online Store Application\Application\obj\Debug\net8.0\Application.pdb
 D:\source\Online Store Application\Application\obj\Debug\net8.0\ref\Application.dll
-D:\source\Online Store Application\Application\bin\Debug\net8.0\Microsoft.Data.Tools.Schema.Sql.UnitTesting.dll
-D:\source\Online Store Application\Application\bin\Debug\net8.0\Microsoft.Data.Tools.Schema.Sql.UnitTestingAdapter.dll
-D:\source\Online Store Application\Application\obj\Debug\net8.0\Applicat.44B5EDA2.Up2Date

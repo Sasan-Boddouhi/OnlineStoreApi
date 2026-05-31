@@ -221,12 +221,12 @@ var assemblies = [
   {
     "name": "Application",
     "classes": [
-      { "name": "Application.Common.Helpers.ExpressionBuilder", "rp": "Application_ExpressionBuilder.html", "cl": 0, "ucl": 16, "cal": 16, "tl": 32, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Helpers.ExpressionCache<T>", "rp": "Application_ExpressionCache_1.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Helpers.FilterLexer", "rp": "Application_FilterLexer.html", "cl": 78, "ucl": 32, "cal": 110, "tl": 158, "cb": 29, "tb": 48, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Helpers.PredicateBuilder", "rp": "Application_PredicateBuilder.html", "cl": 0, "ucl": 20, "cal": 20, "tl": 50, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Helpers.ExpressionBuilder", "rp": "Application_ExpressionBuilder.html", "cl": 16, "ucl": 0, "cal": 16, "tl": 32, "cb": 4, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Helpers.ExpressionCache<T>", "rp": "Application_ExpressionCache_1.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Helpers.FilterLexer", "rp": "Application_FilterLexer.html", "cl": 97, "ucl": 13, "cal": 110, "tl": 158, "cb": 41, "tb": 48, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Helpers.PredicateBuilder", "rp": "Application_PredicateBuilder.html", "cl": 0, "ucl": 20, "cal": 20, "tl": 50, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.Token", "rp": "Application_Token.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 158, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Queries.FilterParser", "rp": "Application_FilterParser.html", "cl": 29, "ucl": 109, "cal": 138, "tl": 191, "cb": 4, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Queries.FilterParser", "rp": "Application_FilterParser.html", "cl": 117, "ucl": 21, "cal": 138, "tl": 191, "cb": 25, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.Internal.LambdaSortDefinition<T>", "rp": "Application_LambdaSortDefinition_1.html", "cl": 5, "ucl": 2, "cal": 7, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.Paging", "rp": "Application_Paging.html", "cl": 0, "ucl": 3, "cal": 3, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.PagingResult", "rp": "Application_PagingResult.html", "cl": 0, "ucl": 4, "cal": 4, "tl": 9, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -239,7 +239,7 @@ var assemblies = [
       { "name": "Application.Common.Queries.SortDefinition<T>", "rp": "Application_SortDefinition_1.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 10, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.SortParser", "rp": "Application_SortParser.html", "cl": 61, "ucl": 3, "cal": 64, "tl": 103, "cb": 31, "tb": 36, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.StringQueryParser", "rp": "Application_StringQueryParser.html", "cl": 32, "ucl": 14, "cal": 46, "tl": 78, "cb": 6, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Specifications.QueryContractMapper", "rp": "Application_QueryContractMapper.html", "cl": 13, "ucl": 7, "cal": 20, "tl": 34, "cb": 6, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Specifications.QueryContractMapper", "rp": "Application_QueryContractMapper.html", "cl": 13, "ucl": 7, "cal": 20, "tl": 34, "cb": 7, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.ReplaceExpressionVisitor", "rp": "Application_ReplaceExpressionVisitor.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 23, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.Spec<T>", "rp": "Application_Spec_1.html", "cl": 39, "ucl": 10, "cal": 49, "tl": 92, "cb": 4, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.SpecificationEvaluator<T>", "rp": "Application_SpecificationEvaluator_1.html", "cl": 16, "ucl": 37, "cal": 53, "tl": 90, "cb": 9, "tb": 26, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -264,7 +264,7 @@ var assemblies = [
       { "name": "Application.Entities.Warehouse", "rp": "Application_Warehouse.html", "cl": 0, "ucl": 5, "cal": 5, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Exceptions.BusinessException", "rp": "Application_BusinessException.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Helper.PersianDateHelper", "rp": "Application_PersianDateHelper.html", "cl": 14, "ucl": 0, "cal": 14, "tl": 28, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Middleware.QueryMetricsMiddleware", "rp": "Application_QueryMetricsMiddleware.html", "cl": 63, "ucl": 1, "cal": 64, "tl": 93, "cb": 10, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Middleware.QueryMetricsMiddleware", "rp": "Application_QueryMetricsMiddleware.html", "cl": 63, "ucl": 1, "cal": 64, "tl": 93, "cb": 12, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Models.Metrics.QueryMetrics", "rp": "Application_QueryMetrics.html", "cl": 11, "ucl": 0, "cal": 11, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "UserSession", "rp": "Application_UserSession.html", "cl": 20, "ucl": 1, "cal": 21, "tl": 52, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -284,11 +284,11 @@ var assemblies = [
       { "name": "BusinessLogic.DTOs.City.CreateCityDto", "rp": "BusinessLogic_CreateCityDto.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.City.UpdateCityDto", "rp": "BusinessLogic_UpdateCityDto.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Employee.CreateEmployeeDto", "rp": "BusinessLogic_CreateEmployeeDto.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 22, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.Employee.EmployeeDto", "rp": "BusinessLogic_EmployeeDto.html", "cl": 10, "ucl": 1, "cal": 11, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.Employee.UpdateEmployeeDto", "rp": "BusinessLogic_UpdateEmployeeDto.html", "cl": 5, "ucl": 1, "cal": 6, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.Employee.EmployeeDto", "rp": "BusinessLogic_EmployeeDto.html", "cl": 11, "ucl": 0, "cal": 11, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.Employee.UpdateEmployeeDto", "rp": "BusinessLogic_UpdateEmployeeDto.html", "cl": 6, "ucl": 0, "cal": 6, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.EmployeeType.CreateEmployeeTypeDto", "rp": "BusinessLogic_CreateEmployeeTypeDto.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.EmployeeType.EmployeeTypeDto", "rp": "BusinessLogic_EmployeeTypeDto.html", "cl": 3, "ucl": 1, "cal": 4, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.EmployeeType.UpdateEmployeeTypeDto", "rp": "BusinessLogic_UpdateEmployeeTypeDto.html", "cl": 0, "ucl": 5, "cal": 5, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.EmployeeType.EmployeeTypeDto", "rp": "BusinessLogic_EmployeeTypeDto.html", "cl": 4, "ucl": 0, "cal": 4, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.EmployeeType.UpdateEmployeeTypeDto", "rp": "BusinessLogic_UpdateEmployeeTypeDto.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Invoice.CreateInvoiceDto", "rp": "BusinessLogic_CreateInvoiceDto.html", "cl": 0, "ucl": 7, "cal": 7, "tl": 12, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Invoice.InvoiceDto", "rp": "BusinessLogic_InvoiceDto.html", "cl": 9, "ucl": 0, "cal": 9, "tl": 21, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Invoice.UpdateInvoiceDto", "rp": "BusinessLogic_UpdateInvoiceDto.html", "cl": 0, "ucl": 8, "cal": 8, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -316,8 +316,8 @@ var assemblies = [
       { "name": "BusinessLogic.DTOs.Province.UpdateProvinceDto", "rp": "BusinessLogic_UpdateProvinceDto.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Shared.PagedResult<T>", "rp": "BusinessLogic_PagedResult_1.html", "cl": 7, "ucl": 0, "cal": 7, "tl": 28, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.User.CreateUserDto", "rp": "BusinessLogic_CreateUserDto.html", "cl": 7, "ucl": 0, "cal": 7, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.User.UpdateUserDto", "rp": "BusinessLogic_UpdateUserDto.html", "cl": 6, "ucl": 1, "cal": 7, "tl": 15, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.User.UpdateUserStatusDto", "rp": "BusinessLogic_UpdateUserStatusDto.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 15, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.User.UpdateUserDto", "rp": "BusinessLogic_UpdateUserDto.html", "cl": 7, "ucl": 0, "cal": 7, "tl": 15, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.User.UpdateUserStatusDto", "rp": "BusinessLogic_UpdateUserStatusDto.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 15, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.User.UserDto", "rp": "BusinessLogic_UserDto.html", "cl": 14, "ucl": 0, "cal": 14, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Extensions.BaseService", "rp": "BusinessLogic_BaseService.html", "cl": 0, "ucl": 10, "cal": 10, "tl": 36, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Extensions.PaginationExtensions", "rp": "BusinessLogic_PaginationExtensions.html", "cl": 0, "ucl": 16, "cal": 16, "tl": 37, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -340,9 +340,9 @@ var assemblies = [
       { "name": "BusinessLogic.Services.Implementations.AddressService", "rp": "BusinessLogic_AddressService.html", "cl": 28, "ucl": 9, "cal": 37, "tl": 66, "cb": 2, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.CityService", "rp": "BusinessLogic_CityService.html", "cl": 69, "ucl": 30, "cal": 99, "tl": 162, "cb": 13, "tb": 22, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.EmployeeService", "rp": "BusinessLogic_EmployeeService.html", "cl": 108, "ucl": 20, "cal": 128, "tl": 215, "cb": 26, "tb": 44, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Services.Implementations.EmployeeTypeService", "rp": "BusinessLogic_EmployeeTypeService.html", "cl": 31, "ucl": 64, "cal": 95, "tl": 172, "cb": 2, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Services.Implementations.EmployeeTypeService", "rp": "BusinessLogic_EmployeeTypeService.html", "cl": 82, "ucl": 13, "cal": 95, "tl": 172, "cb": 7, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.InvoiceService", "rp": "BusinessLogic_InvoiceService.html", "cl": 26, "ucl": 0, "cal": 26, "tl": 52, "cb": 6, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Services.Implementations.JwtTokenService", "rp": "BusinessLogic_JwtTokenService.html", "cl": 0, "ucl": 24, "cal": 24, "tl": 51, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Services.Implementations.JwtTokenService", "rp": "BusinessLogic_JwtTokenService.html", "cl": 0, "ucl": 24, "cal": 24, "tl": 49, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.LogService", "rp": "BusinessLogic_LogService.html", "cl": 31, "ucl": 40, "cal": 71, "tl": 131, "cb": 8, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.OrderItemService", "rp": "BusinessLogic_OrderItemService.html", "cl": 0, "ucl": 22, "cal": 22, "tl": 48, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.OrderService", "rp": "BusinessLogic_OrderService.html", "cl": 127, "ucl": 35, "cal": 162, "tl": 269, "cb": 18, "tb": 24, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -351,15 +351,15 @@ var assemblies = [
       { "name": "BusinessLogic.Services.Implementations.ProductService", "rp": "BusinessLogic_ProductService.html", "cl": 113, "ucl": 15, "cal": 128, "tl": 216, "cb": 21, "tb": 24, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.ProductSubcategoryService", "rp": "BusinessLogic_ProductSubcategoryService.html", "cl": 62, "ucl": 47, "cal": 109, "tl": 201, "cb": 9, "tb": 22, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.ProvinceService", "rp": "BusinessLogic_ProvinceService.html", "cl": 62, "ucl": 29, "cal": 91, "tl": 164, "cb": 10, "tb": 18, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Services.Implementations.UserService", "rp": "BusinessLogic_UserService.html", "cl": 153, "ucl": 72, "cal": 225, "tl": 371, "cb": 38, "tb": 56, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Services.Implementations.UserService", "rp": "BusinessLogic_UserService.html", "cl": 183, "ucl": 42, "cal": 225, "tl": 371, "cb": 43, "tb": 56, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Specifications.Cities.CityQueryConfig", "rp": "BusinessLogic_CityQueryConfig.html", "cl": 7, "ucl": 6, "cal": 13, "tl": 26, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Specifications.Employees.EmployeeQueryConfig", "rp": "BusinessLogic_EmployeeQueryConfig.html", "cl": 13, "ucl": 5, "cal": 18, "tl": 30, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Specifications.EmployeeTypes.EmployeeTypeQueryConfig", "rp": "BusinessLogic_EmployeeTypeQueryConfig.html", "cl": 6, "ucl": 1, "cal": 7, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Specifications.Employees.EmployeeQueryConfig", "rp": "BusinessLogic_EmployeeQueryConfig.html", "cl": 18, "ucl": 0, "cal": 18, "tl": 30, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Specifications.EmployeeTypes.EmployeeTypeQueryConfig", "rp": "BusinessLogic_EmployeeTypeQueryConfig.html", "cl": 7, "ucl": 0, "cal": 7, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Specifications.ProductCategories.ProductCategoryQueryConfig", "rp": "BusinessLogic_ProductCategoryQueryConfig.html", "cl": 0, "ucl": 11, "cal": 11, "tl": 24, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Specifications.Products.ProductQueryConfig", "rp": "BusinessLogic_ProductQueryConfig.html", "cl": 24, "ucl": 0, "cal": 24, "tl": 38, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Specifications.ProductSubcategories.ProductSubcategoryQueryConfig", "rp": "BusinessLogic_ProductSubcategoryQueryConfig.html", "cl": 8, "ucl": 13, "cal": 21, "tl": 37, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Specifications.Provinces.ProvinceQueryConfig", "rp": "BusinessLogic_ProvinceQueryConfig.html", "cl": 5, "ucl": 5, "cal": 10, "tl": 22, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Specifications.Users.UserQueryConfig", "rp": "BusinessLogic_UserQueryConfig.html", "cl": 19, "ucl": 9, "cal": 28, "tl": 39, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Specifications.Users.UserQueryConfig", "rp": "BusinessLogic_UserQueryConfig.html", "cl": 28, "ucl": 0, "cal": 28, "tl": 39, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Auth.LoginDtoValidator", "rp": "BusinessLogic_LoginDtoValidator.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 21, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Auth.RegisterDtoValidator", "rp": "BusinessLogic_RegisterDtoValidator.html", "cl": 21, "ucl": 0, "cal": 21, "tl": 35, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.Cities.CreateCityDtoValidator", "rp": "BusinessLogic_CreateCityDtoValidator.html", "cl": 8, "ucl": 0, "cal": 8, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -368,8 +368,8 @@ var assemblies = [
       { "name": "BusinessLogic.Validators.Products.UpdateProductDtoValidator", "rp": "BusinessLogic_UpdateProductDtoValidator.html", "cl": 12, "ucl": 0, "cal": 12, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.ProductSubcategories.CreateProductSubcategoryDtoValidator", "rp": "BusinessLogic_CreateProductSubcategoryDtoValidator.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Validators.ProductSubcategories.UpdateProductSubcategoryDtoValidator", "rp": "BusinessLogic_UpdateProductSubcategoryDtoValidator.html", "cl": 12, "ucl": 0, "cal": 12, "tl": 23, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.Users.CreateUserDtoValidator", "rp": "BusinessLogic_CreateUserDtoValidator.html", "cl": 21, "ucl": 0, "cal": 21, "tl": 38, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Validators.Users.UpdateUserDtoValidator", "rp": "BusinessLogic_UpdateUserDtoValidator.html", "cl": 20, "ucl": 0, "cal": 20, "tl": 37, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.Users.CreateUserDtoValidator", "rp": "BusinessLogic_CreateUserDtoValidator.html", "cl": 21, "ucl": 0, "cal": 21, "tl": 38, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Validators.Users.UpdateUserDtoValidator", "rp": "BusinessLogic_UpdateUserDtoValidator.html", "cl": 20, "ucl": 0, "cal": 20, "tl": 37, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "CreateAddressDto", "rp": "BusinessLogic_CreateAddressDto.html", "cl": 8, "ucl": 0, "cal": 8, "tl": 15, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "EnumExtensions", "rp": "BusinessLogic_EnumExtensions.html", "cl": 0, "ucl": 6, "cal": 6, "tl": 13, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -386,7 +386,7 @@ var assemblies = [
       { "name": "DataLayer.Migrations.UpdateEmployeeType", "rp": "DataLayer_UpdateEmployeeType.html", "cl": 0, "ucl": 1228, "cal": 1228, "tl": 1318, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Repositories.Implementations.AuditInterceptor", "rp": "DataLayer_AuditInterceptor.html", "cl": 31, "ucl": 4, "cal": 35, "tl": 68, "cb": 12, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Repositories.Implementations.GenericRepository<T>", "rp": "DataLayer_GenericRepository_1.html", "cl": 48, "ucl": 0, "cal": 48, "tl": 104, "cb": 3, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "DataLayer.Repositories.UnitOfWork", "rp": "DataLayer_UnitOfWork.html", "cl": 51, "ucl": 3, "cal": 54, "tl": 110, "cb": 6, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "DataLayer.Repositories.UnitOfWork", "rp": "DataLayer_UnitOfWork.html", "cl": 51, "ucl": 3, "cal": 54, "tl": 110, "cb": 8, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Security.BcryptPasswordHasher", "rp": "DataLayer_BcryptPasswordHasher.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 21, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Services.SqlQueryService", "rp": "DataLayer_SqlQueryService.html", "cl": 0, "ucl": 16, "cal": 16, "tl": 41, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
@@ -394,11 +394,11 @@ var assemblies = [
     "name": "Online Store Application(API)",
     "classes": [
       { "name": "JwtTokenService", "rp": "Online_Store_Application_API__JwtTokenService.html", "cl": 27, "ucl": 0, "cal": 27, "tl": 48, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Online_Store_Application.Controllers.EmployeesController", "rp": "Online_Store_Application_API__EmployeesController.html", "cl": 0, "ucl": 89, "cal": 89, "tl": 162, "cb": 0, "tb": 22, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Online_Store_Application.Controllers.EmployeeTypesController", "rp": "Online_Store_Application_API__EmployeeTypesController.html", "cl": 0, "ucl": 86, "cal": 86, "tl": 152, "cb": 0, "tb": 16, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Online_Store_Application.Controllers.EmployeesController", "rp": "Online_Store_Application_API__EmployeesController.html", "cl": 61, "ucl": 28, "cal": 89, "tl": 162, "cb": 15, "tb": 22, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Online_Store_Application.Controllers.EmployeeTypesController", "rp": "Online_Store_Application_API__EmployeeTypesController.html", "cl": 56, "ucl": 30, "cal": 86, "tl": 152, "cb": 11, "tb": 16, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Online_Store_Application.Controllers.OrdersController", "rp": "Online_Store_Application_API__OrdersController.html", "cl": 0, "ucl": 7, "cal": 7, "tl": 26, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Online_Store_Application.Controllers.ProductsController", "rp": "Online_Store_Application_API__ProductsController.html", "cl": 65, "ucl": 10, "cal": 75, "tl": 144, "cb": 10, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Online_Store_Application.Controllers.UsersController", "rp": "Online_Store_Application_API__UsersController.html", "cl": 0, "ucl": 99, "cal": 99, "tl": 178, "cb": 0, "tb": 28, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Online_Store_Application.Controllers.UsersController", "rp": "Online_Store_Application_API__UsersController.html", "cl": 72, "ucl": 27, "cal": 99, "tl": 178, "cb": 18, "tb": 28, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Online_Store_Application.Services.CurrentUserService", "rp": "Online_Store_Application_API__CurrentUserService.html", "cl": 25, "ucl": 5, "cal": 30, "tl": 57, "cb": 21, "tb": 40, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Program", "rp": "Online_Store_Application_API__Program.html", "cl": 115, "ucl": 34, "cal": 149, "tl": 192, "cb": 3, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "WebApi.Controllers.AuthController", "rp": "Online_Store_Application_API__AuthController.html", "cl": 39, "ucl": 1, "cal": 40, "tl": 89, "cb": 8, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -421,46 +421,16 @@ var riskHotspotMetrics = [
 
 var riskHotspots = [
   {
-    "assembly": "Application", "class": "Application.Common.Helpers.FilterLexer", "reportPath": "Application_FilterLexer.html", "methodName": "ReadNumber()", "methodShortName": "ReadNumber()", "fileIndex": 0, "line": 107,
-    "metrics": [
-      { "value": 72, "exceeded": true },
-      { "value": 8, "exceeded": false },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.FilterParser", "reportPath": "Application_FilterParser.html", "methodName": "BuildNullComparison(System.Linq.Expressions.ParameterExpression,System.Linq.Expressions.Expression,System.String,System.String)", "methodShortName": "BuildNullComparison(...)", "fileIndex": 0, "line": 86,
-    "metrics": [
-      { "value": 72, "exceeded": true },
-      { "value": 8, "exceeded": false },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.FilterParser", "reportPath": "Application_FilterParser.html", "methodName": ".cctor()", "methodShortName": ".cctor()", "fileIndex": 0, "line": 107,
-    "metrics": [
-      { "value": 72, "exceeded": true },
-      { "value": 8, "exceeded": false },
-    ]},
-  {
-    "assembly": "BusinessLogic", "class": "BusinessLogic.Services.Implementations.UserService", "reportPath": "BusinessLogic_UserService.html", "methodName": "GetByQueryAsync()", "methodShortName": "GetByQueryAsync()", "fileIndex": 0, "line": 58,
-    "metrics": [
-      { "value": 72, "exceeded": true },
-      { "value": 8, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Controllers.UsersController", "reportPath": "Online_Store_Application_API__UsersController.html", "methodName": "GetMyProfile()", "methodShortName": "GetMyProfile()", "fileIndex": 0, "line": 169,
-    "metrics": [
-      { "value": 72, "exceeded": true },
-      { "value": 8, "exceeded": false },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Helpers.FilterLexer", "reportPath": "Application_FilterLexer.html", "methodName": "Tokenize()", "methodShortName": "Tokenize()", "fileIndex": 0, "line": 34,
-    "metrics": [
-      { "value": 60.86, "exceeded": true },
-      { "value": 24, "exceeded": true },
-    ]},
-  {
     "assembly": "Application", "class": "Application.Common.Queries.QueryPolicy", "reportPath": "Application_QueryPolicy.html", "methodName": "Validate(Application.Common.Queries.QueryContract`1<TEntity>,Application.Common.Queries.QueryParseContext`1<TEntity>)", "methodShortName": "Validate(...)", "fileIndex": 0, "line": 11,
     "metrics": [
       { "value": 44.06, "exceeded": true },
       { "value": 22, "exceeded": true },
+    ]},
+  {
+    "assembly": "Application", "class": "Application.Common.Helpers.FilterLexer", "reportPath": "Application_FilterLexer.html", "methodName": "Tokenize()", "methodShortName": "Tokenize()", "fileIndex": 0, "line": 34,
+    "metrics": [
+      { "value": 43.77, "exceeded": true },
+      { "value": 24, "exceeded": true },
     ]},
   {
     "assembly": "Application", "class": "Application.Common.Specifications.SpecificationEvaluator<T>", "reportPath": "Application_SpecificationEvaluator_1.html", "methodName": "ApplyOrdering(System.Linq.IQueryable`1<TEntity>,System.Linq.Expressions.LambdaExpression,System.Boolean,System.Boolean)", "methodShortName": "ApplyOrdering(...)", "fileIndex": 0, "line": 58,
@@ -470,30 +440,6 @@ var riskHotspots = [
     ]},
   {
     "assembly": "BusinessLogic", "class": "BusinessLogic.Services.Implementations.ProductCategoryService", "reportPath": "BusinessLogic_ProductCategoryService.html", "methodName": "UpdateAsync()", "methodShortName": "UpdateAsync()", "fileIndex": 0, "line": 166,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Controllers.EmployeesController", "reportPath": "Online_Store_Application_API__EmployeesController.html", "methodName": "GetMyProfile()", "methodShortName": "GetMyProfile()", "fileIndex": 0, "line": 151,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Controllers.EmployeesController", "reportPath": "Online_Store_Application_API__EmployeesController.html", "methodName": "UpdateAsync()", "methodShortName": "UpdateAsync()", "fileIndex": 0, "line": 115,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Controllers.EmployeeTypesController", "reportPath": "Online_Store_Application_API__EmployeeTypesController.html", "methodName": "Update()", "methodShortName": "Update()", "fileIndex": 0, "line": 115,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "Online Store Application(API)", "class": "Online_Store_Application.Controllers.UsersController", "reportPath": "Online_Store_Application_API__UsersController.html", "methodName": "UpdateUser()", "methodShortName": "UpdateUser()", "fileIndex": 0, "line": 114,
     "metrics": [
       { "value": 42, "exceeded": true },
       { "value": 6, "exceeded": false },
