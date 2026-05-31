@@ -18,6 +18,9 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    - name: Restore dependencies
+      run: dotnet restore "Online Store Application.sln"
+
     - name: Test with coverage
       run: dotnet test "Online Store Application.sln" --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
