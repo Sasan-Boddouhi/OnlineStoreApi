@@ -1,11 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "N/7uNU+JFkxacYgOjV7tL6KvRRB4ZbdxKxdI5AL2Z0Sh5bTtw+awdopXbPXJQPdTyx32a9BONrfkXY5Ath4UwQ==",
+  "dgSpecHash": "Z0bdxgfwEOpfMLAdrccj4e500PUDP9qbWSeZmiNwZXajEs4YyYZ167nTa1OmzF0X6atM8KPswND28RMaWIiSig==",
   "success": true,
   "projectFilePath": "D:\\source\\Online Store Application\\Online Store Application\\Online Store Application(API).csproj",
   "expectedPackageFiles": [
     "C:\\Users\\AMUPC\\.nuget\\packages\\automapper\\13.0.1\\automapper.13.0.1.nupkg.sha512",
-    "C:\\Users\\AMUPC\\.nuget\\packages\\automapper.extensions.microsoft.dependencyinjection\\12.0.1\\automapper.extensions.microsoft.dependencyinjection.12.0.1.nupkg.sha512",
     "C:\\Users\\AMUPC\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
     "C:\\Users\\AMUPC\\.nuget\\packages\\azure.identity\\1.11.4\\azure.identity.1.11.4.nupkg.sha512",
     "C:\\Users\\AMUPC\\.nuget\\packages\\bcrypt.net-next\\4.0.2\\bcrypt.net-next.4.0.2.nupkg.sha512",
@@ -139,16 +138,5 @@
     "C:\\Users\\AMUPC\\.nuget\\packages\\system.threading.channels\\6.0.0\\system.threading.channels.6.0.0.nupkg.sha512",
     "C:\\Users\\AMUPC\\.nuget\\packages\\system.threading.tasks.extensions\\4.5.4\\system.threading.tasks.extensions.4.5.4.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1608",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "Detected package version outside of dependency constraint: AutoMapper.Extensions.Microsoft.DependencyInjection 12.0.1 requires AutoMapper (= 12.0.1) but version AutoMapper 13.0.1 was resolved.",
-      "libraryId": "AutoMapper",
-      "targetGraphs": [
-        "net8.0"
-      ]
-    }
-  ]
+  "logs": []
 }
