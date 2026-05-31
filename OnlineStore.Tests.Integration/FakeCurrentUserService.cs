@@ -8,7 +8,7 @@ public sealed class FakeCurrentUserService : ICurrentUserService
 
     public int? TryGetCurrentUserId() => 1;
 
-    public string? GetCurrentUserName() => "TestUser";
+    public string GetCurrentUserName() => "TestUser";
 
     public string? GetCurrentUserRole() => "Admin";
 
