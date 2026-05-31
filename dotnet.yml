@@ -1,4 +1,4 @@
-name: .NET Build & Test
+﻿name: .NET Build & Test
 
 on:
   push:
@@ -10,36 +10,63 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ── Job 1: Build, Test & Collect Coverage ──
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Clean old coverage and build artifacts
-      run: |
-        find . -name "coverage.cobertura.xml" -delete
-        dotnet clean "Online Store Application.sln" --configuration Release
+      # 🔥 NuGet cache – dramatically speeds up dotnet restore
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
-    - name: Restore dependencies
-      run: dotnet restore "Online Store Application.sln"
+      - name: Restore dependencies
+        run: dotnet restore "Online Store Application.sln"
 
-    - name: Test with coverage
-      run: dotnet test "Online Store Application.sln" --configuration Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+      - name: Build
+        run: dotnet build "Online Store Application.sln" --configuration Release --no-restore
 
-    - name: Install ReportGenerator
-      run: dotnet tool install -g dotnet-reportgenerator-globaltool
+      - name: Run tests with coverage
+        run: dotnet test "Online Store Application.sln" --configuration Release --no-build --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
-    - name: Generate coverage report (suppress path warnings)
-      run: reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:Html -verbosity:Warning
+      # Upload raw coverage XML files for the next job
+      - name: Upload coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: '**/TestResults/**/*.cobertura.xml'
+          retention-days: 1
 
-    - name: Upload coverage report
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coveragereport
+  # ── Job 2: HTML Coverage Report ──
+  coverage-report:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage XML
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-xml
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate HTML report (suppress path warnings)
+        run: reportgenerator -reports:"**/*.cobertura.xml" -targetdir:"coveragereport" -reporttypes:Html -verbosity:Warning
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coveragereport
