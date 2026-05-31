@@ -7,7 +7,7 @@ public sealed class Spec<TEntity> : ISpecification<TEntity>
 {
     public Expression<Func<TEntity, bool>>? Criteria { get; private set; }
 
-    public List<Expression<Func<TEntity, object>>> Includes { get; } = new();
+    public List<LambdaExpression> Includes { get; } = [];
 
     public List<(LambdaExpression KeySelector, bool Descending)> OrderExpressions { get; } = [];
 
@@ -38,32 +38,29 @@ public sealed class Spec<TEntity> : ISpecification<TEntity>
         return this;
     }
 
-    // ===== Include =====
-    public Spec<TEntity> Include(Expression<Func<TEntity, object>> include)
+    // ===== Include عمومی =====
+    public Spec<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> include)
     {
         Includes.Add(include);
         return this;
     }
 
-    // ===== مرتب‌سازی اصلی =====
+    // ===== مرتب‌سازی =====
     public Spec<TEntity> OrderBy<TKey>(Expression<Func<TEntity, TKey>> keySelector, bool descending = false)
     {
         OrderExpressions.Add((keySelector, descending));
         return this;
     }
 
-    // ===== مرتب‌سازی نزولی (راحت‌تر) =====
     public Spec<TEntity> OrderByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         => OrderBy(keySelector, descending: true);
 
-    // ===== ThenBy =====
     public Spec<TEntity> ThenBy<TKey>(Expression<Func<TEntity, TKey>> keySelector, bool descending = false)
     {
         OrderExpressions.Add((keySelector, descending));
         return this;
     }
 
-    // ===== ThenByDescending =====
     public Spec<TEntity> ThenByDescending<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         => ThenBy(keySelector, descending: true);
 
@@ -75,14 +72,14 @@ public sealed class Spec<TEntity> : ISpecification<TEntity>
         return this;
     }
 
-    // ===== کنترل tracking =====
+    // ===== Tracking =====
     public Spec<TEntity> AsTracking()
     {
         IsReadOnly = false;
         return this;
     }
 
-    // ===== برچسب (برای دیباگ یا متریک) =====
+    // ===== برچسب =====
     public Spec<TEntity> Tag(string tag)
     {
         if (!string.IsNullOrWhiteSpace(tag))

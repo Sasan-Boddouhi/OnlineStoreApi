@@ -77,7 +77,7 @@ public class ProductQueryConfigTests
             Price = 100,
             Description = "Test description",
             SubcategoryId = 99,
-            Subcategory = null,
+            Subcategory = null!,
             IsActive = true,
             Barcode = "12345"
         };

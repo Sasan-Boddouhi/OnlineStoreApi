@@ -104,8 +104,11 @@ public sealed class ProvinceService : IProvinceService
 
     public async Task<ProvinceDto?> UpdateAsync(UpdateProvinceDto dto, CancellationToken cancellationToken = default)
     {
+        if (dto.ProvinceId == null)
+            throw new BusinessException("شناسه استان الزامی است.");
+
         _logger.LogInformation("Updating province ID: {Id}", dto.ProvinceId);
-        var entity = await _unitOfWork.Repository<Province>().GetByIdAsync(dto.ProvinceId, cancellationToken);
+        var entity = await _unitOfWork.Repository<Province>().GetByIdAsync(dto.ProvinceId.Value, cancellationToken);
         if (entity == null)
         {
             _logger.LogWarning("Province not found: {Id}", dto.ProvinceId);

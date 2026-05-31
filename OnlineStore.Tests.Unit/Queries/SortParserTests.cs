@@ -95,7 +95,7 @@ public class SortParserTests
     [Fact]
     public void TryParse_EmptySort_ReturnsOkWithEmptyList()
     {
-        var context = new QueryParseContext<Product> { AllowedFields = null };
+        var context = new QueryParseContext<Product> { AllowedFields = null! };
         var result = SortParser.TryParse<Product>(null, context);
         result.Success.Should().BeTrue();
         result.Value.Should().BeEmpty();

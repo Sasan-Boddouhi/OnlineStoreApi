@@ -338,7 +338,7 @@ public sealed class UserService : IUserService
             spec.Where(u => u.UserType == userTypeEnum);
 
         // برای بارگذاری Employee.EmployeeType (در صورت نیاز به نقش)
-        spec.Include(u => u.Employee.EmployeeType);
+        spec.Include(u => u.Employee!.EmployeeType);
 
         var users = await _unitOfWork.Repository<User>().ListAsync(spec, cancellationToken);
         var roles = users

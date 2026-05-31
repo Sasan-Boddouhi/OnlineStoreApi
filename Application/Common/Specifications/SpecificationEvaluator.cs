@@ -10,6 +10,23 @@ public static class SpecificationEvaluator<TEntity>
 {
     private static readonly ConcurrentDictionary<string, MethodInfo> OrderMethodCache = new();
 
+    // ===== متد کمکی برای Include =====
+    private static IQueryable<TEntity> IncludeByExpression(
+        IQueryable<TEntity> source,
+        LambdaExpression expression)
+    {
+        var includeMethod = typeof(EntityFrameworkQueryableExtensions)
+            .GetMethods(BindingFlags.Static | BindingFlags.Public)
+            .First(m => m.Name == "Include" &&
+                        m.GetParameters().Length == 2 &&
+                        m.GetParameters()[1].ParameterType.GenericTypeArguments.Length == 2)
+            .MakeGenericMethod(typeof(TEntity), expression.ReturnType);
+
+        return (IQueryable<TEntity>)includeMethod.Invoke(
+            null,
+            new object[] { source, expression })!;
+    }
+
     public static IQueryable<TEntity> GetQuery(
         IQueryable<TEntity> inputQuery,
         ISpecification<TEntity> spec)
@@ -19,9 +36,11 @@ public static class SpecificationEvaluator<TEntity>
         if (spec.Criteria != null)
             query = query.Where(spec.Criteria);
 
-        query = spec.Includes.Aggregate(
-            query,
-            (current, include) => current.Include(include));
+        // 👇 جایگزین خط قبلی
+        foreach (var include in spec.Includes)
+        {
+            query = IncludeByExpression(query, include);
+        }
 
         if (spec.IsReadOnly)
             query = query.AsNoTracking();

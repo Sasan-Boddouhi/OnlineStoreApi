@@ -15,7 +15,7 @@ namespace Application.Common.Helpers
     public class Token
     {
         public TokenType Type { get; set; }
-        public string Value { get; set; }
+        public string Value { get; set; } = null!;
         public int Position { get; set; }
     }
 

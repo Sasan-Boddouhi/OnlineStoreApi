@@ -57,7 +57,9 @@ public sealed class AuthService : IAuthService
                 LastName = dto.LastName,
                 PhoneNumber = dto.PhoneNumber,
                 Email = dto.Email,
-                DateOfBirth = PersianDateHelper.ToGregorian(dto.DateOfBirth),
+                DateOfBirth = !string.IsNullOrWhiteSpace(dto.DateOfBirth)
+                    ? PersianDateHelper.ToGregorian(dto.DateOfBirth)
+                    : null,
                 PasswordHash = _passwordHasher.Hash(dto.Password),
                 UserType = UserType.Customer,
                 IsActive = true,
@@ -94,8 +96,8 @@ public sealed class AuthService : IAuthService
                 new Spec<User>()
                     .Where(u => u.PhoneNumber == dto.PhoneNumber)
                     .Where(u => u.IsActive)
-                    .Include(u => u.Employee)
-                    .Include(u => u.Employee.EmployeeType)
+                    .Include(u => u.Employee!)
+                    .Include(u => u.Employee!.EmployeeType)
                     .AsTracking(),
                 ct);
 
@@ -138,8 +140,8 @@ public sealed class AuthService : IAuthService
                     .Where(t => t.TokenIdentifier == identifier)
                     .Include(t => t.Session)
                     .Include(t => t.User)
-                    .Include(t => t.User.Employee)
-                    .Include(t => t.User.Employee.EmployeeType)
+                    .Include(t => t.User.Employee!)
+                    .Include(t => t.User.Employee!.EmployeeType)
                     .AsTracking(),
                 ct);
 

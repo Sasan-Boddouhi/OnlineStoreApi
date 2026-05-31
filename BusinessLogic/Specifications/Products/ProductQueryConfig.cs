@@ -27,11 +27,11 @@ public static class ProductQueryConfig
             Price = p.Price,
             Description = p.Description,
             SubcategoryId = p.SubcategoryId,
-            SubcategoryName = p.Subcategory != null ? p.Subcategory.SubcategoryName : null,
+            SubcategoryName = p.Subcategory != null ? p.Subcategory.SubcategoryName : string.Empty,
             CategoryId = p.Subcategory != null ? p.Subcategory.CategoryId : 0,
             CategoryName = p.Subcategory != null && p.Subcategory.Category != null
                 ? p.Subcategory.Category.CategoryName
-                : null,
+                : string.Empty,
             IsActive = p.IsActive,
             Barcode = p.Barcode
         };

@@ -21,6 +21,6 @@ public static class CityQueryConfig
             CityId = c.CityId,
             CityName = c.CityName,
             ProvinceId = c.ProvinceId,
-            ProvinceName = c.Province != null ? c.Province.ProvinceName : null
+            ProvinceName = c.Province != null ? c.Province.ProvinceName : string.Empty
         };
 }
