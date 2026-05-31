@@ -22,9 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Online Store Application\Application\Application.csproj" />
-    <ProjectReference Include="..\..\Online Store Application\BusinessLogic\BusinessLogic.csproj" />
-    <ProjectReference Include="..\..\Online Store Application\DataLayer\DataLayer.csproj" />
+    <ProjectReference Include="..\Application\Application.csproj" />
+    <ProjectReference Include="..\BusinessLogic\BusinessLogic.csproj" />
+    <ProjectReference Include="..\DataLayer\DataLayer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
