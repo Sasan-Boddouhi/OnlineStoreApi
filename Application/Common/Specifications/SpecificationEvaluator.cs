@@ -10,23 +10,29 @@ public static class SpecificationEvaluator<TEntity>
 {
     private static readonly ConcurrentDictionary<string, MethodInfo> OrderMethodCache = new();
 
-    // ===== متد کمکی برای Include =====
     private static IQueryable<TEntity> IncludeByExpression(
         IQueryable<TEntity> source,
         LambdaExpression expression)
     {
+        var entityType = typeof(TEntity);
+        var propertyType = expression.ReturnType;
+
+        // پیدا کردن متد Include<TEntity, TProperty>
         var includeMethod = typeof(EntityFrameworkQueryableExtensions)
             .GetMethods(BindingFlags.Static | BindingFlags.Public)
             .First(m => m.Name == "Include" &&
                         m.GetParameters().Length == 2 &&
-                        m.GetParameters()[1].ParameterType.GenericTypeArguments.Length == 2)
-            .MakeGenericMethod(typeof(TEntity), expression.ReturnType);
+                        m.GetParameters()[1].ParameterType.GenericTypeArguments.Length == 1 &&
+                        m.GetParameters()[1].ParameterType.GenericTypeArguments[0]
+                            .GenericTypeArguments.Length == 2)
+            .MakeGenericMethod(entityType, propertyType);
 
         return (IQueryable<TEntity>)includeMethod.Invoke(
             null,
             new object[] { source, expression })!;
     }
 
+    // ───── GetQuery بدون تغییر در منطق ─────
     public static IQueryable<TEntity> GetQuery(
         IQueryable<TEntity> inputQuery,
         ISpecification<TEntity> spec)
@@ -36,7 +42,7 @@ public static class SpecificationEvaluator<TEntity>
         if (spec.Criteria != null)
             query = query.Where(spec.Criteria);
 
-        // 👇 جایگزین خط قبلی
+        // اعمال Include‌ها
         foreach (var include in spec.Includes)
         {
             query = IncludeByExpression(query, include);
@@ -48,7 +54,6 @@ public static class SpecificationEvaluator<TEntity>
         if (spec.OrderExpressions.Any())
         {
             IOrderedQueryable<TEntity>? orderedQuery = null;
-
             foreach (var (keySelector, descending) in spec.OrderExpressions)
             {
                 orderedQuery = ApplyOrdering(
@@ -57,7 +62,6 @@ public static class SpecificationEvaluator<TEntity>
                     descending,
                     orderedQuery != null);
             }
-
             query = orderedQuery ?? query;
         }
 

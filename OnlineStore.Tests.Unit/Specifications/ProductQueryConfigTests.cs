@@ -87,8 +87,8 @@ public class ProductQueryConfigTests
 
         // Assert
         dto.Should().NotBeNull();
-        dto.SubcategoryName.Should().BeNull();
-        dto.CategoryName.Should().BeNull();
+        dto.SubcategoryName.Should().Be(string.Empty);
+        dto.CategoryName.Should().Be(string.Empty);
         dto.CategoryId.Should().Be(0);
         dto.Barcode.Should().Be("12345");
     }

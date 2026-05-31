@@ -38,7 +38,6 @@ public sealed class Spec<TEntity> : ISpecification<TEntity>
         return this;
     }
 
-    // ===== Include عمومی (تبدیل به Expression<Func<TEntity, object>>) =====
     public Spec<TEntity> Include<TProperty>(Expression<Func<TEntity, TProperty>> include)
     {
         Includes.Add(include);
