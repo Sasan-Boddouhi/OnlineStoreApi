@@ -4,10 +4,11 @@
 [![EF Core](https://img.shields.io/badge/EF%20Core-8.0-512BD4?logo=entity-framework)](https://docs.microsoft.com/ef/core/)
 [![Swagger](https://img.shields.io/badge/API-Swagger-85EA2D?logo=swagger)](https://swagger.io/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/dotnet.yml/badge.svg)](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/dotnet.yml)
 
-A modern, scalable and maintainable e-commerce REST API built with **ASP.NET Core 8**, **Clean Architecture**, **Specification Pattern**, and a unified dynamic query pipeline.
+A production-style e-commerce REST API built with **ASP.NET Core 8**, **Clean Architecture**, and the **Specification Pattern**, showcasing advanced querying, authentication, testing, and maintainable enterprise application design.
 
-The project demonstrates enterprise-grade backend development practices including authentication, authorization, validation, structured logging, caching, testing, and flexible querying.
+The project demonstrates modern backend engineering practices including authentication, authorization, validation, structured logging, caching, testing, and a reusable dynamic query pipeline.
 
 ---
 
@@ -73,31 +74,46 @@ The project demonstrates enterprise-grade backend development practices includin
 
 ---
 
+# 📊 Key Highlights
+
+* Clean Architecture implementation
+* Dynamic Query DSL
+* Specification Pattern
+* JWT Authentication
+* Refresh Token Rotation
+* Comprehensive Testing
+* GitHub Actions CI
+* Structured Logging
+* SQLite-backed Integration Testing
+* Reusable Query Infrastructure
+
+---
+
 # 🏗️ Architecture
 
 ```text
-┌─────────────────────────────────────────┐
-│              Presentation               │
-│   Controllers, Middleware, Program.cs   │
-└────────────────────┬────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────┐
-│             BusinessLogic               │
-│ Services, DTOs, Validators, Mappings    │
-└────────────────────┬────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────┐
-│              Application                │
-│ Entities, Contracts, Specifications     │
-└────────────────────┬────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────┐
-│               DataLayer                 │
-│ DbContext, Repositories, Persistence    │
-└─────────────────────────────────────────┘
+┌─────────────────────────────┐
+│        Presentation         │
+│ Controllers, Middleware     │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│       BusinessLogic         │
+│ Services, DTOs, Validators  │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│        Application          │
+│ Entities, Contracts, Specs  │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│         DataLayer           │
+│ EF Core, Repositories       │
+└─────────────────────────────┘
 ```
 
 ### Dependency Flow
@@ -112,7 +128,7 @@ Application
 DataLayer
 ```
 
-Dependencies always flow inward. Outer layers may depend on inner layers, but never the opposite.
+All dependencies flow inward to preserve separation of concerns, maintainability, and testability.
 
 ---
 
@@ -140,7 +156,7 @@ Fluent DSL / Query String
       Repository / EF Core
 ```
 
-This pipeline enables strongly-typed filtering, sorting and paging while keeping controllers and services clean.
+The query pipeline converts query-string expressions into strongly typed specifications, enabling reusable filtering, sorting, paging, and projection while keeping controllers and services free from query logic.
 
 ---
 
@@ -177,9 +193,25 @@ GET /api/products?filter=price gt 1000 and category.name eq 'electronics'&sort=-
 ```text
 src/
 ├── Application
+│   ├── Entities
+│   ├── Contracts
+│   └── Specifications
+│
 ├── BusinessLogic
+│   ├── Services
+│   ├── DTOs
+│   ├── Validators
+│   └── Mappings
+│
 ├── DataLayer
+│   ├── Context
+│   ├── Repositories
+│   └── Persistence
+│
 └── OnlineStore.API
+    ├── Controllers
+    ├── Middleware
+    └── Configuration
 
 tests/
 ├── OnlineStore.Tests.Unit
@@ -191,28 +223,39 @@ tests/
 
 # 🧪 Testing
 
-The solution contains a complete testing infrastructure.
+The solution includes a comprehensive automated testing infrastructure.
 
-| Project                       | Purpose                                  |
-| ----------------------------- | ---------------------------------------- |
-| OnlineStore.Tests.Unit        | Fast isolated unit tests                 |
-| OnlineStore.Tests.Integration | End-to-end application integration tests |
-| OnlineStore.Tests.Shared      | Shared test utilities and fixtures       |
+| Project                       | Purpose                       |
+| ----------------------------- | ----------------------------- |
+| OnlineStore.Tests.Unit        | Fast isolated unit tests      |
+| OnlineStore.Tests.Integration | End-to-end integration tests  |
+| OnlineStore.Tests.Shared      | Shared fixtures and utilities |
 
-### Testing Stack
+### Testing Highlights
 
-* xUnit
-* FluentAssertions
-* Moq
-* WebApplicationFactory
-* SQLite In-Memory
-* ReportGenerator
+* 300+ automated tests
+* GitHub Actions CI validation
+* WebApplicationFactory integration suite
+* SQLite In-Memory testing
+* Coverage reporting via ReportGenerator
 
-For detailed testing documentation see:
+For detailed testing architecture and coverage workflow see:
 
-```text
-TESTING.md
-```
+[TESTING.md](TESTING.md)
+
+---
+
+# 🔄 Continuous Integration
+
+GitHub Actions automatically:
+
+* Restore dependencies
+* Build the solution
+* Execute all tests
+* Generate coverage artifacts
+* Fail the pipeline on test failures
+
+Every pull request is validated before merging.
 
 ---
 
@@ -247,8 +290,6 @@ Implemented security features include:
 
 # 📡 Error Response Format
 
-Example validation error:
-
 ```json
 {
   "success": false,
@@ -267,35 +308,47 @@ Example validation error:
 
 # 🛠️ Technology Stack
 
-### Backend
+## Platform
 
 * .NET 8
 * ASP.NET Core Web API
 * Entity Framework Core 8
 * SQL Server
 
-### Libraries
+## Architecture
 
-* AutoMapper
-* FluentValidation
-* Serilog
-* BCrypt.Net
+* Clean Architecture
+* Repository Pattern
+* Unit of Work Pattern
+* Specification Pattern
+
+## Security
+
 * JWT Bearer Authentication
+* Refresh Token Rotation
+* BCrypt Password Hashing
 
-### Documentation
+## Validation & Mapping
 
-* Swagger / OpenAPI
+* FluentValidation
+* AutoMapper
 
-### Caching
+## Observability
 
-* IMemoryCache
+* Serilog
 
-### Testing
+## Testing
 
 * xUnit
 * Moq
 * FluentAssertions
+* WebApplicationFactory
 * SQLite In-Memory
+* ReportGenerator
+
+## Documentation
+
+* Swagger / OpenAPI
 
 ---
 
@@ -308,19 +361,13 @@ git clone https://github.com/Sasan-Boddouhi/OnlineStoreApi.git
 cd OnlineStoreApi
 ```
 
----
-
 ## Restore Packages
 
 ```bash
 dotnet restore
 ```
 
----
-
 ## Configure Database
-
-Update your connection string:
 
 ```json
 {
@@ -330,15 +377,11 @@ Update your connection string:
 }
 ```
 
----
-
 ## Apply Migrations
 
 ```bash
 dotnet ef database update
 ```
-
----
 
 ## Run Application
 
@@ -362,23 +405,24 @@ Swagger/OpenAPI documentation is generated automatically.
 
 # 🔮 Roadmap
 
-Future improvements may include:
+Planned future enhancements:
 
 * Redis Distributed Cache
-* Docker Support
+* Docker Containerization
 * Kubernetes Deployment
 * CQRS + MediatR
 * OpenTelemetry
 * API Versioning
 * Rate Limiting
 * Distributed Tracing
-* Health Checks Dashboard
+* Health Checks
+* Background Processing
 
 ---
 
 # 🤝 Contributing
 
-Contributions, issues and feature requests are welcome.
+Contributions, issues, and feature requests are welcome.
 
 1. Fork the repository
 2. Create a feature branch
