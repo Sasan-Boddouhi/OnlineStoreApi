@@ -21,17 +21,22 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    - name: Clean old coverage and build artifacts
+      run: |
+        find . -name "coverage.cobertura.xml" -delete
+        dotnet clean "Online Store Application.sln" --configuration Release
+
     - name: Restore dependencies
       run: dotnet restore "Online Store Application.sln"
 
     - name: Test with coverage
-      run: dotnet test "Online Store Application.sln" --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+      run: dotnet test "Online Store Application.sln" --configuration Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
     - name: Install ReportGenerator
       run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
-    - name: Generate coverage report
-      run: reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:Html
+    - name: Generate coverage report (suppress path warnings)
+      run: reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:Html -verbosity:Warning
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
