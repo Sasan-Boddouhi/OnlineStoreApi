@@ -223,7 +223,7 @@ var assemblies = [
     "classes": [
       { "name": "Application.Common.Helpers.ExpressionBuilder", "rp": "Application_ExpressionBuilder.html", "cl": 16, "ucl": 0, "cal": 16, "tl": 32, "cb": 4, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.ExpressionCache<T>", "rp": "Application_ExpressionCache_1.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Helpers.FilterLexer", "rp": "Application_FilterLexer.html", "cl": 97, "ucl": 13, "cal": 110, "tl": 158, "cb": 41, "tb": 48, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Helpers.FilterLexer", "rp": "Application_FilterLexer.html", "cl": 110, "ucl": 0, "cal": 110, "tl": 158, "cb": 48, "tb": 48, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.PredicateBuilder", "rp": "Application_PredicateBuilder.html", "cl": 0, "ucl": 20, "cal": 20, "tl": 50, "cb": 0, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Helpers.Token", "rp": "Application_Token.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 158, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.FilterParser", "rp": "Application_FilterParser.html", "cl": 117, "ucl": 21, "cal": 138, "tl": 191, "cb": 25, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -235,14 +235,14 @@ var assemblies = [
       { "name": "Application.Common.Queries.QueryContract<T>", "rp": "Application_QueryContract_1.html", "cl": 7, "ucl": 0, "cal": 7, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.QueryContractExtensions", "rp": "Application_QueryContractExtensions.html", "cl": 0, "ucl": 10, "cal": 10, "tl": 19, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.QueryParseContext<T>", "rp": "Application_QueryParseContext_1.html", "cl": 4, "ucl": 0, "cal": 4, "tl": 12, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Queries.QueryPolicy", "rp": "Application_QueryPolicy.html", "cl": 24, "ucl": 17, "cal": 41, "tl": 70, "cb": 15, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Queries.QueryPolicy", "rp": "Application_QueryPolicy.html", "cl": 41, "ucl": 0, "cal": 41, "tl": 70, "cb": 36, "tb": 38, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.SortDefinition<T>", "rp": "Application_SortDefinition_1.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 10, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.SortParser", "rp": "Application_SortParser.html", "cl": 61, "ucl": 3, "cal": 64, "tl": 103, "cb": 31, "tb": 36, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Queries.StringQueryParser", "rp": "Application_StringQueryParser.html", "cl": 32, "ucl": 14, "cal": 46, "tl": 78, "cb": 6, "tb": 10, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.QueryContractMapper", "rp": "Application_QueryContractMapper.html", "cl": 13, "ucl": 7, "cal": 20, "tl": 34, "cb": 7, "tb": 12, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.ReplaceExpressionVisitor", "rp": "Application_ReplaceExpressionVisitor.html", "cl": 10, "ucl": 0, "cal": 10, "tl": 23, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Common.Specifications.Spec<T>", "rp": "Application_Spec_1.html", "cl": 39, "ucl": 10, "cal": 49, "tl": 92, "cb": 4, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "Application.Common.Specifications.SpecificationEvaluator<T>", "rp": "Application_SpecificationEvaluator_1.html", "cl": 16, "ucl": 37, "cal": 53, "tl": 90, "cb": 9, "tb": 26, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "Application.Common.Specifications.SpecificationEvaluator<T>", "rp": "Application_SpecificationEvaluator_1.html", "cl": 53, "ucl": 0, "cal": 53, "tl": 90, "cb": 22, "tb": 26, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.Address", "rp": "Application_Address.html", "cl": 13, "ucl": 0, "cal": 13, "tl": 51, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.AuditableEntity", "rp": "Application_AuditableEntity.html", "cl": 4, "ucl": 0, "cal": 4, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "Application.Entities.City", "rp": "Application_City.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 29, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -297,7 +297,7 @@ var assemblies = [
       { "name": "BusinessLogic.DTOs.Order.CreateOrderDto", "rp": "BusinessLogic_CreateOrderDto.html", "cl": 0, "ucl": 5, "cal": 5, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Order.OrderDetailsDto", "rp": "BusinessLogic_OrderDetailsDto.html", "cl": 6, "ucl": 0, "cal": 6, "tl": 20, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.OrderItem.AddOrderItemDto", "rp": "BusinessLogic_AddOrderItemDto.html", "cl": 3, "ucl": 1, "cal": 4, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.OrderItem.CreateOrderItemDto", "rp": "BusinessLogic_CreateOrderItemDto.html", "cl": 0, "ucl": 4, "cal": 4, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.OrderItem.CreateOrderItemDto", "rp": "BusinessLogic_CreateOrderItemDto.html", "cl": 4, "ucl": 0, "cal": 4, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.OrderItem.OrderItemDto", "rp": "BusinessLogic_OrderItemDto.html", "cl": 6, "ucl": 0, "cal": 6, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Payment.CreatePaymentDto", "rp": "BusinessLogic_CreatePaymentDto.html", "cl": 0, "ucl": 7, "cal": 7, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.Payment.PaymentDto", "rp": "BusinessLogic_PaymentDto.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -307,7 +307,7 @@ var assemblies = [
       { "name": "BusinessLogic.DTOs.Product.UpdateProductDto", "rp": "BusinessLogic_UpdateProductDto.html", "cl": 5, "ucl": 0, "cal": 5, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.ProductCategory.CreateProductCategoryDto", "rp": "BusinessLogic_CreateProductCategoryDto.html", "cl": 1, "ucl": 0, "cal": 1, "tl": 13, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.ProductCategory.ProductCategoryDto", "rp": "BusinessLogic_ProductCategoryDto.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 17, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.DTOs.ProductCategory.UpdateProductCategoryDto", "rp": "BusinessLogic_UpdateProductCategoryDto.html", "cl": 0, "ucl": 2, "cal": 2, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.DTOs.ProductCategory.UpdateProductCategoryDto", "rp": "BusinessLogic_UpdateProductCategoryDto.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 14, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.ProductSubcategory.CreateProductSubcategoryDto", "rp": "BusinessLogic_CreateProductSubcategoryDto.html", "cl": 3, "ucl": 0, "cal": 3, "tl": 16, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.ProductSubcategory.ProductSubcategoryDto", "rp": "BusinessLogic_ProductSubcategoryDto.html", "cl": 5, "ucl": 1, "cal": 6, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.DTOs.ProductSubcategory.UpdateProductSubcategoryDto", "rp": "BusinessLogic_UpdateProductSubcategoryDto.html", "cl": 4, "ucl": 1, "cal": 5, "tl": 18, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -344,10 +344,10 @@ var assemblies = [
       { "name": "BusinessLogic.Services.Implementations.InvoiceService", "rp": "BusinessLogic_InvoiceService.html", "cl": 26, "ucl": 0, "cal": 26, "tl": 52, "cb": 6, "tb": 6, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.JwtTokenService", "rp": "BusinessLogic_JwtTokenService.html", "cl": 0, "ucl": 24, "cal": 24, "tl": 49, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.LogService", "rp": "BusinessLogic_LogService.html", "cl": 31, "ucl": 40, "cal": 71, "tl": 131, "cb": 8, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Services.Implementations.OrderItemService", "rp": "BusinessLogic_OrderItemService.html", "cl": 0, "ucl": 22, "cal": 22, "tl": 48, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Services.Implementations.OrderItemService", "rp": "BusinessLogic_OrderItemService.html", "cl": 22, "ucl": 0, "cal": 22, "tl": 48, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.OrderService", "rp": "BusinessLogic_OrderService.html", "cl": 127, "ucl": 35, "cal": 162, "tl": 269, "cb": 18, "tb": 24, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.PaymentService", "rp": "BusinessLogic_PaymentService.html", "cl": 22, "ucl": 0, "cal": 22, "tl": 47, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "BusinessLogic.Services.Implementations.ProductCategoryService", "rp": "BusinessLogic_ProductCategoryService.html", "cl": 28, "ucl": 86, "cal": 114, "tl": 200, "cb": 3, "tb": 18, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "BusinessLogic.Services.Implementations.ProductCategoryService", "rp": "BusinessLogic_ProductCategoryService.html", "cl": 44, "ucl": 70, "cal": 114, "tl": 200, "cb": 6, "tb": 18, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.ProductService", "rp": "BusinessLogic_ProductService.html", "cl": 113, "ucl": 15, "cal": 128, "tl": 216, "cb": 21, "tb": 24, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.ProductSubcategoryService", "rp": "BusinessLogic_ProductSubcategoryService.html", "cl": 62, "ucl": 47, "cal": 109, "tl": 201, "cb": 9, "tb": 22, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "BusinessLogic.Services.Implementations.ProvinceService", "rp": "BusinessLogic_ProvinceService.html", "cl": 62, "ucl": 29, "cal": 91, "tl": 164, "cb": 10, "tb": 18, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
@@ -388,7 +388,7 @@ var assemblies = [
       { "name": "DataLayer.Repositories.Implementations.GenericRepository<T>", "rp": "DataLayer_GenericRepository_1.html", "cl": 48, "ucl": 0, "cal": 48, "tl": 104, "cb": 3, "tb": 4, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Repositories.UnitOfWork", "rp": "DataLayer_UnitOfWork.html", "cl": 51, "ucl": 3, "cal": 54, "tl": 110, "cb": 8, "tb": 14, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
       { "name": "DataLayer.Security.BcryptPasswordHasher", "rp": "DataLayer_BcryptPasswordHasher.html", "cl": 2, "ucl": 0, "cal": 2, "tl": 21, "cb": 0, "tb": 0, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
-      { "name": "DataLayer.Services.SqlQueryService", "rp": "DataLayer_SqlQueryService.html", "cl": 0, "ucl": 16, "cal": 16, "tl": 41, "cb": 0, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
+      { "name": "DataLayer.Services.SqlQueryService", "rp": "DataLayer_SqlQueryService.html", "cl": 14, "ucl": 2, "cal": 16, "tl": 41, "cb": 2, "tb": 2, "cm": 0, "tm": 0, "lch": [], "bch": [], "mch": [], "hc": [], "metrics": { } },
     ]},
   {
     "name": "Online Store Application(API)",
@@ -421,46 +421,22 @@ var riskHotspotMetrics = [
 
 var riskHotspots = [
   {
-    "assembly": "Application", "class": "Application.Common.Queries.QueryPolicy", "reportPath": "Application_QueryPolicy.html", "methodName": "Validate(Application.Common.Queries.QueryContract`1<TEntity>,Application.Common.Queries.QueryParseContext`1<TEntity>)", "methodShortName": "Validate(...)", "fileIndex": 0, "line": 11,
-    "metrics": [
-      { "value": 44.06, "exceeded": true },
-      { "value": 22, "exceeded": true },
-    ]},
-  {
     "assembly": "Application", "class": "Application.Common.Helpers.FilterLexer", "reportPath": "Application_FilterLexer.html", "methodName": "Tokenize()", "methodShortName": "Tokenize()", "fileIndex": 0, "line": 34,
     "metrics": [
-      { "value": 43.77, "exceeded": true },
+      { "value": 24, "exceeded": false },
       { "value": 24, "exceeded": true },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Specifications.SpecificationEvaluator<T>", "reportPath": "Application_SpecificationEvaluator_1.html", "methodName": "ApplyOrdering(System.Linq.IQueryable`1<TEntity>,System.Linq.Expressions.LambdaExpression,System.Boolean,System.Boolean)", "methodShortName": "ApplyOrdering(...)", "fileIndex": 0, "line": 58,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "BusinessLogic", "class": "BusinessLogic.Services.Implementations.ProductCategoryService", "reportPath": "BusinessLogic_ProductCategoryService.html", "methodName": "UpdateAsync()", "methodShortName": "UpdateAsync()", "fileIndex": 0, "line": 166,
-    "metrics": [
-      { "value": 42, "exceeded": true },
-      { "value": 6, "exceeded": false },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Queries.QueryPolicy", "reportPath": "Application_QueryPolicy.html", "methodName": "Normalize(Application.Common.Queries.QueryContract`1<TEntity>,Application.Common.Queries.QueryParseContext`1<TEntity>)", "methodShortName": "Normalize(...)", "fileIndex": 0, "line": 37,
-    "metrics": [
-      { "value": 38.48, "exceeded": true },
-      { "value": 16, "exceeded": true },
-    ]},
-  {
-    "assembly": "Application", "class": "Application.Common.Specifications.SpecificationEvaluator<T>", "reportPath": "Application_SpecificationEvaluator_1.html", "methodName": "GetQuery(System.Linq.IQueryable`1<TEntity>,Application.Common.Specifications.ISpecification`1<TEntity>)", "methodShortName": "GetQuery(...)", "fileIndex": 0, "line": 16,
-    "metrics": [
-      { "value": 36.16, "exceeded": true },
-      { "value": 16, "exceeded": true },
     ]},
   {
     "assembly": "BusinessLogic", "class": "AuthService", "reportPath": "BusinessLogic_AuthService.html", "methodName": "CreateSession(System.Int32,System.Object)", "methodShortName": "CreateSession(...)", "fileIndex": 0, "line": 237,
     "metrics": [
       { "value": 24, "exceeded": false },
       { "value": 24, "exceeded": true },
+    ]},
+  {
+    "assembly": "Application", "class": "Application.Common.Queries.QueryPolicy", "reportPath": "Application_QueryPolicy.html", "methodName": "Validate(Application.Common.Queries.QueryContract`1<TEntity>,Application.Common.Queries.QueryParseContext`1<TEntity>)", "methodShortName": "Validate(...)", "fileIndex": 0, "line": 11,
+    "metrics": [
+      { "value": 22, "exceeded": false },
+      { "value": 22, "exceeded": true },
     ]},
   {
     "assembly": "BusinessLogic", "class": "BusinessLogic.Common.Mapping.AutoMapperExtensions", "reportPath": "BusinessLogic_AutoMapperExtensions.html", "methodName": "ConfigureDbDestination(AutoMapper.IMappingExpression`2<TSource,TDestination>)", "methodShortName": "ConfigureDbDestination(...)", "fileIndex": 0, "line": 10,
@@ -479,6 +455,18 @@ var riskHotspots = [
     "metrics": [
       { "value": 23.65, "exceeded": false },
       { "value": 18, "exceeded": true },
+    ]},
+  {
+    "assembly": "Application", "class": "Application.Common.Queries.QueryPolicy", "reportPath": "Application_QueryPolicy.html", "methodName": "Normalize(Application.Common.Queries.QueryContract`1<TEntity>,Application.Common.Queries.QueryParseContext`1<TEntity>)", "methodShortName": "Normalize(...)", "fileIndex": 0, "line": 37,
+    "metrics": [
+      { "value": 16, "exceeded": false },
+      { "value": 16, "exceeded": true },
+    ]},
+  {
+    "assembly": "Application", "class": "Application.Common.Specifications.SpecificationEvaluator<T>", "reportPath": "Application_SpecificationEvaluator_1.html", "methodName": "GetQuery(System.Linq.IQueryable`1<TEntity>,Application.Common.Specifications.ISpecification`1<TEntity>)", "methodShortName": "GetQuery(...)", "fileIndex": 0, "line": 16,
+    "metrics": [
+      { "value": 16.32, "exceeded": false },
+      { "value": 16, "exceeded": true },
     ]},
   {
     "assembly": "BusinessLogic", "class": "BusinessLogic.Common.Validation.PersianDateValidator", "reportPath": "BusinessLogic_PersianDateValidator.html", "methodName": "IsValid(System.String)", "methodShortName": "IsValid(...)", "fileIndex": 0, "line": 9,
