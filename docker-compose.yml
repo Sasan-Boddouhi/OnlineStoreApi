@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    ports:
+      - "5000:80"
+    environment:
+      - ConnectionStrings__SQLServer=Server=db;Database=ShopDB;User Id=sa;Password=YourPassword123;TrustServerCertificate=true;
+      - Jwt__Key=ThisIsASecureKey_ReplaceInProduction_12345
+      - Jwt__Issuer=OnlineStoreApi
+      - Jwt__Audience=OnlineStoreClient
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80 
+    depends_on:
+      - db
+
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourPassword123
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+
+volumes:
+  sql_data:
