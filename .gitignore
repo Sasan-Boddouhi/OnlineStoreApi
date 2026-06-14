@@ -2,29 +2,68 @@
 .vs/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
 
 # Build results
 bin/
 obj/
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+Out/
+
+# .NET specific
+*.pdb
+*.exe
+*.dll
+*.cache
+*.log
+*.tmp
+*.rsp
+**/AssemblyInfo.cs
+*.nupkg
+
+# User-specific / Local settings
+*.usersecrets.json
+launchSettings.json
+appsettings.*.json
+!appsettings.json
 
 # Logs
 Logs/
 *.log
 Online Store Application/Logs/
 
-# Node.js
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# OS
-Thumbs.db
-.DS_Store
+# Testing & Coverage
+coveragereport/
+TestResults/
+coverage.cobertura.xml
+coverage.opencover.xml
 
 # IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
 
 # Temporary / Environment
 *.tmp
 *.env
+.env.local
+.env.*.local
+
+# NuGet
+packages/
+*.nupkg
