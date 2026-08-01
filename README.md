@@ -1,5 +1,4 @@
-﻿```markdown
-# 🛒 Online Store API
+﻿# 🛒 Online Store API
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![EF Core](https://img.shields.io/badge/EF%20Core-8.0-512BD4?logo=entity-framework)](https://docs.microsoft.com/ef/core/)
