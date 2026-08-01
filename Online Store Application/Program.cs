@@ -1,19 +1,25 @@
-﻿using BusinessLogic.Extensions;
-using Serilog;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using BusinessLogic.Services.Implementations;
-using Online_Store_Application.Services;
+﻿using Application.Common.Specifications;
+using Application.Entities;
 using Application.Interfaces;
-using Application.Middleware;
-using DataLayer.Extensions;
-using DataLayer.Security;
 using Application.Interfaces.Security;
+using Application.Middleware;
+using BusinessLogic.Extensions;
+using BusinessLogic.Services.Implementations;
 using BusinessLogic.Services.Interfaces;
 using DataLayer.Context;
+using DataLayer.Extensions;
+using DataLayer.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Online_Store_Application.Middleware;
+using Online_Store_Application.Services;
+using Serilog;
 using System.Security.Claims;
+using System.Text;
+using System.Threading.RateLimiting;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +40,12 @@ builder.Services.AddControllers(options =>
         Newtonsoft.Json.ReferenceLoopHandling.Ignore;
 })
 .AddXmlDataContractSerializerFormatters();
+
+builder.Services.Configure<ApiBehaviorOptions>(
+    options =>
+    {
+        options.SuppressModelStateInvalidFilter = true;
+    });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -126,6 +138,19 @@ builder.Services.AddAuthentication(options =>
             if (!isActive)
             {
                 context.Fail("Session revoked");
+                return;
+            }
+
+            // SecurityStamp check: ensure user's current stamp matches token claim
+            var stamp = context.Principal!.FindFirst("SecurityStamp")?.Value;
+
+            var dbUser = await unitOfWork.Repository<User>()
+                .FirstOrDefaultAsync(new Spec<User>().Where(u => u.UserId == uid));
+
+            if (dbUser == null || stamp == null || dbUser.SecurityStamp != stamp)
+            {
+                context.Fail("Security stamp invalid");
+                return;
             }
         }
     };
@@ -153,7 +178,34 @@ builder.Services.AddCors(options =>
         });
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter(
+        "LoginLimiter",
+        config =>
+        {
+            config.PermitLimit = 5;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        });
+
+    options.AddFixedWindowLimiter(
+        "RefreshLimiter",
+        config =>
+        {
+            config.PermitLimit = 20;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        });
+});
+
 var app = builder.Build();
+
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 
 using (var scope = app.Services.CreateScope())
 {
@@ -175,6 +227,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 app.UseCors("ReactFrontend");
+app.UseRateLimiter();
 app.UseMiddleware<QueryMetricsMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();

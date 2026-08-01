@@ -244,6 +244,12 @@ namespace DataLayer.Context
                 .WithMany()
                 .HasForeignKey(r => r.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RefreshTokenEntity>()
+                .HasOne(r => r.ReplacedByToken)
+                .WithMany()
+                .HasForeignKey(r => r.ReplacedByTokenId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

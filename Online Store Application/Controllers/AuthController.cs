@@ -2,9 +2,9 @@
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.IdentityModel.Tokens.Jwt;
-using System.Numerics;
 using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
+using BusinessLogic.DTOs.User;
 
 namespace WebApi.Controllers
 {
@@ -21,23 +21,19 @@ namespace WebApi.Controllers
 
         // ثبت‌نام
         [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterDto dto)
+        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
-            try
-            {
-                var result = await _authService.RegisterAsync(dto);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            var result =
+                await _authService.RegisterAsync(dto);
+
+            return Ok(result);
         }
 
 
         // ورود و دریافت AccessToken + RefreshToken
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginDto dto)
+        [EnableRateLimiting("LoginLimiter")]
+        public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var tokenResult = await _authService.LoginAsync(dto);
             if (tokenResult == null)
@@ -51,18 +47,19 @@ namespace WebApi.Controllers
         [HttpGet("me")]
         public IActionResult Me()
         {
-            return Ok(new
-            {
-                UserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
-                FullName = User.FindFirst("FullName")?.Value,
-                Role = User.FindFirst(ClaimTypes.Role)?.Value,
-                PhoneNumber = User.FindFirst("PhoneNumber")?.Value
-            });
+            var profile = new UserProfileDto(
+                User.FindFirstValue(ClaimTypes.NameIdentifier)!,
+                User.FindFirstValue("FullName")!,
+                User.FindFirstValue(ClaimTypes.Role)!,
+                User.FindFirstValue("PhoneNumber")!
+            );
+            return Ok(profile);
         }
 
         // تازه‌سازی توکن با RefreshToken
         [HttpPost("refresh")]
-        public async Task<IActionResult> Refresh(RefreshTokenDto dto)
+        [EnableRateLimiting("RefreshLimiter")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenDto dto)
         {
             var tokenResult = await _authService.RefreshTokenAsync(dto.RefreshToken);
             if (tokenResult == null)

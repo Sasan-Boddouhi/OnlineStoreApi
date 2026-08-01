@@ -6,7 +6,6 @@ namespace Application.Entities
 {
     [Table("RefreshToken")]
     public class RefreshTokenEntity
-
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -32,7 +31,7 @@ namespace Application.Entities
         [ForeignKey(nameof(UserId))]
         public virtual User User { get; set; } = default!;
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [Required]
         public DateTime ExpiryDate { get; set; }
@@ -42,7 +41,11 @@ namespace Application.Entities
 
         public DateTime? RevokedAtUtc { get; set; }
 
-        public string? ReplacedByTokenHash { get; set; }
+        // New: point to replacement refresh token (rotation). int matches PK type.
+        public int? ReplacedByTokenId { get; set; }
+
+        [ForeignKey(nameof(ReplacedByTokenId))]
+        public virtual RefreshTokenEntity? ReplacedByToken { get; set; }
 
         [Timestamp]
         public byte[] RowVersion { get; set; } = Array.Empty<byte>();

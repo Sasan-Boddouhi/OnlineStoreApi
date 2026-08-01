@@ -1,24 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "D:\\source\\Online Store Application\\Online Store Application\\Online Store Application(API).csproj": {}
+    "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\Online Store Application(API).csproj": {}
   },
   "projects": {
-    "D:\\source\\Online Store Application\\Application\\Application.csproj": {
+    "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\source\\Online Store Application\\Application\\Application.csproj",
+        "projectUniqueName": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj",
         "projectName": "Application",
-        "projectPath": "D:\\source\\Online Store Application\\Application\\Application.csproj",
-        "packagesPath": "C:\\Users\\AMUPC\\.nuget\\packages\\",
-        "outputPath": "D:\\source\\Online Store Application\\Application\\obj\\",
+        "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj",
+        "packagesPath": "C:\\Users\\NegAnd\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
-          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\AMUPC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\NegAnd\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -45,7 +44,8 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
         "net8.0": {
@@ -80,25 +80,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.204/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.301/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "D:\\source\\Online Store Application\\BusinessLogic\\BusinessLogic.csproj": {
+    "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\BusinessLogic\\BusinessLogic.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\source\\Online Store Application\\BusinessLogic\\BusinessLogic.csproj",
+        "projectUniqueName": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\BusinessLogic\\BusinessLogic.csproj",
         "projectName": "BusinessLogic",
-        "projectPath": "D:\\source\\Online Store Application\\BusinessLogic\\BusinessLogic.csproj",
-        "packagesPath": "C:\\Users\\AMUPC\\.nuget\\packages\\",
-        "outputPath": "D:\\source\\Online Store Application\\BusinessLogic\\obj\\",
+        "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\BusinessLogic\\BusinessLogic.csproj",
+        "packagesPath": "C:\\Users\\NegAnd\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\BusinessLogic\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
-          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\AMUPC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\NegAnd\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -114,8 +113,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "D:\\source\\Online Store Application\\Application\\Application.csproj": {
-                "projectPath": "D:\\source\\Online Store Application\\Application\\Application.csproj"
+              "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj": {
+                "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj"
               }
             }
           }
@@ -132,7 +131,8 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
         "net8.0": {
@@ -199,25 +199,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.204/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.301/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "D:\\source\\Online Store Application\\DataLayer\\DataLayer.csproj": {
+    "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\DataLayer\\DataLayer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\source\\Online Store Application\\DataLayer\\DataLayer.csproj",
+        "projectUniqueName": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\DataLayer\\DataLayer.csproj",
         "projectName": "DataLayer",
-        "projectPath": "D:\\source\\Online Store Application\\DataLayer\\DataLayer.csproj",
-        "packagesPath": "C:\\Users\\AMUPC\\.nuget\\packages\\",
-        "outputPath": "D:\\source\\Online Store Application\\DataLayer\\obj\\",
+        "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\DataLayer\\DataLayer.csproj",
+        "packagesPath": "C:\\Users\\NegAnd\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\DataLayer\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
-          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\AMUPC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\NegAnd\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -233,8 +232,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "D:\\source\\Online Store Application\\Application\\Application.csproj": {
-                "projectPath": "D:\\source\\Online Store Application\\Application\\Application.csproj"
+              "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj": {
+                "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj"
               }
             }
           }
@@ -248,7 +247,8 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
         "net8.0": {
@@ -301,25 +301,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.204/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.301/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "D:\\source\\Online Store Application\\Online Store Application\\Online Store Application(API).csproj": {
+    "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\Online Store Application(API).csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\source\\Online Store Application\\Online Store Application\\Online Store Application(API).csproj",
+        "projectUniqueName": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\Online Store Application(API).csproj",
         "projectName": "Online Store Application(API)",
-        "projectPath": "D:\\source\\Online Store Application\\Online Store Application\\Online Store Application(API).csproj",
-        "packagesPath": "C:\\Users\\AMUPC\\.nuget\\packages\\",
-        "outputPath": "D:\\source\\Online Store Application\\Online Store Application\\obj\\",
+        "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\Online Store Application(API).csproj",
+        "packagesPath": "C:\\Users\\NegAnd\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
-          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\AMUPC\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\NegAnd\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -335,14 +334,14 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "D:\\source\\Online Store Application\\Application\\Application.csproj": {
-                "projectPath": "D:\\source\\Online Store Application\\Application\\Application.csproj"
+              "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj": {
+                "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Application\\Application.csproj"
               },
-              "D:\\source\\Online Store Application\\BusinessLogic\\BusinessLogic.csproj": {
-                "projectPath": "D:\\source\\Online Store Application\\BusinessLogic\\BusinessLogic.csproj"
+              "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\BusinessLogic\\BusinessLogic.csproj": {
+                "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\BusinessLogic\\BusinessLogic.csproj"
               },
-              "D:\\source\\Online Store Application\\DataLayer\\DataLayer.csproj": {
-                "projectPath": "D:\\source\\Online Store Application\\DataLayer\\DataLayer.csproj"
+              "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\DataLayer\\DataLayer.csproj": {
+                "projectPath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\DataLayer\\DataLayer.csproj"
               }
             }
           }
@@ -356,7 +355,8 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
         "net8.0": {
@@ -416,7 +416,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.204/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.301/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
