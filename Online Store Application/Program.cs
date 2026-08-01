@@ -33,6 +33,8 @@ builder.Host.UseSerilog();
 builder.Services.AddControllers(options =>
 {
     options.ReturnHttpNotAcceptable = true;
+
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
 })
 .AddNewtonsoftJson(options =>
 {
@@ -41,11 +43,29 @@ builder.Services.AddControllers(options =>
 })
 .AddXmlDataContractSerializerFormatters();
 
-builder.Services.Configure<ApiBehaviorOptions>(
-    options =>
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.SuppressModelStateInvalidFilter = false;
+
+    options.InvalidModelStateResponseFactory = context =>
     {
-        options.SuppressModelStateInvalidFilter = true;
-    });
+        var errors = context.ModelState
+            .Where(x => x.Value?.Errors.Count > 0)
+            .ToDictionary(
+                x => x.Key,
+                x => x.Value!.Errors
+                    .Select(e => e.ErrorMessage)
+                    .ToArray());
+
+        return new UnprocessableEntityObjectResult(
+            new ValidationProblemDetails(errors)
+            {
+                Status = StatusCodes.Status422UnprocessableEntity,
+                Title = "Validation failed"
+            });
+    };
+});
+
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -180,25 +200,50 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter(
-        "LoginLimiter",
-        config =>
-        {
-            config.PermitLimit = 5;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        });
+    if (builder.Environment.IsEnvironment("Testing"))
+    {
+        options.AddFixedWindowLimiter(
+            "LoginLimiter",
+            config =>
+            {
+                config.PermitLimit = 10000;
+                config.Window = TimeSpan.FromMinutes(1);
+                config.QueueLimit = 0;
+            });
 
-    options.AddFixedWindowLimiter(
-        "RefreshLimiter",
-        config =>
-        {
-            config.PermitLimit = 20;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        });
+        options.AddFixedWindowLimiter(
+            "RefreshLimiter",
+            config =>
+            {
+                config.PermitLimit = 10000;
+                config.Window = TimeSpan.FromMinutes(1);
+                config.QueueLimit = 0;
+            });
+    }
+    else
+    {
+        options.AddFixedWindowLimiter(
+            "LoginLimiter",
+            config =>
+            {
+                config.PermitLimit = 5;
+                config.Window = TimeSpan.FromMinutes(1);
+                config.QueueLimit = 0;
+                config.QueueProcessingOrder =
+                    QueueProcessingOrder.OldestFirst;
+            });
+
+        options.AddFixedWindowLimiter(
+            "RefreshLimiter",
+            config =>
+            {
+                config.PermitLimit = 20;
+                config.Window = TimeSpan.FromMinutes(1);
+                config.QueueLimit = 0;
+                config.QueueProcessingOrder =
+                    QueueProcessingOrder.OldestFirst;
+            });
+    }
 });
 
 var app = builder.Build();
@@ -225,15 +270,21 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseStaticFiles();
+
 app.UseRouting();
+
 app.UseCors("ReactFrontend");
+
 app.UseRateLimiter();
+
 app.UseMiddleware<QueryMetricsMiddleware>();
+
 app.UseAuthentication();
+
 app.UseAuthorization();
 
 app.MapControllers();
-app.UseStaticFiles();
 
 
 Log.Information("Online Store API started successfully");

@@ -170,14 +170,14 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task UpdateUser_IdMismatch_ReturnsBadRequest()
+    public async Task UpdateUser_IdMismatch_ReturnsUnprocessableEntity()
     {
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var updateDto = new UpdateUserDto { UserId = 5 };
         var response = await Client.PutAsJsonAsync("/api/users/10", updateDto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 
     // ============================================================

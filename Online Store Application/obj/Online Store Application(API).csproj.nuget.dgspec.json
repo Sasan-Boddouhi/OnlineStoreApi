@@ -154,6 +154,10 @@
               "target": "Package",
               "version": "[12.0.0, )"
             },
+            "FluentValidation.AspNetCore": {
+              "target": "Package",
+              "version": "[11.3.1, )"
+            },
             "FluentValidation.DependencyInjectionExtensions": {
               "target": "Package",
               "version": "[12.0.0, )"
@@ -173,10 +177,6 @@
             "Microsoft.Extensions.Identity.Core": {
               "target": "Package",
               "version": "[10.0.3, )"
-            },
-            "SharpGrip.FluentValidation.AutoValidation.Mvc": {
-              "target": "Package",
-              "version": "[2.0.0, )"
             },
             "System.IdentityModel.Tokens.Jwt": {
               "target": "Package",

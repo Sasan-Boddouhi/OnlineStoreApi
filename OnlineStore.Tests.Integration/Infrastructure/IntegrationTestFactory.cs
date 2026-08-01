@@ -1,14 +1,17 @@
 ﻿using Application.Interfaces;
 using DataLayer.Context;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Data.Common;
+using System.Threading.RateLimiting;
 
 namespace OnlineStore.Tests.Integration.Infrastructure;
 
@@ -64,7 +67,6 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
             services.AddScoped<AppDbContext, TestAppDbContext>();
 
             services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
-
         });
     }
 

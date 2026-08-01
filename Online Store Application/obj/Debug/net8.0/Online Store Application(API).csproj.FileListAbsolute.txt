@@ -441,8 +441,6 @@ C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\n
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\Serilog.Sinks.Debug.dll
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\Serilog.Sinks.File.dll
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\Serilog.Sinks.MSSqlServer.dll
-C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\SharpGrip.FluentValidation.AutoValidation.Mvc.dll
-C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\SharpGrip.FluentValidation.AutoValidation.Shared.dll
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerUI.dll
@@ -561,3 +559,4 @@ C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\obj\Debug\n
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\obj\Debug\net8.0\Online Store Application(API).pdb
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\obj\Debug\net8.0\Online Store Application(API).genruntimeconfig.cache
 C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\obj\Debug\net8.0\ref\Online Store Application(API).dll
+C:\Users\NegAnd\source\repos\OnlineStoreApi\Online Store Application\bin\Debug\net8.0\FluentValidation.AspNetCore.dll

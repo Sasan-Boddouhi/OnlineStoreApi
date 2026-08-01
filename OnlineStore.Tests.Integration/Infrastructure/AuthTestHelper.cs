@@ -16,8 +16,8 @@ public class AuthTestHelper
     {
         var login = new LoginDto
         {
-            PhoneNumber = "admin@test.com",
-            Password = "123456",
+            PhoneNumber = "09120000000",   // شماره موبایل ادمین در SeedData
+            Password = "Admin@123",        // رمز عبور واقعی
             DeviceId = "test"
         };
 

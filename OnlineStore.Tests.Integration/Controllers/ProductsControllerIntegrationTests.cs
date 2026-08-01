@@ -79,7 +79,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateProduct_EmptyName_ReturnsBadRequest()
+    public async Task CreateProduct_EmptyName_ReturnsValidationError()
     {
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization =
@@ -93,7 +93,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         var response = await Client.PostAsJsonAsync("/api/products", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity); // ۴۲۲
     }
 
     // ============================================================

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "MvK5RQO8kNM=",
+  "dgSpecHash": "Ns1m0vt6Y00=",
   "success": true,
   "projectFilePath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\Online Store Application(API).csproj",
   "expectedPackageFiles": [
@@ -10,6 +10,7 @@
     "C:\\Users\\NegAnd\\.nuget\\packages\\bcrypt.net-next\\4.0.2\\bcrypt.net-next.4.0.2.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\dapper\\2.1.35\\dapper.2.1.35.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\fluentvalidation\\12.0.0\\fluentvalidation.12.0.0.nupkg.sha512",
+    "C:\\Users\\NegAnd\\.nuget\\packages\\fluentvalidation.aspnetcore\\11.3.1\\fluentvalidation.aspnetcore.11.3.1.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\fluentvalidation.dependencyinjectionextensions\\12.0.0\\fluentvalidation.dependencyinjectionextensions.12.0.0.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.aspnetcore.authentication\\2.1.1\\microsoft.aspnetcore.authentication.2.1.1.nupkg.sha512",
@@ -97,8 +98,6 @@
     "C:\\Users\\NegAnd\\.nuget\\packages\\serilog.sinks.debug\\2.0.0\\serilog.sinks.debug.2.0.0.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\serilog.sinks.file\\5.0.0\\serilog.sinks.file.5.0.0.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\serilog.sinks.mssqlserver\\8.0.0\\serilog.sinks.mssqlserver.8.0.0.nupkg.sha512",
-    "C:\\Users\\NegAnd\\.nuget\\packages\\sharpgrip.fluentvalidation.autovalidation.mvc\\2.0.0\\sharpgrip.fluentvalidation.autovalidation.mvc.2.0.0.nupkg.sha512",
-    "C:\\Users\\NegAnd\\.nuget\\packages\\sharpgrip.fluentvalidation.autovalidation.shared\\2.0.0\\sharpgrip.fluentvalidation.autovalidation.shared.2.0.0.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\swashbuckle.aspnetcore\\6.4.0\\swashbuckle.aspnetcore.6.4.0.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\swashbuckle.aspnetcore.swagger\\6.4.0\\swashbuckle.aspnetcore.swagger.6.4.0.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\swashbuckle.aspnetcore.swaggergen\\6.4.0\\swashbuckle.aspnetcore.swaggergen.6.4.0.nupkg.sha512",

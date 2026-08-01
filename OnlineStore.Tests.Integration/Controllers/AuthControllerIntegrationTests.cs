@@ -52,18 +52,19 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task Login_MissingDeviceId_ReturnsBadRequest()
+    public async Task Login_MissingDeviceId_ReturnsValidationError()
     {
-        // بسته به FluentValidation ممکن است DeviceId اجباری باشد
+        // اگر DeviceId در Login اجباری باشد (با FluentValidation)
         var loginDto = new
         {
             PhoneNumber = "09123456789",
             Password = "Test@123"
-            // DeviceId omitted
+            // DeviceId حذف شده
         };
 
         var response = await Client.PostAsJsonAsync("/api/auth/login", loginDto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        // اعتبارسنجی FluentValidation -> 422 UnprocessableEntity
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 
     // ===============================================
@@ -108,11 +109,12 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
 
         // تلاش دوباره با همان شماره
         var response = await Client.PostAsJsonAsync("/api/auth/register", registerDto);
+        // BusinessException -> 400 BadRequest
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
-    public async Task Register_MissingRequiredField_ReturnsBadRequest()
+    public async Task Register_MissingRequiredField_ReturnsValidationError()
     {
         // مثلاً بدون DateOfBirth که اجباری است
         var registerDto = new
@@ -126,7 +128,8 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         var response = await Client.PostAsJsonAsync("/api/auth/register", registerDto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        // FluentValidation -> 422 UnprocessableEntity
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 
     // ===============================================
@@ -210,7 +213,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
         firstRefresh.StatusCode.Should().Be(HttpStatusCode.OK); // بار اول موفق
 
         var secondRefresh = await Client.PostAsJsonAsync("/api/auth/refresh", refreshDto);
-        // بنابر پیاده‌سازی AuthService، توکن قبلی revoked می‌شود
+        // بنابر پیاده‌سازی AuthService، توکن قبلی revoked می‌شود -> Reuse Detection فعال شده و 401 برمی‌گرداند
         secondRefresh.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 

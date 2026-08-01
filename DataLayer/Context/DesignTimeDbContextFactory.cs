@@ -17,13 +17,12 @@ namespace DataLayer.Context
     {
         public AppDbContext CreateDbContext(string[] args)
         {
-            var connectionString = "Server=.\\SQLSERVER2014;Database=ShopDB;User Id=sa;Password=nb123456;TrustServerCertificate=True;";
+            var connectionString = "Data Source=.;Initial Catalog=ShopDB;User ID=sa;Password=nb123456;TrustServerCertificate=True;";
 
             var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
             optionsBuilder.UseSqlServer(connectionString);
 
             var emptyInterceptors = Enumerable.Empty<Microsoft.EntityFrameworkCore.Diagnostics.ISaveChangesInterceptor>();
-
             return new AppDbContext(optionsBuilder.Options, emptyInterceptors);
         }
     }
