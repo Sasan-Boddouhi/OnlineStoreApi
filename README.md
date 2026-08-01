@@ -238,7 +238,7 @@ The solution includes a comprehensive automated testing infrastructure.
 
 ### Testing Highlights
 
-* 300+ automated tests
+* 330+ automated tests (114 integration + 216 unit)
 * GitHub Actions CI validation
 * WebApplicationFactory integration suite
 * SQLite In-Memory testing
