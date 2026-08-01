@@ -1,4 +1,5 @@
-﻿# 🛒 Online Store API
+﻿```markdown
+# 🛒 Online Store API
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![EF Core](https://img.shields.io/badge/EF%20Core-8.0-512BD4?logo=entity-framework)](https://docs.microsoft.com/ef/core/)
@@ -41,11 +42,15 @@ The project demonstrates modern backend engineering practices including authenti
 ## Security
 
 * JWT Authentication
-* Refresh Token Rotation
+* Refresh Token Rotation (with reuse detection & automatic family revocation)
 * BCrypt Password Hashing
-* Session Management
+* Session Management (device fingerprint, IP, user agent)
+* Active Session Limiting (max 5 per user; oldest revoked)
+* Rate Limiting (login & refresh)
 * Login Lockout Protection
-* Input Validation
+* SecurityStamp Validation (instant invalidation of all tokens on password change or full logout)
+* Global Exception Handling (standardized ProblemDetails responses)
+* Input Validation (FluentValidation)
 
 ## Performance
 
@@ -81,6 +86,7 @@ The project demonstrates modern backend engineering practices including authenti
 * Specification Pattern
 * JWT Authentication
 * Refresh Token Rotation
+* Rate Limiting
 * Comprehensive Testing
 * GitHub Actions CI
 * Structured Logging
@@ -276,31 +282,54 @@ The application includes several performance optimizations:
 
 # 🔒 Security
 
-Implemented security features include:
-
-* JWT Authentication
-* Refresh Token Rotation
-* Session Tracking
-* BCrypt Password Hashing
-* Login Lockout Protection
-* Request Validation
-* Secure Token Lifecycle Management
+- **JWT Bearer Authentication** with short-lived access tokens
+- **Refresh Token Rotation** with family tracking, reuse detection, and automatic revocation of all sessions in case of theft
+- **Session Management** – per-device sessions with device fingerprint, IP, and user agent
+- **Active Session Limiting** – maximum 5 concurrent sessions per user; oldest sessions are revoked when exceeded
+- **Rate Limiting** – login: 5 req/min, refresh: 20 req/min (to prevent brute-force & abuse)
+- **BCrypt Password Hashing** for secure credential storage
+- **Login Lockout Protection** – account temporarily locks after 5 failed attempts
+- **SecurityStamp Validation** – every JWT is verified against the current user's stamp; changing password or logging out all invalidates all tokens
+- **Global Exception Handling** – all errors return standardized `ProblemDetails` (RFC 7807)
+- **Input Validation** – FluentValidation auto-validation integrated across the application
 
 ---
 
 # 📡 Error Response Format
 
+All errors are returned as `application/problem+json` following [RFC 7807](https://tools.ietf.org/html/rfc7807).
+
+**Example – Validation Error (422):**
+
 ```json
 {
-  "success": false,
-  "message": "Validation failed",
-  "errors": [
-    {
-      "code": "invalid_phone_number",
-      "target": "phoneNumber",
-      "message": "شماره موبایل معتبر نیست"
-    }
-  ]
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.21",
+  "title": "Validation Error",
+  "status": 422,
+  "errors": {
+    "PhoneNumber": ["شماره موبایل معتبر نیست"],
+    "Password": ["رمز عبور باید حداقل 6 کاراکتر باشد"]
+  }
+}
+```
+
+**Example – Business Logic Error (400):**
+
+```json
+{
+  "title": "خطای کسب و کار",
+  "status": 400,
+  "detail": "شماره تماس تکراری است."
+}
+```
+
+**Example – Internal Server Error (500):**
+
+```json
+{
+  "title": "خطای سرور",
+  "status": 500,
+  "detail": "خطایی رخ داده است."
 }
 ```
 
@@ -405,18 +434,16 @@ Swagger/OpenAPI documentation is generated automatically.
 
 # 🔮 Roadmap
 
-Planned future enhancements:
-
-* Redis Distributed Cache
-* Docker Containerization
-* Kubernetes Deployment
-* CQRS + MediatR
-* OpenTelemetry
-* API Versioning
-* Rate Limiting
-* Distributed Tracing
-* Health Checks
-* Background Processing
+- [x] Rate Limiting (login & refresh)
+- [ ] Redis Distributed Cache
+- [ ] Docker Containerization
+- [ ] Kubernetes Deployment
+- [ ] CQRS + MediatR
+- [ ] OpenTelemetry
+- [ ] API Versioning
+- [ ] Distributed Tracing
+- [ ] Health Checks
+- [ ] Background Processing
 
 ---
 
