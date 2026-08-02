@@ -53,16 +53,19 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
             .Where(x => x.Value?.Errors.Count > 0)
             .ToDictionary(
                 x => x.Key,
-                x => x.Value!.Errors
-                    .Select(e => e.ErrorMessage)
-                    .ToArray());
+                x => x.Value!.Errors.Select(e => e.ErrorMessage).ToArray());
 
-        return new UnprocessableEntityObjectResult(
-            new ValidationProblemDetails(errors)
-            {
-                Status = StatusCodes.Status422UnprocessableEntity,
-                Title = "Validation failed"
-            });
+        var problem = new ValidationProblemDetails(errors)
+        {
+            Status = StatusCodes.Status422UnprocessableEntity,
+            Title = "Validation failed",
+            Detail = "One or more validation errors occurred.", 
+            Instance = context.HttpContext.Request.Path
+        };
+        problem.Extensions["code"] = "VALIDATION_ERROR";
+        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+        return new UnprocessableEntityObjectResult(problem);
     };
 });
 

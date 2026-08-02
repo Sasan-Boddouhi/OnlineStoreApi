@@ -37,7 +37,7 @@ namespace BusinessLogic.Extensions
 
         public static IServiceCollection AddFluentValidationServices(this IServiceCollection services)
         {
-            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly(), ServiceLifetime.Scoped);
 
             services.AddFluentValidationAutoValidation();
 

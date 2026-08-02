@@ -62,6 +62,6 @@ public class PaymentServiceTests
     {
         _invoiceRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync((Invoice?)null);
         Func<Task> act = () => _service.RecordPaymentAsync(1, 100, "TRX");
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*Invoice*");
+        await act.Should().ThrowAsync<BusinessException>().WithMessage("فاکتور یافت نشد.");
     }
 }

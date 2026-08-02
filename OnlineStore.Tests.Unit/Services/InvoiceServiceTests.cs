@@ -94,6 +94,6 @@ public class InvoiceServiceTests
         var order = CreateOrder(1, OrderStatus.Processing, 500, existingInvoice);
         _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
         Func<Task> act = () => _service.CreateInvoiceAsync(1);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*Invoice*");
+        await act.Should().ThrowAsync<BusinessException>().WithMessage("فاکتور قبلاً ایجاد شده است.");
     }
 }
