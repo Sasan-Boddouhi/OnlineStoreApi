@@ -25,7 +25,7 @@ namespace BusinessLogic.Services.Implementations
         {
             var invoice = await _unitOfWork.Repository<Invoice>().GetByIdAsync(invoiceId, cancellationToken);
 
-            if (invoice == null) throw new BusinessException("Invoice یافت نشد.");
+            if (invoice == null) throw new BusinessException("فاکتور یافت نشد.", "INVOICE_NOT_FOUND");
 
             var payment = new Payment
             {

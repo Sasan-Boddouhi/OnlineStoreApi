@@ -84,13 +84,13 @@ public sealed class CityService : ICityService
 
             _logger.LogInformation("City created with ID: {Id}", entity.CityId);
             return await GetByIdAsync(entity.CityId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی شهر ایجاد شده");
+                   ?? throw new BusinessException("خطا در بازیابی شهر ایجاد شده", "CITY_RETRIEVAL_ERROR");
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create city: {CityName}", dto.CityName);
-            throw new BusinessException("خطا در ایجاد شهر", ex);
+            throw new BusinessException("خطا در ایجاد شهر", "CITY_CREATE_ERROR");
         }
     }
 
@@ -109,7 +109,7 @@ public sealed class CityService : ICityService
             var exists = await _unitOfWork.Repository<City>()
                 .AnyAsync(c => c.CityName == dto.CityName && c.CityId != dto.CityId, cancellationToken);
             if (exists)
-                throw new BusinessException("شهری با این نام قبلاً ثبت شده است.");
+                throw new BusinessException("شهری با این نام قبلاً ثبت شده است.", "CITY_NAME_DUPLICATE");
         }
 
         _mapper.Map(dto, entity);
@@ -143,19 +143,19 @@ public sealed class CityService : ICityService
     private async Task ValidateCreationAsync(CreateCityDto dto, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.CityName))
-            throw new BusinessException("نام شهر الزامی است.");
+            throw new BusinessException("نام شهر الزامی است.", "CITY_NAME_REQUIRED");
         if (dto.ProvinceId <= 0)
-            throw new BusinessException("شناسه استان معتبر نیست.");
+            throw new BusinessException("شناسه استان معتبر نیست.", "INVALID_PROVINCE_ID");
 
         var provinceExists = await _unitOfWork.Repository<Province>()
             .AnyAsync(p => p.ProvinceId == dto.ProvinceId, cancellationToken);
         if (!provinceExists)
-            throw new BusinessException("استان انتخاب‌شده وجود ندارد.");
+            throw new BusinessException("استان انتخاب‌شده وجود ندارد.", "PROVINCE_NOT_FOUND");
 
         var cityExists = await _unitOfWork.Repository<City>()
             .AnyAsync(c => c.CityName == dto.CityName, cancellationToken);
         if (cityExists)
-            throw new BusinessException("شهری با این نام قبلاً ثبت شده است.");
+            throw new BusinessException("شهری با این نام قبلاً ثبت شده است.", "CITY_NAME_DUPLICATE");
     }
 
     #endregion

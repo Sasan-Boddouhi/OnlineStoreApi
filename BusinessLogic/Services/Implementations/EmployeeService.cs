@@ -41,13 +41,13 @@ public sealed class EmployeeService : IEmployeeService
 
             _logger.LogInformation("Employee created with ID: {EmployeeId}", entity.EmployeeId);
             return await GetByIdAsync(entity.EmployeeId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی کارمند ایجاد شده");
+                   ?? throw new BusinessException("خطا در بازیابی کارمند ایجاد شده", "EMPLOYEE_RETRIEVAL_ERROR");
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create employee for UserId: {UserId}", dto.UserId);
-            throw new BusinessException("خطا در ایجاد کارمند", ex);
+            throw new BusinessException("خطا در ایجاد کارمند", "EMPLOYEE_CREATE_ERROR");
         }
     }
 
@@ -70,7 +70,7 @@ public sealed class EmployeeService : IEmployeeService
             var typeExists = await _unitOfWork.Repository<EmployeeType>()
                 .AnyAsync(et => et.EmployeeTypeId == dto.EmployeeTypeId.Value, cancellationToken);
             if (!typeExists)
-                throw new BusinessException("نوع کارمند انتخاب‌شده وجود ندارد.");
+                throw new BusinessException("نوع کارمند انتخاب‌شده وجود ندارد.", "EMPLOYEE_TYPE_NOT_FOUND");
         }
 
         if (!string.IsNullOrWhiteSpace(dto.EmployeeNumber) && dto.EmployeeNumber != entity.EmployeeNumber)
@@ -78,11 +78,11 @@ public sealed class EmployeeService : IEmployeeService
             var numberExists = await _unitOfWork.Repository<Employee>()
                 .AnyAsync(e => e.EmployeeNumber == dto.EmployeeNumber && e.EmployeeId != entity.EmployeeId, cancellationToken);
             if (numberExists)
-                throw new BusinessException("این شماره پرسنلی قبلاً ثبت شده است.");
+                throw new BusinessException("این شماره پرسنلی قبلاً ثبت شده است.", "EMPLOYEE_NUMBER_DUPLICATE");
         }
 
         if (dto.Salary.HasValue && dto.Salary.Value <= 0)
-            throw new BusinessException("حقوق باید بزرگتر از صفر باشد.");
+            throw new BusinessException("حقوق باید بزرگتر از صفر باشد.", "SALARY_INVALID");
 
         _mapper.Map(dto, entity);
         _unitOfWork.Repository<Employee>().Update(entity);
@@ -144,14 +144,13 @@ public sealed class EmployeeService : IEmployeeService
         QueryContract<Employee> query,
         CancellationToken cancellationToken = default)
     {
-        var spec = query.ToSpec();   // تبدیل Contract به Spec (از QueryContractMapper)
+        var spec = query.ToSpec();
         var items = await _unitOfWork.Repository<Employee>()
             .ListAsync(spec, EmployeeQueryConfig.Projection, cancellationToken);
 
         var totalCount = await _unitOfWork.Repository<Employee>()
             .CountAsync(spec, cancellationToken);
 
-        // محاسبه صفحه و اندازه
         int pageNumber, pageSize;
         if (query.Skip.HasValue || query.Take.HasValue)
         {
@@ -181,34 +180,34 @@ public sealed class EmployeeService : IEmployeeService
     private async Task ValidateEmployeeCreationAsync(CreateEmployeeDto dto, CancellationToken cancellationToken)
     {
         if (dto.Salary <= 0)
-            throw new BusinessException("حقوق باید بزرگتر از صفر باشد.");
+            throw new BusinessException("حقوق باید بزرگتر از صفر باشد.", "SALARY_INVALID");
         if (dto.UserId <= 0)
-            throw new BusinessException("شناسه کاربر معتبر نیست.");
+            throw new BusinessException("شناسه کاربر معتبر نیست.", "INVALID_USER_ID");
         if (dto.EmployeeTypeId <= 0)
-            throw new BusinessException("نوع کارمند باید انتخاب شود.");
+            throw new BusinessException("نوع کارمند باید انتخاب شود.", "EMPLOYEE_TYPE_REQUIRED");
         if (string.IsNullOrWhiteSpace(dto.EmployeeNumber))
-            throw new BusinessException("شماره پرسنلی الزامی است.");
+            throw new BusinessException("شماره پرسنلی الزامی است.", "EMPLOYEE_NUMBER_REQUIRED");
 
         var user = await _unitOfWork.Repository<User>().GetByIdAsync(dto.UserId, cancellationToken);
         if (user == null)
-            throw new BusinessException("کاربری با این شناسه یافت نشد.");
+            throw new BusinessException("کاربری با این شناسه یافت نشد.", "USER_NOT_FOUND");
         if (user.UserType != UserType.Employee)
-            throw new BusinessException("نوع کاربر باید 'کارمند' باشد.");
+            throw new BusinessException("نوع کاربر باید 'کارمند' باشد.", "USER_NOT_EMPLOYEE_TYPE");
 
         var empTypeExists = await _unitOfWork.Repository<EmployeeType>()
             .AnyAsync(et => et.EmployeeTypeId == dto.EmployeeTypeId, cancellationToken);
         if (!empTypeExists)
-            throw new BusinessException("نوع کارمند انتخاب‌شده وجود ندارد.");
+            throw new BusinessException("نوع کارمند انتخاب‌شده وجود ندارد.", "EMPLOYEE_TYPE_NOT_FOUND");
 
         var empNumberExists = await _unitOfWork.Repository<Employee>()
             .AnyAsync(e => e.EmployeeNumber == dto.EmployeeNumber, cancellationToken);
         if (empNumberExists)
-            throw new BusinessException("این شماره پرسنلی قبلاً ثبت شده است.");
+            throw new BusinessException("این شماره پرسنلی قبلاً ثبت شده است.", "EMPLOYEE_NUMBER_DUPLICATE");
 
         var userAlreadyEmployee = await _unitOfWork.Repository<Employee>()
             .AnyAsync(e => e.UserId == dto.UserId, cancellationToken);
         if (userAlreadyEmployee)
-            throw new BusinessException("این کاربر از قبل کارمند است.");
+            throw new BusinessException("این کاربر از قبل کارمند است.", "USER_ALREADY_EMPLOYEE");
     }
 
     #endregion

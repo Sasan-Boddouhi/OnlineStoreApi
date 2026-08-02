@@ -1,6 +1,7 @@
 ﻿using Application.Entities;
 using Application.Interfaces;
 using Application.Common.Specifications;
+using Application.Exceptions;
 using AutoMapper;
 using BusinessLogic.DTOs.ProductCategory;
 using BusinessLogic.Services.Interfaces;
@@ -32,7 +33,7 @@ public sealed class ProductCategoryService : IProductCategoryService
     {
         var role = _currentUserService.GetCurrentUserRole();
         if (role != "Admin" && role != "Manager")
-            throw new UnauthorizedAccessException("Access denied. Only Admin or Manager can perform this action.");
+            throw new ForbiddenException("فقط مدیر یا مدیر ارشد می‌تواند این عملیات را انجام دهد.", "ACCESS_DENIED");
     }
 
     #region Create
@@ -46,7 +47,7 @@ public sealed class ProductCategoryService : IProductCategoryService
             var exists = await _unitOfWork.Repository<ProductCategory>()
                 .AnyAsync(pc => pc.CategoryName == dto.Name, cancellationToken);
             if (exists)
-                throw new Exception("Category with this name already exists.");
+                throw new BusinessException("دسته‌بندی با این نام قبلاً وجود دارد.", "CATEGORY_NAME_DUPLICATE");
 
             var entity = _mapper.Map<ProductCategory>(dto);
             await _unitOfWork.Repository<ProductCategory>().AddAsync(entity, cancellationToken);
@@ -100,7 +101,7 @@ public sealed class ProductCategoryService : IProductCategoryService
 
     #endregion
 
-    #region Get All (با استفاده از Spec)
+    #region Get All
 
     public async Task<IEnumerable<ProductCategoryDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
@@ -171,7 +172,7 @@ public sealed class ProductCategoryService : IProductCategoryService
             var exists = await _unitOfWork.Repository<ProductCategory>()
                 .AnyAsync(pc => pc.CategoryName == dto.Name && pc.CategoryId != dto.ProductCategoryId, cancellationToken);
             if (exists)
-                throw new Exception("Category with this name already exists.");
+                throw new BusinessException("دسته‌بندی با این نام قبلاً وجود دارد.", "CATEGORY_NAME_DUPLICATE");
 
             var entity = await _unitOfWork.Repository<ProductCategory>().GetByIdAsync(dto.ProductCategoryId, cancellationToken);
             if (entity == null || !entity.IsActive)

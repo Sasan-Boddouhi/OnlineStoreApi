@@ -88,13 +88,13 @@ public sealed class ProvinceService : IProvinceService
 
             _logger.LogInformation("Province created with ID: {Id}", entity.ProvinceId);
             return await GetByIdAsync(entity.ProvinceId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی استان ایجاد شده");
+                   ?? throw new BusinessException("خطا در بازیابی استان ایجاد شده", "PROVINCE_RETRIEVAL_ERROR");
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create province: {ProvinceName}", dto.ProvinceName);
-            throw new BusinessException("خطا در ایجاد استان", ex);
+            throw new BusinessException("خطا در ایجاد استان", "PROVINCE_CREATE_ERROR");
         }
     }
 
@@ -105,7 +105,7 @@ public sealed class ProvinceService : IProvinceService
     public async Task<ProvinceDto?> UpdateAsync(UpdateProvinceDto dto, CancellationToken cancellationToken = default)
     {
         if (dto.ProvinceId == null)
-            throw new BusinessException("شناسه استان الزامی است.");
+            throw new BusinessException("شناسه استان الزامی است.", "PROVINCE_ID_REQUIRED");
 
         _logger.LogInformation("Updating province ID: {Id}", dto.ProvinceId);
         var entity = await _unitOfWork.Repository<Province>().GetByIdAsync(dto.ProvinceId.Value, cancellationToken);
@@ -120,7 +120,7 @@ public sealed class ProvinceService : IProvinceService
             var exists = await _unitOfWork.Repository<Province>()
                 .AnyAsync(p => p.ProvinceName == dto.ProvinceName && p.ProvinceId != dto.ProvinceId, cancellationToken);
             if (exists)
-                throw new BusinessException("استانی با این نام قبلاً ثبت شده است.");
+                throw new BusinessException("استانی با این نام قبلاً ثبت شده است.", "PROVINCE_NAME_DUPLICATE");
         }
 
         _mapper.Map(dto, entity);
@@ -155,7 +155,7 @@ public sealed class ProvinceService : IProvinceService
     private async Task ValidateCreationAsync(CreateProvinceDto dto, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.ProvinceName))
-            throw new BusinessException("نام استان الزامی است.");
+            throw new BusinessException("نام استان الزامی است.", "PROVINCE_NAME_REQUIRED");
 
         var exists = await _unitOfWork.Repository<Province>()
             .AnyAsync(p => p.ProvinceName == dto.ProvinceName, cancellationToken);

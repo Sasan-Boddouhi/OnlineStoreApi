@@ -11,6 +11,6 @@ namespace BusinessLogic.Services.Interfaces
 {
     public interface IAddressService
     {
-        Task<AddressDto> CreateAsync(int userId, CreateAddressDto dto);
+        Task<AddressDto> CreateAsync(int userId, CreateAddressDto dto, CancellationToken cancellationToken = default);
     }
 }

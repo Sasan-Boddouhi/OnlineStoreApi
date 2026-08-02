@@ -1,16 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Http;
 
-namespace Application.Exceptions
+namespace Application.Exceptions;
+
+public class BusinessException : AppException
 {
-    public class BusinessException : Exception
+    public BusinessException(string message, string code = "BUSINESS_ERROR")
+        : base(message, code, StatusCodes.Status400BadRequest)
     {
-        public BusinessException(string message) : base(message) { }
-
-        public BusinessException(string message, Exception innerException) : base(message, innerException) { }
     }
-
 }

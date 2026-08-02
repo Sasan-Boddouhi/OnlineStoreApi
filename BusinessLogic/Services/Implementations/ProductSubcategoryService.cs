@@ -31,20 +31,16 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         _logger = logger;
     }
 
-    #region GetByQueryAsync (متد اصلی جستجو)
+    #region GetByQueryAsync
 
     public async Task<PagedResult<ProductSubcategoryDto>> GetByQueryAsync(
         QueryContract<ProductSubcategory> query,
         CancellationToken cancellationToken = default)
     {
         var spec = query.ToSpec();
-
-        // انتخاب پروجکشن بر اساس نیاز (اختیاری: در صورت وجود فیلتر روی CategoryId می‌توان از Projection کامل استفاده کرد)
         var projection = ProductSubcategoryQueryConfig.Projection;
-
         var items = await _unitOfWork.Repository<ProductSubcategory>()
             .ListAsync(spec, projection, cancellationToken);
-
         var totalCount = await _unitOfWork.Repository<ProductSubcategory>()
             .CountAsync(spec, cancellationToken);
 
@@ -118,13 +114,13 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
             _logger.LogInformation("Product subcategory created with ID: {Id}", entity.SubcategoryId);
             return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی ایجاد شده");
+                   ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی ایجاد شده", "SUBCATEGORY_RETRIEVAL_ERROR");
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create product subcategory: {SubcategoryName}", dto.SubcategoryName);
-            throw new BusinessException("خطا در ایجاد زیردسته‌بندی", ex);
+            throw new BusinessException("خطا در ایجاد زیردسته‌بندی", "SUBCATEGORY_CREATE_ERROR");
         }
     }
 
@@ -137,7 +133,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         _logger.LogInformation("Updating product subcategory ID: {Id}", dto.SubcategoryId);
         var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(dto.SubcategoryId, cancellationToken);
         if (entity == null || !entity.IsActive)
-            throw new BusinessException("زیردسته‌بندی یافت نشد.");
+            throw new BusinessException("زیردسته‌بندی یافت نشد.", "SUBCATEGORY_NOT_FOUND");
 
         _mapper.Map(dto, entity);
         _unitOfWork.Repository<ProductSubcategory>().Update(entity);
@@ -145,7 +141,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
         _logger.LogInformation("Product subcategory updated: {Id}", dto.SubcategoryId);
         return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
-               ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی به‌روز شده");
+               ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی به‌روز شده", "SUBCATEGORY_RETRIEVAL_ERROR");
     }
 
     #endregion
@@ -184,17 +180,17 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
     private async Task ValidateCreationAsync(CreateProductSubcategoryDto dto, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.SubcategoryName))
-            throw new BusinessException("نام زیردسته‌بندی الزامی است.");
+            throw new BusinessException("نام زیردسته‌بندی الزامی است.", "SUBCATEGORY_NAME_REQUIRED");
 
         var exists = await _unitOfWork.Repository<ProductSubcategory>()
             .AnyAsync(ps => ps.SubcategoryName == dto.SubcategoryName, cancellationToken);
         if (exists)
-            throw new BusinessException("زیردسته‌بندی با این نام قبلاً ثبت شده است.");
+            throw new BusinessException("زیردسته‌بندی با این نام قبلاً ثبت شده است.", "SUBCATEGORY_NAME_DUPLICATE");
 
         var categoryExists = await _unitOfWork.Repository<ProductCategory>()
             .AnyAsync(pc => pc.CategoryId == dto.CategoryId, cancellationToken);
         if (!categoryExists)
-            throw new BusinessException("دسته‌بندی والد وجود ندارد.");
+            throw new BusinessException("دسته‌بندی والد وجود ندارد.", "PARENT_CATEGORY_NOT_FOUND");
     }
 
     #endregion

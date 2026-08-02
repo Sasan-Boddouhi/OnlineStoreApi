@@ -25,7 +25,7 @@ namespace BusinessLogic.Services.Implementations
         public async Task<OrderItemDto> AddOrderItemAsync(int orderId, CreateOrderItemDto dto, CancellationToken cancellationToken = default)
         {
             var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
-            if (order == null) throw new BusinessException("سفارش یافت نشد.");
+            if (order == null) throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
             var item = new OrderItem(
                 productId: dto.ProductId,

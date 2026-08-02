@@ -52,7 +52,7 @@ public sealed class AuthService : IAuthService
                 .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, ct);
 
             if (exists)
-                throw new BusinessException("شماره تماس تکراری است.");
+                throw new BusinessException("شماره تماس تکراری است.", "USER_PHONE_EXISTS");
 
             var user = new User
             {

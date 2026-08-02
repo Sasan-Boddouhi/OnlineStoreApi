@@ -19,7 +19,6 @@ public sealed class OrderService : IOrderService
     private readonly ILogger<OrderService> _logger;
     private readonly ICurrentUserService _currentUserService;
 
-    // پر‌و‌جکشن برای Order -> OrderDto (بدون آیتم‌ها)
     private static readonly Expression<Func<Order, OrderDto>> OrderProjection = o => new OrderDto
     {
         OrderId = o.OrderId,
@@ -31,7 +30,6 @@ public sealed class OrderService : IOrderService
         ShippingPhoneNumber = o.ShippingPhoneNumber
     };
 
-    // پر‌و‌جکشن برای Order -> OrderDetailsDto (با آیتم‌ها)
     private static readonly Expression<Func<Order, OrderDetailsDto>> OrderDetailsProjection = o => new OrderDetailsDto
     {
         OrderId = o.OrderId,
@@ -79,7 +77,7 @@ public sealed class OrderService : IOrderService
 
         var customer = await _unitOfWork.Repository<Customer>().GetByIdAsync(customerId, cancellationToken);
         if (customer == null)
-            throw new BusinessException("مشتری یافت نشد.");
+            throw new BusinessException("مشتری یافت نشد.", "CUSTOMER_NOT_FOUND");
 
         var order = new Order
         {
@@ -108,20 +106,19 @@ public sealed class OrderService : IOrderService
     {
         _logger.LogInformation("Adding item to order {OrderId}", orderId);
 
-        // واکشی سفارش با آیتم‌ها (برای اعتبارسنجی و به‌روزرسانی)
         var orderSpec = new Spec<Order>()
             .Where(o => o.OrderId == orderId)
             .Include(o => o.OrderItems);
         var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(orderSpec, cancellationToken);
         if (order == null)
-            throw new BusinessException("سفارش یافت نشد.");
+            throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
         if (order.Status != OrderStatus.Pending)
-            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.");
+            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
 
         var product = await _unitOfWork.Repository<Product>().GetByIdAsync(itemDto.ProductId, cancellationToken);
         if (product == null)
-            throw new BusinessException("محصول یافت نشد.");
+            throw new BusinessException("محصول یافت نشد.", "PRODUCT_NOT_FOUND");
 
         var item = new OrderItem(
             productId: itemDto.ProductId,
@@ -154,14 +151,14 @@ public sealed class OrderService : IOrderService
             .Include(o => o.OrderItems);
         var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(orderSpec, cancellationToken);
         if (order == null)
-            throw new BusinessException("سفارش یافت نشد.");
+            throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
         if (order.Status != OrderStatus.Pending)
-            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.");
+            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
 
         var item = order.OrderItems.FirstOrDefault(i => i.OrderItemId == orderItemId);
         if (item == null)
-            throw new BusinessException("آیتم مورد نظر در سفارش یافت نشد.");
+            throw new BusinessException("آیتم مورد نظر در سفارش یافت نشد.", "ORDER_ITEM_NOT_FOUND");
 
         order.RemoveItem(item);
 
@@ -181,7 +178,7 @@ public sealed class OrderService : IOrderService
 
         var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
         if (order == null)
-            throw new BusinessException("سفارش یافت نشد.");
+            throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
         order.Confirm();
         _unitOfWork.Repository<Order>().Update(order);
@@ -215,14 +212,13 @@ public sealed class OrderService : IOrderService
 
         var spec = new Spec<Order>()
             .Where(o => o.OrderId == orderId)
-            .Include(o => o.OrderItems)    // برای آیتم‌ها
-            .Include(o => o.Invoice);      // برای اطلاعات فاکتور
+            .Include(o => o.OrderItems)
+            .Include(o => o.Invoice);
 
         var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(spec, cancellationToken);
         if (order == null)
             return null;
 
-        // تبدیل دستی به OrderDetailsDto (می‌توان از AutoMapper نیز استفاده کرد)
         return new OrderDetailsDto
         {
             OrderId = order.OrderId,
@@ -256,7 +252,7 @@ public sealed class OrderService : IOrderService
 
         var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
         if (order == null)
-            throw new BusinessException("سفارش یافت نشد.");
+            throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
         order.Cancel();
         _unitOfWork.Repository<Order>().Update(order);

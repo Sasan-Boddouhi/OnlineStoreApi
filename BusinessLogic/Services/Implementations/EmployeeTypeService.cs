@@ -107,7 +107,7 @@ public sealed class EmployeeTypeService : IEmployeeTypeService
 
             _logger.LogError(ex, "Failed to create employee type");
 
-            throw new BusinessException("خطا در ایجاد نوع کارمند", ex);
+            throw new BusinessException("خطا در ایجاد نوع کارمند", "EMPLOYEE_TYPE_CREATE_ERROR");
         }
     }
 
@@ -160,12 +160,12 @@ public sealed class EmployeeTypeService : IEmployeeTypeService
     private async Task ValidateCreationAsync(CreateEmployeeTypeDto dto, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.TypeName))
-            throw new BusinessException("نام نوع کارمند الزامی است.");
+            throw new BusinessException("نام نوع کارمند الزامی است.", "EMPLOYEE_TYPE_NAME_REQUIRED");
 
         var exists = await _unitOfWork.Repository<EmployeeType>()
             .AnyAsync(et => et.TypeName == dto.TypeName, cancellationToken);
         if (exists)
-            throw new BusinessException("نوع کارمند با این نام قبلاً ثبت شده است.");
+            throw new BusinessException("نوع کارمند با این نام قبلاً ثبت شده است.", "EMPLOYEE_TYPE_NAME_DUPLICATE");
     }
 
     #endregion

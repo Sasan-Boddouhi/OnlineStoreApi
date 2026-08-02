@@ -11,15 +11,11 @@ public sealed class ExceptionHandlingMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
-
-    public ExceptionHandlingMiddleware(
-        RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger)
+    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
     }
-
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -27,97 +23,77 @@ public sealed class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
-
-        catch (BusinessException ex)
+        catch (AppException ex)
         {
-            _logger.LogWarning(
-                ex,
-                "Business exception occurred");
+            _logger.LogWarning(ex, "Application exception: {Code} - {Message}", ex.Code, ex.Message);
 
-            await WriteResponse(
-                context,
-                HttpStatusCode.BadRequest,
-                "خطای کسب و کار",
-                ex.Message);
+            context.Response.StatusCode = ex.StatusCode;
+            context.Response.ContentType = "application/problem+json";
+
+            var problem = new ProblemDetails
+            {
+                Type = $"https://api.yourstore.com/errors/{ex.Code.ToLowerInvariant()}",
+                Title = GetTitleForStatusCode(ex.StatusCode),
+                Status = ex.StatusCode,
+                Detail = ex.Message,
+                Instance = context.Request.Path
+            };
+            problem.Extensions["code"] = ex.Code;
+            problem.Extensions["traceId"] = context.TraceIdentifier;
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
         }
-
-
         catch (ValidationException ex)
         {
-            _logger.LogWarning(
-                ex,
-                "Validation exception occurred");
+            _logger.LogWarning(ex, "Validation failed");
 
+            context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+            context.Response.ContentType = "application/problem+json";
 
-            context.Response.StatusCode =
-                (int)HttpStatusCode.UnprocessableEntity;
+            var errors = ex.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
 
+            var problem = new ValidationProblemDetails(errors)
+            {
+                Status = StatusCodes.Status422UnprocessableEntity,
+                Title = "Validation Error",
+                Detail = "One or more validation errors occurred.",
+                Instance = context.Request.Path
+            };
+            problem.Extensions["traceId"] = context.TraceIdentifier;
 
-            context.Response.ContentType =
-                "application/problem+json";
-
-
-            var errors =
-                ex.Errors
-                .GroupBy(x => x.PropertyName)
-                .ToDictionary(
-                    x => x.Key,
-                    x => x.Select(e => e.ErrorMessage)
-                          .ToArray());
-
-
-            var response =
-                new ValidationProblemDetails(errors)
-                {
-                    Status = 422,
-                    Title = "Validation Error"
-                };
-
-
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(response));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
         }
-
-
         catch (Exception ex)
         {
-            _logger.LogError(
-                ex,
-                "Unhandled exception");
+            _logger.LogError(ex, "Unhandled exception");
 
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/problem+json";
 
-            await WriteResponse(
-                context,
-                HttpStatusCode.InternalServerError,
-                "خطای سرور",
-                "خطایی رخ داده است.");
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status500InternalServerError,
+                Title = "Internal Server Error",
+                Detail = "An unexpected error occurred. Please try again later.",
+                Instance = context.Request.Path
+            };
+            problem.Extensions["traceId"] = context.TraceIdentifier;
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
         }
     }
 
-
-
-    private static async Task WriteResponse(
-        HttpContext context,
-        HttpStatusCode status,
-        string title,
-        string detail)
+    private static string GetTitleForStatusCode(int statusCode) => statusCode switch
     {
-
-        context.Response.StatusCode = (int)status;
-
-        context.Response.ContentType =
-            "application/problem+json";
-
-
-        var problem = new ProblemDetails
-        {
-            Status = (int)status,
-            Title = title,
-            Detail = detail
-        };
-
-
-        await context.Response.WriteAsync(
-            JsonSerializer.Serialize(problem));
-    }
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        409 => "Conflict",
+        422 => "Unprocessable Entity",
+        500 => "Internal Server Error",
+        _ => "Error"
+    };
 }

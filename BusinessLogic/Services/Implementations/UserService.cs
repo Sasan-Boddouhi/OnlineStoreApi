@@ -196,7 +196,7 @@ public sealed class UserService : IUserService
             var exists = await _unitOfWork.Repository<User>()
                 .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, cancellationToken);
             if (exists)
-                throw new BusinessException("شماره موبایل قبلاً ثبت شده است.");
+                throw new BusinessException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
 
             var user = _mapper.Map<User>(dto);
             user.PasswordHash = _passwordHasher.Hash(dto.Password);
@@ -230,7 +230,7 @@ public sealed class UserService : IUserService
             _logger.LogInformation("User created successfully with ID: {UserId}", user.UserId);
             _cache.Remove($"{ALL_USERS_FULL_CACHE_KEY}_all");
 
-            return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken) ?? throw new Exception("User creation failed");
+            return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken) ?? throw new BusinessException("خطا در ایجاد کاربر", "USER_CREATION_FAILED");
         }
         catch (Exception ex) when (ex is not BusinessException)
         {
@@ -260,7 +260,7 @@ public sealed class UserService : IUserService
             var exists = await _unitOfWork.Repository<User>()
                 .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber && x.UserId != dto.UserId, cancellationToken);
             if (exists)
-                throw new BusinessException("شماره موبایل قبلاً ثبت شده است.");
+                throw new BusinessException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
             user.SecurityStamp = Guid.NewGuid().ToString();
         }
 

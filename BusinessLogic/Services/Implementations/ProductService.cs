@@ -107,7 +107,7 @@ public sealed class ProductService : IProductService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);
-            throw new BusinessException("خطا در ایجاد محصول", ex);
+            throw new BusinessException("خطا در ایجاد محصول", "PRODUCT_CREATE_ERROR");
         }
     }
 
@@ -131,7 +131,7 @@ public sealed class ProductService : IProductService
                 var exists = await _unitOfWork.Repository<Product>()
                     .AnyAsync(x => x.Name == dto.Name && x.ProductId != dto.ProductId, cancellationToken);
                 if (exists)
-                    throw new BusinessException("محصولی با این نام قبلاً ثبت شده است");
+                    throw new BusinessException("محصولی با این نام قبلاً ثبت شده است", "PRODUCT_NAME_DUPLICATE");
             }
 
             _mapper.Map(dto, entity);
@@ -193,23 +193,23 @@ public sealed class ProductService : IProductService
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
-            throw new BusinessException("نام محصول الزامی است.");
+            throw new BusinessException("نام محصول الزامی است.", "PRODUCT_NAME_REQUIRED");
 
         if (dto.Price <= 0)
-            throw new BusinessException("قیمت محصول باید بیشتر از صفر باشد.");
+            throw new BusinessException("قیمت محصول باید بیشتر از صفر باشد.", "PRODUCT_PRICE_INVALID");
 
         if (dto.SubcategoryId <= 0)
-            throw new BusinessException("زیردسته‌بندی نامعتبر است.");
+            throw new BusinessException("زیردسته‌بندی نامعتبر است.", "INVALID_SUBCATEGORY");
 
         var subcategoryExists = await _unitOfWork.Repository<ProductSubcategory>()
             .AnyAsync(x => x.SubcategoryId == dto.SubcategoryId, cancellationToken);
         if (!subcategoryExists)
-            throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.");
+            throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.", "SUBCATEGORY_NOT_FOUND");
 
         var duplicateName = await _unitOfWork.Repository<Product>()
             .AnyAsync(x => x.Name == dto.Name, cancellationToken);
         if (duplicateName)
-            throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.");
+            throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.", "PRODUCT_NAME_DUPLICATE");
     }
 
     #endregion

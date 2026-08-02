@@ -25,12 +25,12 @@ namespace BusinessLogic.Services.Implementations
         {
             var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
 
-            if (order == null) throw new BusinessException("سفارش یافت نشد.");
+            if (order == null) throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
             if (order.Status != OrderStatus.Processing)
-                throw new BusinessException("سفارش باید تایید شده باشد.");
+                throw new BusinessException("سفارش باید تایید شده باشد.", "ORDER_NOT_PROCESSING");
 
-            if (order.Invoice != null) throw new BusinessException("Invoice قبلا ایجاد شده است.");
+            if (order.Invoice != null) throw new BusinessException("فاکتور قبلاً ایجاد شده است.", "INVOICE_ALREADY_EXISTS");
 
             var invoice = new Invoice
             {
