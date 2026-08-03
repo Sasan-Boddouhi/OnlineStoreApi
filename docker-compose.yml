@@ -1,27 +1,51 @@
 services:
-  api:
-    build: .
-    ports:
-      - "5000:80"
-    environment:
-      - ConnectionStrings__SQLServer=Server=db;Database=ShopDB;User Id=sa;Password=YourPassword123;TrustServerCertificate=true;
-      - Jwt__Key=ThisIsASecureKey_ReplaceInProduction_12345
-      - Jwt__Issuer=OnlineStoreApi
-      - Jwt__Audience=OnlineStoreClient
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:80 
-    depends_on:
-      - db
 
-  db:
+  sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: onlinestore-sqlserver
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=YourPassword123
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "StrongPass123!"
     ports:
       - "1433:1433"
     volumes:
-      - sql_data:/var/opt/mssql
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - onlinestore-network
+
+
+  api:
+    image: onlinestore-api:latest
+    container_name: onlinestore-api
+    depends_on:
+      - sqlserver
+    environment:
+
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: "http://+:80"
+      Swagger__Enabled: "true"
+
+      ConnectionStrings__DefaultConnection: >
+        Server=sqlserver;
+        Database=ShopDB;
+        User Id=sa;
+        Password=StrongPass123!;
+        TrustServerCertificate=True;
+
+      Jwt__Key: "THIS_IS_A_VERY_SECRET_KEY_CHANGE_IT_123456789"
+      Jwt__Issuer: "OnlineStoreApi"
+      Jwt__Audience: "OnlineStoreClient"
+
+    ports:
+      - "5000:80"
+
+    networks:
+      - onlinestore-network
+
 
 volumes:
-  sql_data:
+  sqlserver_data:
+
+
+networks:
+  onlinestore-network:

@@ -1,8 +1,34 @@
-**/bin
-**/obj
-**/TestResults
-**/coveragereport
-**/.git
-**/.vs
-**/*.md
-!README.md
+# Build output
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# User files
+*.user
+*.suo
+
+# Tests
+TestResults/
+**/TestResults/
+coverage/
+**/coverage/
+
+# Logs
+**/Logs/
+
+# Uploads
+**/wwwroot/uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md

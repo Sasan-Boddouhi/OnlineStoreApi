@@ -1,23 +1,22 @@
 ﻿using DataLayer.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 
 namespace DataLayer.Context
 {
-    /// <summary>
-    /// Factory برای زمان طراحی (Migration) – بدون وابستگی به DI و Interceptors
-    /// </summary>
     public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     {
         public AppDbContext CreateDbContext(string[] args)
         {
-            var connectionString = "Data Source=.;Initial Catalog=ShopDB;User ID=sa;Password=nb123456;TrustServerCertificate=True;";
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json")
+                .AddJsonFile($"appsettings.Development.json", optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
 
             var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
             optionsBuilder.UseSqlServer(connectionString);

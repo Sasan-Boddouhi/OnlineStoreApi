@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "Ns1m0vt6Y00=",
+  "dgSpecHash": "+krrTzM5OZg=",
   "success": true,
   "projectFilePath": "C:\\Users\\NegAnd\\source\\repos\\OnlineStoreApi\\Online Store Application\\Online Store Application(API).csproj",
   "expectedPackageFiles": [
@@ -43,7 +43,7 @@
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore\\8.0.4\\microsoft.entityframeworkcore.8.0.4.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\8.0.4\\microsoft.entityframeworkcore.abstractions.8.0.4.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\8.0.4\\microsoft.entityframeworkcore.analyzers.8.0.4.nupkg.sha512",
-    "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore.design\\8.0.0\\microsoft.entityframeworkcore.design.8.0.0.nupkg.sha512",
+    "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore.design\\8.0.4\\microsoft.entityframeworkcore.design.8.0.4.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\8.0.4\\microsoft.entityframeworkcore.relational.8.0.4.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.entityframeworkcore.sqlserver\\8.0.4\\microsoft.entityframeworkcore.sqlserver.8.0.4.nupkg.sha512",
     "C:\\Users\\NegAnd\\.nuget\\packages\\microsoft.extensions.apidescription.server\\6.0.5\\microsoft.extensions.apidescription.server.6.0.5.nupkg.sha512",

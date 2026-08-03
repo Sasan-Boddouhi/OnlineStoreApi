@@ -258,16 +258,33 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-    if (!app.Environment.IsEnvironment("Testing") &&
-        context.Database.IsRelational())
+    if (!app.Environment.IsEnvironment("Testing") && context.Database.IsRelational())
     {
-        context.Database.Migrate();
+        var retryCount = 0;
+        const int maxRetries = 10;
+        while (retryCount < maxRetries)
+        {
+            try
+            {
+                await context.Database.MigrateAsync();
+                break;
+            }
+            catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException ||
+                                       ex is System.TimeoutException ||
+                                       ex.InnerException is System.TimeoutException)
+            {
+                retryCount++;
+                if (retryCount >= maxRetries)
+                    throw;
+                Console.WriteLine($"Database not ready, retrying in 5 seconds... (attempt {retryCount})");
+                await Task.Delay(5000);
+            }
+        }
     }
 }
 
 // pipeline
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();

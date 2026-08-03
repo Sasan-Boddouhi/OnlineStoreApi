@@ -69,12 +69,13 @@ The project demonstrates modern backend engineering practices including authenti
 
 ## Developer Experience
 
-* Swagger / OpenAPI
+* Swagger / OpenAPI (configurable per environment)
 * FluentValidation
 * AutoMapper
 * Full Async Support
 * CancellationToken Support
 * Comprehensive Testing Infrastructure
+* Docker Containerization (docker compose up)
 
 ---
 
@@ -86,7 +87,8 @@ The project demonstrates modern backend engineering practices including authenti
 * JWT Authentication
 * Refresh Token Rotation
 * Rate Limiting
-* Comprehensive Testing
+* Dockerized with Docker Compose
+* Comprehensive Testing (330+ tests)
 * GitHub Actions CI
 * Structured Logging
 * SQLite-backed Integration Testing
@@ -374,6 +376,11 @@ All errors are returned as `application/problem+json` following [RFC 7807](https
 * SQLite In-Memory
 * ReportGenerator
 
+## Containerization
+
+* Docker
+* Docker Compose
+
 ## Documentation
 
 * Swagger / OpenAPI
@@ -382,39 +389,56 @@ All errors are returned as `application/problem+json` following [RFC 7807](https
 
 # 🚀 Getting Started
 
-## Clone Repository
+## Prerequisites
+
+* .NET 8 SDK
+* SQL Server (or Docker for containerized setup)
+
+## Option 1 – Run with Docker (recommended)
 
 ```bash
+# Clone the repository
 git clone https://github.com/Sasan-Boddouhi/OnlineStoreApi.git
 cd OnlineStoreApi
+
+# Start all services (API + SQL Server)
+docker compose up -d --build
+
+# The API will be available at http://localhost:5000
+# Swagger UI at http://localhost:5000/swagger
 ```
 
-## Restore Packages
+### Docker configuration
+Connection strings and JWT settings are injected via environment variables in `docker-compose.yml`.  
+To enable Swagger in Production, set `Swagger__Enabled=true`.
+
+## Option 2 – Run locally
 
 ```bash
+# Clone repository
+git clone https://github.com/Sasan-Boddouhi/OnlineStoreApi.git
+cd OnlineStoreApi
+
+# Restore packages
 dotnet restore
+
+# Apply migrations
+dotnet ef database update
+
+# Run application
+dotnet run
 ```
 
 ## Configure Database
 
+Update `appsettings.Development.json` with your connection string:
+
 ```json
 {
   "ConnectionStrings": {
-    "SQLServer": "Data Source=YOUR_SERVER;Initial Catalog=ShopDB;Trusted_Connection=True;TrustServerCertificate=True;"
+    "DefaultConnection": "Data Source=YOUR_SERVER;Initial Catalog=ShopDB;User ID=sa;Password=YourPassword;TrustServerCertificate=True;"
   }
 }
-```
-
-## Apply Migrations
-
-```bash
-dotnet ef database update
-```
-
-## Run Application
-
-```bash
-dotnet run
 ```
 
 ---
@@ -424,7 +448,8 @@ dotnet run
 After starting the application:
 
 ```text
-https://localhost:7076/swagger
+http://localhost:5000/swagger   (Docker)
+https://localhost:7076/swagger  (Local)
 ```
 
 Swagger/OpenAPI documentation is generated automatically.
@@ -434,15 +459,14 @@ Swagger/OpenAPI documentation is generated automatically.
 # 🔮 Roadmap
 
 - [x] Rate Limiting (login & refresh)
-- [ ] Redis Distributed Cache
-- [ ] Docker Containerization
-- [ ] Kubernetes Deployment
-- [ ] CQRS + MediatR
-- [ ] OpenTelemetry
-- [ ] API Versioning
-- [ ] Distributed Tracing
+- [x] Docker Containerization
 - [ ] Health Checks
+- [ ] Redis Distributed Cache
+- [ ] OpenTelemetry & Distributed Tracing
+- [ ] API Versioning
 - [ ] Background Processing
+- [ ] CQRS + MediatR
+- [ ] Kubernetes Deployment
 
 ---
 
@@ -475,6 +499,7 @@ Special thanks to the teams behind:
 * FluentValidation
 * Serilog
 * Swagger
+* Docker
 
 ---
 

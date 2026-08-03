@@ -20,7 +20,7 @@ namespace DataLayer.Extensions
             services.AddScoped<AuditInterceptor>();
             services.AddDbContext<AppDbContext>((serviceProvider, options) =>
             {
-                options.UseSqlServer(configuration.GetConnectionString("SQLServer"));
+                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
 
                 var auditInterceptor = serviceProvider.GetRequiredService<AuditInterceptor>();
                 options.AddInterceptors(auditInterceptor);
