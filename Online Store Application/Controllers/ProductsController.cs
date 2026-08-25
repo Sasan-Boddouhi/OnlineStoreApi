@@ -6,6 +6,7 @@ using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Products;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace Online_Store_Application.Controllers;
 
@@ -76,6 +77,7 @@ public class ProductsController : ControllerBase
     // ================= GET BY ID =================
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(Duration = 30, VaryByRouteValueNames = new[] { "id" })]
     public async Task<ActionResult<ProductDto>> GetProduct(int id)
     {
         var product = await _productService.GetByIdAsync(id);

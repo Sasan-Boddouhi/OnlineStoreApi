@@ -44,7 +44,7 @@ builder.Services.AddControllers(options =>
 .AddNewtonsoftJson(options =>
 {
     options.SerializerSettings.ReferenceLoopHandling =
-        Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+    Newtonsoft.Json.ReferenceLoopHandling.Ignore;
 })
 .AddXmlDataContractSerializerFormatters();
 
@@ -64,7 +64,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
             Status = StatusCodes.Status422UnprocessableEntity,
             Title = "Validation failed",
-            Detail = "One or more validation errors occurred.", 
+            Detail = "One or more validation errors occurred.",
             Instance = context.HttpContext.Request.Path
         };
         problem.Extensions["code"] = "VALIDATION_ERROR";
@@ -73,7 +73,6 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         return new UnprocessableEntityObjectResult(problem);
     };
 });
-
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -207,9 +206,7 @@ builder.Services.AddAuthentication(options =>
                 return;
             }
 
-            // SecurityStamp check: ensure user's current stamp matches token claim
             var stamp = context.Principal!.FindFirst("SecurityStamp")?.Value;
-
             var dbUser = await unitOfWork.Repository<User>()
                 .FirstOrDefaultAsync(new Spec<User>().Where(u => u.UserId == uid));
 
@@ -251,46 +248,61 @@ builder.Services.AddRateLimiter(options =>
         options.AddFixedWindowLimiter(
             "LoginLimiter",
             config =>
-            {
-                config.PermitLimit = 10000;
-                config.Window = TimeSpan.FromMinutes(1);
-                config.QueueLimit = 0;
-            });
+        {
+            config.PermitLimit = 10000;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+        });
 
         options.AddFixedWindowLimiter(
             "RefreshLimiter",
             config =>
-            {
-                config.PermitLimit = 10000;
-                config.Window = TimeSpan.FromMinutes(1);
-                config.QueueLimit = 0;
-            });
+        {
+            config.PermitLimit = 10000;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+        });
     }
     else
     {
         options.AddFixedWindowLimiter(
             "LoginLimiter",
             config =>
-            {
-                config.PermitLimit = 5;
-                config.Window = TimeSpan.FromMinutes(1);
-                config.QueueLimit = 0;
-                config.QueueProcessingOrder =
-                    QueueProcessingOrder.OldestFirst;
-            });
+        {
+            config.PermitLimit = 5;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
 
         options.AddFixedWindowLimiter(
             "RefreshLimiter",
             config =>
-            {
-                config.PermitLimit = 20;
-                config.Window = TimeSpan.FromMinutes(1);
-                config.QueueLimit = 0;
-                config.QueueProcessingOrder =
-                    QueueProcessingOrder.OldestFirst;
-            });
+        {
+            config.PermitLimit = 20;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
     }
 });
+
+// Register OutputCache only outside Testing
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddOutputCache(options =>
+    {
+        options.AddBasePolicy(builder => builder.Cache());
+    });
+
+    builder.Services.AddStackExchangeRedisOutputCache(options =>
+    {
+        options.Configuration = redisOptions.Configuration;
+        options.InstanceName = redisOptions.InstanceName;
+    });
+}
 
 builder.Services.AddRedis(redisOptions);
 
@@ -363,6 +375,11 @@ app.MapHealthChecks("/health", new HealthCheckOptions
         await context.Response.WriteAsJsonAsync(result);
     }
 });
+
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseOutputCache();
+}
 
 app.UseCors("ReactFrontend");
 
