@@ -5,11 +5,11 @@ using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
 using Application.Interfaces.Security;
+using Application.Interfaces.Services;
 using AutoMapper;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Implementations;
 using FluentAssertions;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -21,7 +21,7 @@ public class UserServiceTests
     private readonly Mock<IPasswordHasher> _hasherMock;
     private readonly Mock<ICurrentUserService> _currentUserMock;
     private readonly Mock<ILogger<UserService>> _loggerMock;
-    private readonly IMemoryCache _cache;
+    private readonly FakeCacheService _cacheService;
     private readonly Mock<IMapper> _mapperMock;
 
     private readonly Mock<IGenericRepository<User>> _userRepoMock;
@@ -37,8 +37,8 @@ public class UserServiceTests
         _loggerMock = new Mock<ILogger<UserService>>();
         _mapperMock = new Mock<IMapper>();
 
-        // استفاده از یک حافظهٔ نهان واقعی
-        _cache = new MemoryCache(new MemoryCacheOptions());
+        // استفاده از FakeCacheService به‌جای MemoryCache
+        _cacheService = new FakeCacheService();
 
         _userRepoMock = new Mock<IGenericRepository<User>>();
         _addressRepoMock = new Mock<IGenericRepository<Address>>();
@@ -55,7 +55,7 @@ public class UserServiceTests
             _hasherMock.Object,
             _currentUserMock.Object,
             _loggerMock.Object,
-            _cache,
+            _cacheService,
             _mapperMock.Object);
     }
 
@@ -303,5 +303,28 @@ public class UserServiceTests
         var roles = await _service.GetRolesAsync();
         roles.Should().Contain("Customer");
         roles.Should().Contain("Admin");
+    }
+
+    private class FakeCacheService : ICacheService
+    {
+        private readonly Dictionary<string, object> _cache = new();
+
+        public Task<T?> GetAsync<T>(string key, CancellationToken ct = default) where T : class
+        {
+            _cache.TryGetValue(key, out var value);
+            return Task.FromResult(value as T);
+        }
+
+        public Task SetAsync<T>(string key, T value, TimeSpan? expiry = null, CancellationToken ct = default) where T : class
+        {
+            _cache[key] = value;
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(string key, CancellationToken ct = default)
+        {
+            _cache.Remove(key);
+            return Task.CompletedTask;
+        }
     }
 }

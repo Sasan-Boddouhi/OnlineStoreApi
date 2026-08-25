@@ -5,12 +5,12 @@ using Application.Exceptions;
 using Application.Helper;
 using Application.Interfaces;
 using Application.Interfaces.Security;
+using Application.Interfaces.Services;
 using AutoMapper;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Users;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
@@ -21,15 +21,8 @@ public sealed class UserService : IUserService
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<UserService> _logger;
-    private readonly IMemoryCache _cache;
+    private readonly ICacheService _cacheService;
     private readonly IMapper _mapper;
-
-    private static readonly MemoryCacheEntryOptions _cacheEntryOptions = new()
-    {
-        SlidingExpiration = TimeSpan.FromMinutes(5),
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
-        Priority = CacheItemPriority.Normal
-    };
 
     private const string USER_FULL_CACHE_KEY_PREFIX = "UserFull_";
     private const string ALL_USERS_FULL_CACHE_KEY = "AllUsersFull";
@@ -39,14 +32,14 @@ public sealed class UserService : IUserService
         IPasswordHasher passwordHasher,
         ICurrentUserService currentUserService,
         ILogger<UserService> logger,
-        IMemoryCache cache,
+        ICacheService cacheService,
         IMapper mapper)
     {
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
         _currentUserService = currentUserService;
         _logger = logger;
-        _cache = cache;
+        _cacheService = cacheService;
         _mapper = mapper;
     }
 
@@ -110,16 +103,20 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region GetByIdAsync (با پشتیبانی کش و نقش)
+    #region GetByIdAsync (با پشتیبانی کش)
 
-    public async Task<UserDto?> GetByIdAsync(int id, bool includeRoles = false, CancellationToken cancellationToken = default)
+    public async Task<UserDto?> GetByIdAsync(
+        int id,
+        bool includeRoles = false,
+        CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Retrieving user by ID: {UserId}, includeRoles: {IncludeRoles}", id, includeRoles);
 
         if (includeRoles)
         {
             var cacheKey = $"{USER_FULL_CACHE_KEY_PREFIX}{id}";
-            if (_cache.TryGetValue(cacheKey, out UserDto? cachedUser) && cachedUser is not null)
+            var cachedUser = await _cacheService.GetAsync<UserDto>(cacheKey, cancellationToken);
+            if (cachedUser is not null)
             {
                 _logger.LogDebug("Cache hit for {CacheKey}", cacheKey);
                 return cachedUser;
@@ -142,7 +139,11 @@ public sealed class UserService : IUserService
         if (includeRoles)
         {
             var cacheKey = $"{USER_FULL_CACHE_KEY_PREFIX}{id}";
-            _cache.Set(cacheKey, userDto, _cacheEntryOptions);
+            await _cacheService.SetAsync(
+                cacheKey,
+                userDto,
+                TimeSpan.FromMinutes(30),
+                cancellationToken);
             _logger.LogDebug("User cached with role for ID: {UserId}", id);
         }
 
@@ -228,9 +229,10 @@ public sealed class UserService : IUserService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogInformation("User created successfully with ID: {UserId}", user.UserId);
-            _cache.Remove($"{ALL_USERS_FULL_CACHE_KEY}_all");
+            await _cacheService.RemoveAsync(ALL_USERS_FULL_CACHE_KEY, cancellationToken);
 
-            return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken) ?? throw new BusinessException("خطا در ایجاد کاربر", "USER_CREATION_FAILED");
+            return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken)
+                   ?? throw new BusinessException("خطا در ایجاد کاربر", "USER_CREATION_FAILED");
         }
         catch (Exception ex) when (ex is not BusinessException)
         {
@@ -275,14 +277,14 @@ public sealed class UserService : IUserService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("User updated successfully: {UserId}", dto.UserId);
-        InvalidateUserCache(user.UserId);
+        await InvalidateUserCache(user.UserId, cancellationToken);
 
         return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken);
     }
 
     #endregion
 
-    #region DeleteAsync (حذف فیزیکی، در صورت نیاز Soft Delete را تغییر دهید)
+    #region DeleteAsync
 
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
@@ -298,7 +300,7 @@ public sealed class UserService : IUserService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("User deleted successfully: {UserId}", id);
-        InvalidateUserCache(id);
+        await InvalidateUserCache(id, cancellationToken);
         return true;
     }
 
@@ -322,7 +324,7 @@ public sealed class UserService : IUserService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("User {UserId} active status updated to: {IsActive}", id, isActive);
-        InvalidateUserCache(id);
+        await InvalidateUserCache(id, cancellationToken);
         return true;
     }
 
@@ -337,7 +339,6 @@ public sealed class UserService : IUserService
         if (!string.IsNullOrWhiteSpace(userType) && Enum.TryParse<UserType>(userType, out var userTypeEnum))
             spec.Where(u => u.UserType == userTypeEnum);
 
-        // برای بارگذاری Employee.EmployeeType (در صورت نیاز به نقش)
         spec.Include(u => u.Employee!.EmployeeType);
 
         var users = await _unitOfWork.Repository<User>().ListAsync(spec, cancellationToken);
@@ -352,19 +353,10 @@ public sealed class UserService : IUserService
 
     #region Helper Methods
 
-    private static UserDto MapToSimpleUserDto(User user) => new()
+    private async Task InvalidateUserCache(int userId, CancellationToken cancellationToken)
     {
-        UserId = user.UserId,
-        FirstName = user.FirstName,
-        LastName = user.LastName,
-        PhoneNumber = user.PhoneNumber,
-        IsActive = user.IsActive
-    };
-
-    private void InvalidateUserCache(int userId)
-    {
-        _cache.Remove($"{USER_FULL_CACHE_KEY_PREFIX}{userId}");
-        _cache.Remove(ALL_USERS_FULL_CACHE_KEY);
+        await _cacheService.RemoveAsync($"{USER_FULL_CACHE_KEY_PREFIX}{userId}", cancellationToken);
+        await _cacheService.RemoveAsync(ALL_USERS_FULL_CACHE_KEY, cancellationToken);
     }
 
     #endregion

@@ -2,18 +2,23 @@
 using Application.Entities;
 using Application.Interfaces;
 using Application.Interfaces.Security;
+using Application.Interfaces.Services;
 using Application.Middleware;
+using Application.Options;
 using BusinessLogic.Extensions;
 using BusinessLogic.Services.Implementations;
 using BusinessLogic.Services.Interfaces;
 using DataLayer.Context;
 using DataLayer.Extensions;
 using DataLayer.Security;
+using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Online_Store_Application.Extensions;
 using Online_Store_Application.Middleware;
 using Online_Store_Application.Services;
 using Serilog;
@@ -99,9 +104,32 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+builder.Services.AddOptions<Application.Options.DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection(Application.Options.DatabaseOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
+var databaseOptions = builder.Configuration.GetSection("ConnectionStrings").Get<DatabaseOptions>()
+    ?? new DatabaseOptions
+    {
+        DefaultConnection = "Data Source=:memory:"
+    };
 
-builder.Services.AddDataLayerServices(builder.Configuration);
+builder.Services.AddOptions<DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection("ConnectionStrings"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddDataLayerServices(databaseOptions);
+
+var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
+    ?? new RedisOptions
+    {
+        Configuration = "localhost:6379",
+        InstanceName = "OnlineStore_Test:"
+    };
+builder.Services.AddApplicationHealthChecks(databaseOptions, redisOptions);
+
 builder.Services.AddBusinessLogicServices();
 builder.Services.AddFluentValidationServices();
 
@@ -112,6 +140,21 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
+builder.Services.AddScoped<ICacheService, RedisCacheService>();
+
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<Application.Options.JwtOptions>()
+    ?? new Application.Options.JwtOptions
+    {
+        Key = "THIS_IS_A_VERY_SECRET_TEST_KEY_1234567890",
+        Issuer = "OnlineStoreApi",
+        Audience = "OnlineStoreClient",
+        ExpireMinutes = 60
+    };
+
+builder.Services.AddOptions<Application.Options.JwtOptions>()
+    .Bind(builder.Configuration.GetSection("Jwt"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -127,10 +170,10 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
 
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
+        ValidIssuer = jwtOptions.Issuer,
+        ValidAudience = jwtOptions.Audience,
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
+            Encoding.UTF8.GetBytes(jwtOptions.Key)),
 
         RoleClaimType = ClaimTypes.Role,
         NameClaimType = ClaimTypes.NameIdentifier
@@ -249,6 +292,8 @@ builder.Services.AddRateLimiter(options =>
     }
 });
 
+builder.Services.AddRedis(redisOptions);
+
 var app = builder.Build();
 
 
@@ -293,6 +338,31 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swa
 app.UseStaticFiles();
 
 app.UseRouting();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+
+        var result = new
+        {
+            status = report.Status.ToString(),
+            totalDuration = report.TotalDuration,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration,
+                description = e.Value.Description,
+                tags = e.Value.Tags,
+                exception = e.Value.Exception?.Message
+            })
+        };
+
+        await context.Response.WriteAsJsonAsync(result);
+    }
+});
 
 app.UseCors("ReactFrontend");
 

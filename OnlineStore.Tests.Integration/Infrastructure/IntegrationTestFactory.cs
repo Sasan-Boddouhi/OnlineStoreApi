@@ -39,7 +39,10 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["Jwt:Key"] = "THIS_IS_A_VERY_SECRET_TEST_KEY_1234567890",
                 ["Jwt:Issuer"] = "OnlineStoreApi",
                 ["Jwt:Audience"] = "OnlineStoreClient",
-                ["Jwt:ExpireMinutes"] = "60"
+                ["Jwt:ExpireMinutes"] = "60",
+                ["Redis:Configuration"] = "localhost:6379",
+                ["Redis:InstanceName"] = "OnlineStore_Test:",
+                ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:"
             });
         });
 

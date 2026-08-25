@@ -13,6 +13,20 @@ services:
     networks:
       - onlinestore-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: onlinestore-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - onlinestore-network
 
   api:
     image: onlinestore-api:latest
@@ -35,7 +49,8 @@ services:
       Jwt__Key: "THIS_IS_A_VERY_SECRET_KEY_CHANGE_IT_123456789"
       Jwt__Issuer: "OnlineStoreApi"
       Jwt__Audience: "OnlineStoreClient"
-
+      Redis__Configuration: "redis:6379"
+      Redis__InstanceName: "OnlineStore:"
     ports:
       - "5000:80"
 
@@ -45,7 +60,7 @@ services:
 
 volumes:
   sqlserver_data:
-
+  redisdata:
 
 networks:
   onlinestore-network:

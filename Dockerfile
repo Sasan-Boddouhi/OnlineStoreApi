@@ -16,7 +16,7 @@ RUN dotnet restore "Online Store Application/Online Store Application(API).cspro
 # 3. کپی کامل سورس
 COPY . .
 
-# 4. Build و Publish (یکجا انجام می‌شود برای کاهش لایه‌ها)
+# 4. Build و Publish
 WORKDIR "/src/Online Store Application"
 RUN dotnet publish "Online Store Application(API).csproj" \
     -c Release \
@@ -40,8 +40,16 @@ ENV ASPNETCORE_URLS=http://+:80
 # 7. پورت
 EXPOSE 80
 
-# 8. کاربر غیر root (امنیت بیشتر)
+# 8. نصب curl برای HEALTHCHECK (نیاز به root)
+USER root
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# 9. برگرداندن کاربر غیر root (امنیت بیشتر)
 USER app
 
-# 9. دستور اجرا
+# 10. HEALTHCHECK واقعی
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl --fail http://localhost:80/health || exit 1
+
+# 11. دستور اجرا
 ENTRYPOINT ["dotnet", "Online Store Application(API).dll"]

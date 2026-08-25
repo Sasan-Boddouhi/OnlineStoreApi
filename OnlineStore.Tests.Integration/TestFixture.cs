@@ -1,6 +1,7 @@
 ﻿using Application.Entities;
 using Application.Interfaces;
 using Application.Interfaces.Security;
+using Application.Options;
 using AutoMapper;
 using BusinessLogic.Extensions;
 using DataLayer.Context;
@@ -25,6 +26,14 @@ public class TestFixture
             .Build();
 
         // -------------------------
+        // DatabaseOptions (برای تست)
+        // -------------------------
+        var databaseOptions = new DatabaseOptions
+        {
+            DefaultConnection = "TestConnectionString"
+        };
+
+        // -------------------------
         // DbContext
         // -------------------------
         services.AddDbContext<AppDbContext>(options =>
@@ -38,7 +47,7 @@ public class TestFixture
         // -------------------------
         // Infrastructure
         // -------------------------
-        services.AddDataLayerServices(configuration);
+        services.AddDataLayerServices(databaseOptions);
         services.AddBusinessLogicServices();
 
         // -------------------------
