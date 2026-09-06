@@ -17,6 +17,19 @@ jobs:
   # ── Job 1: Build, Test & Collect Coverage ──
   build-and-test:
     runs-on: ubuntu-latest
+
+    # Redis required by integration tests
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +38,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # NuGet cache
+      # ── NuGet Cache ──
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
@@ -34,15 +47,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      # ── Restore ──
       - name: Restore dependencies
         run: dotnet restore "Online Store Application.sln"
 
+      # ── Build ──
       - name: Build
         run: dotnet build "Online Store Application.sln" --configuration Release --no-restore
 
+      # ── Tests + Coverage ──
       - name: Run tests with coverage
-        run: dotnet test "Online Store Application.sln" --configuration Release --no-build --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+        run: >
+          dotnet test "Online Store Application.sln"
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --settings coverlet.runsettings
 
+      # ── Upload Coverage XML ──
       - name: Upload coverage XML
         uses: actions/upload-artifact@v4
         with:
@@ -50,10 +72,12 @@ jobs:
           path: '**/TestResults/**/*.cobertura.xml'
           retention-days: 1
 
+
   # ── Job 2: HTML Coverage Report ──
   coverage-report:
     needs: build-and-test
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -65,8 +89,13 @@ jobs:
       - name: Install ReportGenerator
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
-      - name: Generate HTML report (suppress path warnings)
-        run: reportgenerator -reports:"**/*.cobertura.xml" -targetdir:"coveragereport" -reporttypes:Html -verbosity:Warning
+      - name: Generate HTML report
+        run: >
+          reportgenerator
+          -reports:"**/*.cobertura.xml"
+          -targetdir:"coveragereport"
+          -reporttypes:Html
+          -verbosity:Warning
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -74,16 +103,20 @@ jobs:
           name: coverage-report
           path: coveragereport
 
+
   # ── Job 3: Docker Image Build & Push to GHCR ──
   docker-build-push:
     needs: build-and-test
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
+      # ── Docker Buildx ──
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ── Login to GHCR ──
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -91,14 +124,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # ── Build & Push ──
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: ./Dockerfile
+
+          # Push only on push events.
+          # Pull Requests will build the image but won't publish it.
           push: ${{ github.event_name != 'pull_request' }}
+
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+          # GitHub Actions cache for Docker layers
           cache-from: type=gha
           cache-to: type=gha,mode=max
