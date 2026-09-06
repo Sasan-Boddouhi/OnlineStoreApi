@@ -1,4 +1,5 @@
 ﻿using Application.Interfaces;
+using Application.Interfaces.Services;
 using DataLayer.Context;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -10,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Data.Common;
 using System.Threading.RateLimiting;
 
@@ -68,6 +70,12 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
             services.AddScoped(_ => optionsBuilder.Options);
 
             services.AddScoped<AppDbContext, TestAppDbContext>();
+
+            // حذف پیاده‌سازی واقعی ICacheService (Redis)
+            services.RemoveAll<ICacheService>();
+
+            // جایگزینی با Fake برای تست
+            services.AddSingleton<ICacheService, FakeCacheService>();
 
             services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
         });
