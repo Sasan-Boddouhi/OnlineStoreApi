@@ -5,9 +5,7 @@ services:
     container_name: onlinestore-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "StrongPass123!"
-    ports:
-      - "1433:1433"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
     volumes:
       - sqlserver_data:/var/opt/mssql
     networks:
@@ -16,8 +14,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: onlinestore-redis
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -29,28 +25,35 @@ services:
       - onlinestore-network
 
   api:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: onlinestore-api:latest
     container_name: onlinestore-api
+
     depends_on:
       - sqlserver
+      - redis
+
     environment:
-
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: "http://+:80"
-      Swagger__Enabled: "true"
+      Swagger__Enabled: "false"
 
-      ConnectionStrings__DefaultConnection: >
+      ConnectionStrings__DefaultConnection: >-
         Server=sqlserver;
         Database=ShopDB;
         User Id=sa;
-        Password=StrongPass123!;
+        Password=${MSSQL_SA_PASSWORD};
         TrustServerCertificate=True;
 
-      Jwt__Key: "THIS_IS_A_VERY_SECRET_KEY_CHANGE_IT_123456789"
+      Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: "OnlineStoreApi"
       Jwt__Audience: "OnlineStoreClient"
+
       Redis__Configuration: "redis:6379"
       Redis__InstanceName: "OnlineStore:"
+
     ports:
       - "5000:80"
 
@@ -61,6 +64,7 @@ services:
 volumes:
   sqlserver_data:
   redisdata:
+
 
 networks:
   onlinestore-network:
