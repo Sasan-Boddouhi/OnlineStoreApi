@@ -1,0 +1,66 @@
+﻿version: "3.8"
+
+services:
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: onlinestore-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - onlinestore-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: onlinestore-redis
+    volumes:
+      - redisdata:/data
+    networks:
+      - onlinestore-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/sasan-boddouhi/onlinestoreapi:latest
+    container_name: onlinestore-api
+    depends_on:
+      - sqlserver
+      - redis
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:80"
+      Swagger__Enabled: "false"
+
+      ConnectionStrings__DefaultConnection: >-
+        Server=sqlserver;
+        Database=ShopDB;
+        User Id=sa;
+        Password=${MSSQL_SA_PASSWORD};
+        TrustServerCertificate=True;
+
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER:-OnlineStoreApi}
+      Jwt__Audience: ${JWT_AUDIENCE:-OnlineStoreClient}
+
+      Redis__Configuration: "redis:6379"
+      Redis__InstanceName: "OnlineStore:"
+
+    ports:
+      - "5000:80"
+
+    networks:
+      - onlinestore-network
+
+volumes:
+  sqlserver_data:
+  redisdata:
+
+networks:
+  onlinestore-network:
+    driver: bridge
