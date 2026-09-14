@@ -393,6 +393,13 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapGet("/version", () => new
+{
+    version = "v2",
+    commit = Environment.GetEnvironmentVariable("GIT_COMMIT") ?? "unknown",
+    deployedAt = DateTime.UtcNow
+});
+
 
 Log.Information("Online Store API started successfully");
 Console.WriteLine("Application is running...");
