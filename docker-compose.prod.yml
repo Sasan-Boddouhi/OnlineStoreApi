@@ -59,7 +59,12 @@ services:
 
 volumes:
   sqlserver_data:
+    external: true
+    name: onlinestoreapi_sqlserver_data
+
   redisdata:
+    external: true
+    name: onlinestoreapi_redisdata
 
 networks:
   onlinestore-network:
