@@ -3,6 +3,14 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.editorconfig'
+      - '.vscode/**'
+      - '.vs/**'
 
   pull_request:
     branches: [ main ]
