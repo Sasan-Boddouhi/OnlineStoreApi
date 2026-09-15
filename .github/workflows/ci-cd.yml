@@ -63,3 +63,40 @@ jobs:
           name: coverage-xml
           path: '**/TestResults/**/*.cobertura.xml'
           retention-days: 1
+
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 2: HTML Coverage Report
+  # Runner: ubuntu-latest
+  # Not on the critical path - failure here does not block deploy
+  # ═══════════════════════════════════════════════════════════
+  coverage-report:
+    name: Coverage Report
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download coverage XML
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-xml
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate HTML report
+        run: >
+          reportgenerator
+          -reports:"**/*.cobertura.xml"
+          -targetdir:"coveragereport"
+          -reporttypes:Html
+          -verbosity:Warning
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coveragereport
