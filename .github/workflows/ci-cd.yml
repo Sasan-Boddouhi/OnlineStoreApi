@@ -141,3 +141,62 @@ jobs:
             ghcr.io/sasan-boddouhi/onlinestoreapi:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 4: Deploy to Production VM
+  # Runner: self-hosted, onlinestore-prod
+  # Gated by successful Docker push
+  # Only runs on push to main - NEVER on PR or feature branches
+  # ═══════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to Production
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, onlinestore-prod]
+
+    steps:
+      - name: Deploy API Container
+        run: |
+          cd ~/onlinestore-prod
+          export IMAGE_TAG=${GITHUB_SHA}
+          export GIT_COMMIT=${GITHUB_SHA}
+          docker compose -f docker-compose.prod.yml pull api
+          docker compose -f docker-compose.prod.yml up -d --force-recreate api
+
+      - name: Wait for API to be ready
+        run: sleep 20
+
+      - name: Verify Health
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl --fail --silent http://localhost:5000/health > /dev/null; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
+
+      - name: Verify Deployed Version
+        run: |
+          RESPONSE=$(curl --silent http://localhost:5000/version)
+          echo "Response: $RESPONSE"
+          if echo "$RESPONSE" | grep -q "${GITHUB_SHA:0:7}"; then
+            echo "Deployed commit matches ${GITHUB_SHA:0:7}"
+          else
+            echo "Deployed commit does NOT match ${GITHUB_SHA:0:7}"
+            echo "This can happen if /version endpoint isn't yet updated."
+          fi
+
+      - name: Print Deployment Summary
+        run: |
+          echo "================================"
+          echo "Deployment Complete"
+          echo "================================"
+          echo "Commit: ${GITHUB_SHA}"
+          echo "Branch: ${GITHUB_REF_NAME}"
+          echo "Runner: ${{ runner.name }}"
+          echo "================================"
