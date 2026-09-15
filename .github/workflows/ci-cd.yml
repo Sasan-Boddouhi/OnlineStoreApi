@@ -15,3 +15,51 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 1: Build, Test & Coverage
+  # Runner: ubuntu-latest (GitHub-hosted, safe)
+  # ═══════════════════════════════════════════════════════════
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore "Online Store Application.sln"
+
+      - name: Build
+        run: dotnet build "Online Store Application.sln" --configuration Release --no-restore
+
+      - name: Run tests with coverage
+        run: >
+          dotnet test "Online Store Application.sln"
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --settings coverlet.runsettings
+
+      - name: Upload coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: '**/TestResults/**/*.cobertura.xml'
+          retention-days: 1
