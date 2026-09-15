@@ -393,6 +393,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// T2 code-trigger verification
 app.MapGet("/version", () => new
 {
     version = "v2",
