@@ -137,7 +137,7 @@ jobs:
           # push to main/develop: build + push
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/sasan-boddouhi/onlinestoreapi:latest
+            ghcr.io/sasan-boddouhi/onlinestoreapi:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
