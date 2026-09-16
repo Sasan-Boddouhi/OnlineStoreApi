@@ -16,6 +16,12 @@ on:
     branches: [ main ]
 
   workflow_dispatch:
+    inputs:
+      force_verify_fail:
+        description: 'T4-I4: force Verify New Health to fail and test rollback'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -28,7 +34,7 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════
   # Job 1: Build, Test & Coverage
-  # Runner: ubuntu-latest (GitHub-hosted, safe)
+  # Runner: GitHub-hosted
   # ═══════════════════════════════════════════════════════════
   build-and-test:
     name: Build & Test
@@ -75,8 +81,7 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════
   # Job 2: HTML Coverage Report
-  # Runner: ubuntu-latest
-  # Not on the critical path - failure here does not block deploy
+  # Not on the critical deployment path
   # ═══════════════════════════════════════════════════════════
   coverage-report:
     name: Coverage Report
@@ -112,9 +117,7 @@ jobs:
 
   # ═══════════════════════════════════════════════════════════
   # Job 3: Docker Build & Push to GHCR
-  # Runner: ubuntu-latest
-  # Gated by successful tests (build-and-test)
-  # Push only on non-PR events (main/develop pushes)
+  # Gated by successful tests
   # ═══════════════════════════════════════════════════════════
   docker:
     name: Docker Build & Push
@@ -140,30 +143,61 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # Push only when NOT a pull_request event
-          # PR: build only (safe)
-          # push to main/develop: build + push
+
+          # PR: build only
+          # main/develop push: build + push
+          # workflow_dispatch: build + push
           push: ${{ github.event_name != 'pull_request' }}
+
           tags: |
             ghcr.io/sasan-boddouhi/onlinestoreapi:latest
             ghcr.io/sasan-boddouhi/onlinestoreapi:${{ github.sha }}
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
 
   # ═══════════════════════════════════════════════════════════
   # Job 4: Deploy to Production VM
-  # Runner: self-hosted, onlinestore-prod
-  # Gated by successful Docker push
-  # Only runs on push to main - NEVER on PR or feature branches
+  #
+  # Normal production deploy:
+  #   push -> main
+  #
+  # Controlled rollback test:
+  #   workflow_dispatch -> main
+  #
+  # NEVER runs on PRs or develop pushes.
   # ═══════════════════════════════════════════════════════════
   deploy:
     name: Deploy to Production
+
     needs: docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+
     runs-on: [self-hosted, Linux, X64, onlinestore-prod]
 
+    env:
+      # Only workflow_dispatch can activate the test failure.
+      # Normal push to main is always false.
+      FORCE_VERIFY_FAIL: ${{ github.event_name == 'workflow_dispatch' && inputs.force_verify_fail == true }}
+
     steps:
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I1
+      # Capture the currently deployed production SHA.
+      #
+      # Primary source:
+      #   /version
+      #
+      # Fallback:
+      #   docker inspect
+      #
+      # No production mutation.
+      # ═══════════════════════════════════════════════════════════
       - name: Capture Previous Version
         id: previous
         run: |
@@ -203,54 +237,227 @@ jobs:
           echo "========================================"
           echo "Captured previous SHA: ${PREV_SHA:-<empty>}"
           echo "========================================"
-          
+
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I2 / Deployment
+      # Deploy the new image.
+      # ═══════════════════════════════════════════════════════════
       - name: Deploy API Container
+        id: deploy-new
         run: |
           cd ~/onlinestore-prod
+
           export IMAGE_TAG=${GITHUB_SHA}
           export GIT_COMMIT=${GITHUB_SHA}
+
+          echo "Deploying image:"
+          echo "  ghcr.io/sasan-boddouhi/onlinestoreapi:${IMAGE_TAG}"
+
           docker compose -f docker-compose.prod.yml pull api
+
           docker compose -f docker-compose.prod.yml up -d --force-recreate api
 
+
+      # ═══════════════════════════════════════════════════════════
+      # Wait for new API container.
+      # ═══════════════════════════════════════════════════════════
       - name: Wait for API to be ready
+        if: steps.deploy-new.outcome == 'success'
         run: sleep 20
 
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I2
+      #
+      # State-aware health verification.
+      #
+      # continue-on-error allows Rollback to inspect:
+      #   steps.verify-new.outcome
+      #
+      # T4-I4 controlled failure can be activated only through
+      # workflow_dispatch with force_verify_fail=true.
+      # ═══════════════════════════════════════════════════════════
       - name: Verify New Health
         id: verify-new
+        if: steps.deploy-new.outcome == 'success'
         continue-on-error: true
         run: |
+
+          if [ "${FORCE_VERIFY_FAIL}" = "true" ]; then
+            echo "⚠️ FORCED FAILURE (T4-I4 test mode)"
+            echo "The new container was deployed."
+            echo "Health verification is intentionally failing."
+            exit 1
+          fi
+
           for i in 1 2 3 4 5; do
+
             if curl --fail --silent http://localhost:5000/health > /dev/null; then
               echo "✅ New deploy health check passed"
               exit 0
             fi
+
             echo "Attempt $i failed, retrying in 5s..."
             sleep 5
+
           done
+
           echo "❌ New deploy health check failed after 5 attempts"
           exit 1
 
-      - name: Verify Deployed Version
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I3
+      #
+      # Rollback only when the new deployment health verification
+      # failed.
+      #
+      # continue-on-error:
+      #   allows notification/final-failure logic to inspect
+      #   steps.rollback.outcome
+      #
+      # Only API container is touched.
+      # SQL Server, Redis and volumes are untouched.
+      # ═══════════════════════════════════════════════════════════
+      - name: Rollback to Previous Version
+        id: rollback
+        if: steps.verify-new.outcome == 'failure'
+        continue-on-error: true
         run: |
-          RESPONSE=$(curl --silent http://localhost:5000/version)
-          echo "Response: $RESPONSE"
-          if echo "$RESPONSE" | grep -q "${GITHUB_SHA:0:7}"; then
-            echo "Deployed commit matches ${GITHUB_SHA:0:7}"
-          else
-            echo "Deployed commit does NOT match ${GITHUB_SHA:0:7}"
-            echo "This can happen if /version endpoint isn't yet updated."
+          set -e
+
+          PREV_SHA="${{ steps.previous.outputs.previous_sha }}"
+
+          echo "========================================"
+          echo "Rollback requested"
+          echo "Previous SHA: ${PREV_SHA:-<empty>}"
+          echo "========================================"
+
+          if [ -z "$PREV_SHA" ]; then
+            echo "🚨 CRITICAL: No previous SHA captured"
+            echo "Rollback is impossible."
+            exit 1
           fi
 
-      - name: Print Deployment Summary
-        run: |
-          echo "================================"
-          echo "Deployment Complete"
-          echo "================================"
-          echo "Commit: ${GITHUB_SHA}"
-          echo "Branch: ${GITHUB_REF_NAME}"
-          echo "Runner: ${{ runner.name }}"
-          echo "================================"
+          if ! echo "$PREV_SHA" | grep -qE '^[a-f0-9]{40}$'; then
+            echo "🚨 CRITICAL: Previous SHA is invalid"
+            exit 1
+          fi
 
+          echo "⚠️ Rolling back API to:"
+          echo "   $PREV_SHA"
+
+          cd ~/onlinestore-prod
+
+          export IMAGE_TAG=$PREV_SHA
+          export GIT_COMMIT=$PREV_SHA
+
+          echo "Pulling previous image..."
+          docker compose -f docker-compose.prod.yml pull api
+
+          echo "Recreating API container with previous version..."
+          docker compose -f docker-compose.prod.yml up -d --force-recreate api
+
+          echo "Waiting for rollback container..."
+          sleep 20
+
+          echo "Verifying rollback health..."
+
+          for i in 1 2 3 4 5; do
+
+            if curl --fail --silent http://localhost:5000/health > /dev/null; then
+              echo "✅ Rollback health check passed"
+              break
+            fi
+
+            echo "Rollback health attempt $i failed, retrying in 5s..."
+            sleep 5
+
+          done
+
+          if ! curl --fail --silent http://localhost:5000/health > /dev/null; then
+            echo "❌ Rollback health check failed"
+            exit 1
+          fi
+
+          echo "Verifying rollback version..."
+
+          RESPONSE=$(curl --silent --fail --max-time 10 http://localhost:5000/version)
+
+          echo "Rollback /version response:"
+          echo "$RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "$PREV_SHA"; then
+            echo "✅ Rollback version matches previous SHA"
+          else
+            echo "❌ Rollback version does NOT match previous SHA"
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "Rollback completed successfully"
+          echo "Rolled back to: $PREV_SHA"
+          echo "========================================"
+
+
+      # ═══════════════════════════════════════════════════════════
+      # Verify the NEW deployment version.
+      #
+      # This is only relevant when the new deployment passed health.
+      # It is informational and does not decide rollback.
+      # Rollback is driven by Verify New Health.
+      # ═══════════════════════════════════════════════════════════
+      - name: Verify Deployed Version
+        id: verify-version
+        if: steps.verify-new.outcome == 'success'
+        continue-on-error: true
+        run: |
+
+          RESPONSE=$(curl --silent --fail --max-time 10 \
+            http://localhost:5000/version || true)
+
+          echo "Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "${GITHUB_SHA:0:7}"; then
+            echo "✅ Deployed commit matches ${GITHUB_SHA:0:7}"
+          else
+            echo "⚠️ Deployed commit does NOT match ${GITHUB_SHA:0:7}"
+          fi
+
+
+      # ═══════════════════════════════════════════════════════════
+      # Deployment state summary.
+      #
+      # Must run regardless of deployment outcome so the state
+      # is visible in the GitHub Actions log.
+      # ═══════════════════════════════════════════════════════════
+      - name: Print Deployment Summary
+        if: always()
+        run: |
+
+          echo "========================================"
+          echo "Production Deployment Summary"
+          echo "========================================"
+
+          echo "Commit:              ${GITHUB_SHA}"
+          echo "Branch:              ${GITHUB_REF_NAME}"
+          echo "Runner:              ${{ runner.name }}"
+
+          echo "Previous SHA:        ${{ steps.previous.outputs.previous_sha }}"
+          echo "Deploy outcome:      ${{ steps.deploy-new.outcome }}"
+          echo "New health outcome:  ${{ steps.verify-new.outcome }}"
+          echo "Rollback outcome:    ${{ steps.rollback.outcome }}"
+          echo "Version check:       ${{ steps.verify-version.outcome }}"
+
+          echo "========================================"
+
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I5
+      #
+      # Normal successful deployment.
+      # ═══════════════════════════════════════════════════════════
       - name: Notify Success
         if: steps.verify-new.outcome == 'success'
         continue-on-error: true
@@ -262,7 +469,9 @@ jobs:
           GH_ACTOR: ${{ github.actor }}
           GH_RUN_NUMBER: ${{ github.run_number }}
           GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
         run: |
+
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           SHORT_SHA=$(echo "$GH_SHA" | cut -c1-7)
 
@@ -286,9 +495,20 @@ jobs:
           }
           EOF
 
-      - name: Notify Failure
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I5
+      #
+      # New deployment failed, rollback succeeded.
+      #
+      # IMPORTANT:
+      # The job will still FAIL later.
+      # This notification happens BEFORE the explicit failure step.
+      # ═══════════════════════════════════════════════════════════
+      - name: Notify Rollback
         if: |
-          failure() || steps.verify-new.outcome == 'failure'
+          steps.verify-new.outcome == 'failure' &&
+          steps.rollback.outcome == 'success'
         continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -298,9 +518,14 @@ jobs:
           GH_ACTOR: ${{ github.actor }}
           GH_RUN_NUMBER: ${{ github.run_number }}
           GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PREVIOUS_SHA: ${{ steps.previous.outputs.previous_sha }}
+
         run: |
+
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
           SHORT_SHA=$(echo "$GH_SHA" | cut -c1-7)
+          PREVIOUS_SHORT_SHA=$(echo "$PREVIOUS_SHA" | cut -c1-7)
 
           curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
@@ -308,12 +533,13 @@ jobs:
           {
             "username": "OnlineStore CI/CD",
             "embeds": [{
-              "title": "❌ Deploy Failed",
-              "color": 16711680,
+              "title": "⚠️ Deploy Failed, Rolled Back",
+              "color": 16753920,
               "fields": [
                 {"name": "Repository", "value": "$GH_REPOSITORY", "inline": true},
                 {"name": "Branch", "value": "$GH_BRANCH", "inline": true},
-                {"name": "Commit", "value": "$SHORT_SHA", "inline": true},
+                {"name": "Failed Commit", "value": "$SHORT_SHA", "inline": true},
+                {"name": "Rolled Back To", "value": "$PREVIOUS_SHORT_SHA", "inline": true},
                 {"name": "Actor", "value": "$GH_ACTOR", "inline": true},
                 {"name": "Run", "value": "[#$GH_RUN_NUMBER]($GH_RUN_URL)"}
               ],
@@ -321,3 +547,98 @@ jobs:
             }]
           }
           EOF
+
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I5
+      #
+      # Critical cases:
+      #
+      # 1. New health failed + rollback failed
+      # 2. New health failed + rollback skipped
+      # 3. Deploy itself failed before health verification
+      #
+      # This notification must happen before final job failure.
+      # ═══════════════════════════════════════════════════════════
+      - name: Notify Critical
+        if: |
+          always() &&
+          (
+            (
+              steps.verify-new.outcome == 'failure' &&
+              steps.rollback.outcome != 'success'
+            )
+            ||
+            (
+              steps.deploy-new.outcome != 'success' &&
+              steps.verify-new.outcome != 'failure'
+            )
+          )
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_BRANCH: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_RUN_NUMBER: ${{ github.run_number }}
+          GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PREVIOUS_SHA: ${{ steps.previous.outputs.previous_sha }}
+
+        run: |
+
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          SHORT_SHA=$(echo "$GH_SHA" | cut -c1-7)
+
+          PREVIOUS_SHA_VALUE="$PREVIOUS_SHA"
+
+          if [ -z "$PREVIOUS_SHA_VALUE" ]; then
+            PREVIOUS_SHA_VALUE="<empty>"
+          fi
+
+          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "username": "OnlineStore CI/CD",
+            "embeds": [{
+              "title": "🚨 CRITICAL: Deploy Failed, Rollback Failed",
+              "color": 16711680,
+              "fields": [
+                {"name": "Repository", "value": "$GH_REPOSITORY", "inline": true},
+                {"name": "Branch", "value": "$GH_BRANCH", "inline": true},
+                {"name": "Failed Commit", "value": "$SHORT_SHA", "inline": true},
+                {"name": "Previous SHA", "value": "$PREVIOUS_SHA_VALUE", "inline": true},
+                {"name": "Actor", "value": "$GH_ACTOR", "inline": true},
+                {"name": "Run", "value": "[#$GH_RUN_NUMBER]($GH_RUN_URL)"}
+              ],
+              "timestamp": "$TIMESTAMP"
+            }]
+          }
+          EOF
+
+
+      # ═══════════════════════════════════════════════════════════
+      # T4-I5
+      #
+      # Final authoritative job status.
+      #
+      # Notification steps have already executed.
+      # If the new deployment was not healthy, the workflow MUST
+      # finish as FAILED even if rollback succeeded.
+      # ═══════════════════════════════════════════════════════════
+      - name: Fail Job if Deployment Was Not Successful
+        if: |
+          always() &&
+          steps.verify-new.outcome != 'success'
+        run: |
+
+          echo "❌ Production deployment did not complete successfully."
+
+          echo "Deploy outcome:     ${{ steps.deploy-new.outcome }}"
+          echo "New health outcome: ${{ steps.verify-new.outcome }}"
+          echo "Rollback outcome:   ${{ steps.rollback.outcome }}"
+          echo "Previous SHA:       ${{ steps.previous.outputs.previous_sha }}"
+
+          exit 1
