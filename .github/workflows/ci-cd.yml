@@ -208,3 +208,73 @@ jobs:
           echo "Branch: ${GITHUB_REF_NAME}"
           echo "Runner: ${{ runner.name }}"
           echo "================================"
+
+      - name: Notify Success
+        if: success()
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_BRANCH: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_RUN_NUMBER: ${{ github.run_number }}
+          GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SHORT_SHA=$(echo "$GH_SHA" | cut -c1-7)
+
+          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "username": "OnlineStore CI/CD",
+            "embeds": [{
+              "title": "✅ Deploy Successful",
+              "color": 65280,
+              "fields": [
+                {"name": "Repository", "value": "$GH_REPOSITORY", "inline": true},
+                {"name": "Branch", "value": "$GH_BRANCH", "inline": true},
+                {"name": "Commit", "value": "$SHORT_SHA", "inline": true},
+                {"name": "Actor", "value": "$GH_ACTOR", "inline": true},
+                {"name": "Run", "value": "[#$GH_RUN_NUMBER]($GH_RUN_URL)"}
+              ],
+              "timestamp": "$TIMESTAMP"
+            }]
+          }
+          EOF
+
+      - name: Notify Failure
+        if: failure()
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_BRANCH: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_RUN_NUMBER: ${{ github.run_number }}
+          GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SHORT_SHA=$(echo "$GH_SHA" | cut -c1-7)
+
+          curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "username": "OnlineStore CI/CD",
+            "embeds": [{
+              "title": "❌ Deploy Failed",
+              "color": 16711680,
+              "fields": [
+                {"name": "Repository", "value": "$GH_REPOSITORY", "inline": true},
+                {"name": "Branch", "value": "$GH_BRANCH", "inline": true},
+                {"name": "Commit", "value": "$SHORT_SHA", "inline": true},
+                {"name": "Actor", "value": "$GH_ACTOR", "inline": true},
+                {"name": "Run", "value": "[#$GH_RUN_NUMBER]($GH_RUN_URL)"}
+              ],
+              "timestamp": "$TIMESTAMP"
+            }]
+          }
+          EOF
