@@ -164,15 +164,6 @@ jobs:
     runs-on: [self-hosted, Linux, X64, onlinestore-prod]
 
     steps:
-      # ⚠️ TEMPORARY - T3-I4 Failure Test
-      # This must remain BEFORE any production deployment command.
-      - name: Controlled Failure Test
-        run: |
-          echo "T3-I4 Controlled Failure Test"
-          echo "Intentional failure to verify Notify Failure workflow"
-          echo "This step will be removed immediately after validation"
-          exit 1
-
       - name: Deploy API Container
         run: |
           cd ~/onlinestore-prod
