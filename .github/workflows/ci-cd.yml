@@ -164,6 +164,46 @@ jobs:
     runs-on: [self-hosted, Linux, X64, onlinestore-prod]
 
     steps:
+          - name: Capture Previous Version
+        id: previous
+        run: |
+          PREV_SHA=""
+
+          echo "Attempting to read current version from /version..."
+
+          if curl -sf --max-time 5 http://localhost:5000/version > /tmp/version.json 2>/dev/null; then
+            PREV_SHA=$(grep -oE '"commit":"[a-f0-9]{40}"' /tmp/version.json 2>/dev/null \
+              | grep -oE '[a-f0-9]{40}' \
+              | head -1 || true)
+
+            echo "  /version returned: ${PREV_SHA:-<empty>}"
+          else
+            echo "  /version not reachable"
+          fi
+
+          if ! echo "$PREV_SHA" | grep -qE '^[a-f0-9]{40}$'; then
+            echo "Fallback to docker inspect..."
+
+            PREV_SHA=$(docker inspect onlinestore-api \
+              --format '{{.Config.Image}}' 2>/dev/null \
+              | sed 's/.*://' \
+              | grep -oE '^[a-f0-9]{40}$' \
+              | head -1 || true)
+
+            echo "  docker inspect returned: ${PREV_SHA:-<empty>}"
+          fi
+
+          if ! echo "$PREV_SHA" | grep -qE '^[a-f0-9]{40}$'; then
+            echo "⚠️ No valid previous SHA could be captured"
+            PREV_SHA=""
+          fi
+
+          echo "previous_sha=$PREV_SHA" >> "$GITHUB_OUTPUT"
+
+          echo "========================================"
+          echo "Captured previous SHA: ${PREV_SHA:-<empty>}"
+          echo "========================================"
+          
       - name: Deploy API Container
         run: |
           cd ~/onlinestore-prod
