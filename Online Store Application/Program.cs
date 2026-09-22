@@ -103,7 +103,13 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Register OtelOptions with validation
 builder.Services.AddOpenTelemetryOptions(builder.Configuration);
+
+// Start OpenTelemetry SDK (traces + metrics, no logs yet)
+builder.Services.AddOpenTelemetryServices(
+    builder.Configuration,
+    builder.Environment);
 
 builder.Services.AddOptions<Application.Options.DatabaseOptions>()
     .Bind(builder.Configuration.GetSection(Application.Options.DatabaseOptions.SectionName))
