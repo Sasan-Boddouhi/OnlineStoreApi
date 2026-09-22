@@ -36,7 +36,7 @@ services:
       - onlinestore-network
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.115.0
+    image: otel/opentelemetry-collector-contrib:0.115.1
     container_name: onlinestore-otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
