@@ -23,8 +23,11 @@ exporters:
     tls:
       insecure: true
 
-  debug:
-    verbosity: basic
+debug:
+  verbosity: detailed
+  use_internal_logger: false
+  output_paths:
+    - stderr
 
 service:
   telemetry:
