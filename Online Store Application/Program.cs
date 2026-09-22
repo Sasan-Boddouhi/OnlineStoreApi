@@ -103,6 +103,8 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+builder.Services.AddOpenTelemetryOptions(builder.Configuration);
+
 builder.Services.AddOptions<Application.Options.DatabaseOptions>()
     .Bind(builder.Configuration.GetSection(Application.Options.DatabaseOptions.SectionName))
     .ValidateDataAnnotations()
