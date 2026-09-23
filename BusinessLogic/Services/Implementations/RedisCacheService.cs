@@ -2,6 +2,7 @@
 using Application.Interfaces.Services;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
+using Application.Diagnostics;
 
 namespace BusinessLogic.Services.Implementations;
 
@@ -29,11 +30,17 @@ public sealed class RedisCacheService : ICacheService
             if (cached == null)
             {
                 activity?.SetTag("cache.hit", false);
+                OnlineStoreMetrics.CacheMisses.Add(
+                    1,
+                    new KeyValuePair<string, object?>("cache.type", typeof(T).Name));
                 activity?.SetStatus(ActivityStatusCode.Ok);
                 return null;
             }
 
             activity?.SetTag("cache.hit", true);
+            OnlineStoreMetrics.CacheHits.Add(
+                1,
+                new KeyValuePair<string, object?>("cache.type", typeof(T).Name));
             activity?.SetStatus(ActivityStatusCode.Ok);
             return JsonSerializer.Deserialize<T>(cached);
         }

@@ -15,6 +15,7 @@ using System.Text;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
+using Application.Diagnostics;
 
 public sealed class AuthService : IAuthService
 {
@@ -96,6 +97,8 @@ public sealed class AuthService : IAuthService
 
             await _unitOfWork.CommitTransactionAsync(ct);
 
+            OnlineStoreMetrics.UserRegistrations.Add(1);
+
             activity?.SetTag("user.id", user.UserId);
             activity?.SetTag("session.id", session.Id);
             activity?.SetStatus(ActivityStatusCode.Ok);
@@ -118,6 +121,8 @@ public sealed class AuthService : IAuthService
         const int maxFailed = 5;
         const int lockMinutes = 15;
 
+        OnlineStoreMetrics.LoginAttempts.Add(1);
+
         var user = await _unitOfWork.Repository<User>()
             .FirstOrDefaultAsync(
                 new Spec<User>()
@@ -130,6 +135,10 @@ public sealed class AuthService : IAuthService
 
         if (user is null)
         {
+            OnlineStoreMetrics.LoginFailure.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", "user_not_found"));
+
             _logger.LogWarning("Login failed. User not found {Phone}", dto.PhoneNumber);
             activity?.SetStatus(ActivityStatusCode.Error, "User not found");
             return null;
@@ -139,6 +148,10 @@ public sealed class AuthService : IAuthService
 
         if (user.LockoutEnd.HasValue && user.LockoutEnd > DateTime.UtcNow)
         {
+            OnlineStoreMetrics.LoginFailure.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", "account_locked"));
+
             activity?.SetStatus(ActivityStatusCode.Error, "Account locked");
             return null;
         }
@@ -151,6 +164,10 @@ public sealed class AuthService : IAuthService
                 user.LockoutEnd = DateTime.UtcNow.AddMinutes(lockMinutes);
 
             await _unitOfWork.SaveChangesAsync(ct);
+
+            OnlineStoreMetrics.LoginFailure.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", "invalid_password"));
 
             _logger.LogWarning("Invalid password for {UserId}", user.UserId);
             activity?.SetTag("auth.failed_attempts", user.FailedLoginAttempts);
@@ -184,6 +201,8 @@ public sealed class AuthService : IAuthService
 
             activity?.SetTag("session.id", session.Id);
             activity?.SetStatus(ActivityStatusCode.Ok);
+
+            OnlineStoreMetrics.LoginSuccess.Add(1);
 
             return result;
         }
@@ -241,6 +260,8 @@ public sealed class AuthService : IAuthService
             if (token.ReplacedByTokenId == null)
             {
                 // token already revoked and not rotated -> possible reuse attack
+                OnlineStoreMetrics.RefreshTokenReuse.Add(1);
+
                 _logger.LogWarning("Refresh token reuse detected for UserId={UserId}, SessionId={SessionId}", token.UserId, token.SessionId);
                 if (token.Session != null)
                 {

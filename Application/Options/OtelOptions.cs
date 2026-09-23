@@ -29,4 +29,11 @@ public sealed class OtelOptions
 
     [Range(1, 8192)]
     public int MaxBatchSize { get; set; } = 2048;
+
+    /// <summary>
+    /// Prometheus exposition port on the OTel Collector.
+    /// Prometheus scrapes this port.
+    /// </summary>
+    [Range(1024, 65535)]
+    public int PrometheusExporterPort { get; set; } = 8889;
 }

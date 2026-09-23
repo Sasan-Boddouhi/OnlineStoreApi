@@ -35,6 +35,23 @@ services:
     networks:
       - onlinestore-network
 
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: onlinestore-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    mem_limit: 256m
+    networks:
+      - onlinestore-network
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.115.1
     container_name: onlinestore-otel-collector
@@ -84,6 +101,7 @@ services:
       OpenTelemetry__Enabled: "true"
       OpenTelemetry__Endpoint: "http://otel-collector:4317"
       OpenTelemetry__TraceSamplingRatio: "1.0"
+      OpenTelemetry__PrometheusExporterPort: "8889"
 
     ports:
       - "5000:80"
@@ -95,6 +113,7 @@ services:
 volumes:
   sqlserver_data:
   redisdata:
+  prometheus_data:
 
 
 networks:

@@ -18,10 +18,21 @@ processors:
     send_batch_max_size: 1024
 
 exporters:
+  # Traces → Jaeger
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
+
+  # Metrics → Prometheus (scrape endpoint on :8889)
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: onlinestore
+    send_timestamps: true
+    metric_expiration: 5m
+
+  debug:
+    verbosity: basic
 
 service:
   telemetry:
@@ -32,4 +43,9 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/jaeger]
+      exporters: [otlp/jaeger, debug]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, debug]

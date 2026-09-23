@@ -1,3 +1,4 @@
+using Application.Diagnostics;
 using Application.Options;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
@@ -84,8 +85,8 @@ public static class OpenTelemetryExtensions
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
-                    .AddMeter("OnlineStore.Auth")
-                    .AddMeter("OnlineStore.Cache")
+                    .AddMeter(OnlineStoreMetrics.AuthMeterName)
+                    .AddMeter(OnlineStoreMetrics.CacheMeterName)
                     .AddOtlpExporter(otlp =>
                     {
                         otlp.Endpoint = new Uri(options.Endpoint);
