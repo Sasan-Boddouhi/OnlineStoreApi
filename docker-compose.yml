@@ -63,7 +63,8 @@ services:
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
       - GF_LOG_LEVEL=warn
     volumes:
-      - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./otel/grafana/provisioning/datasources/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./otel/grafana/provisioning/dashboards/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
       - ./otel/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
@@ -132,13 +133,11 @@ services:
     networks:
       - onlinestore-network
 
-
 volumes:
   sqlserver_data:
   redisdata:
   prometheus_data:
   grafana_data:
-
 
 networks:
   onlinestore-network:
