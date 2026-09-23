@@ -56,12 +56,12 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(increase(onlinestore_auth_login_attempts_total[1h]))",
+          "expr": "sum(increase(onlinestore_auth_login_attempts_total[$__range]))",
           "legendFormat": "Total Attempts",
           "refId": "A"
         }
       ],
-      "title": "Login Attempts (last 1h)",
+      "title": "Login Attempts (selected range)",
       "type": "stat"
     },
     {
@@ -108,12 +108,12 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(increase(onlinestore_auth_login_success_logins_total[1h]))",
+          "expr": "sum(increase(onlinestore_auth_login_success_logins_total[$__range]))",
           "legendFormat": "Successful",
           "refId": "A"
         }
       ],
-      "title": "Login Success (last 1h)",
+      "title": "Login Success (selected range)",
       "type": "stat"
     },
     {
@@ -168,12 +168,12 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(increase(onlinestore_auth_login_failure_failures_total[1h]))",
+          "expr": "sum(increase(onlinestore_auth_login_failure_failures_total[$__range]))",
           "legendFormat": "Failures",
           "refId": "A"
         }
       ],
-      "title": "Login Failures (last 1h)",
+      "title": "Login Failures (selected range)",
       "type": "stat"
     },
     {
@@ -220,12 +220,12 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(increase(onlinestore_auth_register_success_registrations_total[1h]))",
+          "expr": "sum(increase(onlinestore_auth_register_success_registrations_total[$__range]))",
           "legendFormat": "Registrations",
           "refId": "A"
         }
       ],
-      "title": "Registrations (last 1h)",
+      "title": "Registrations (selected range)",
       "type": "stat"
     },
     {
@@ -266,17 +266,17 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(onlinestore_cache_hit_hits_total[1h]))",
+          "expr": "sum(increase(onlinestore_cache_hit_hits_total[$__range]))",
           "legendFormat": "Hits",
           "refId": "A"
         },
         {
-          "expr": "sum(increase(onlinestore_cache_miss_misses_total[1h]))",
+          "expr": "sum(increase(onlinestore_cache_miss_misses_total[$__range]))",
           "legendFormat": "Misses",
           "refId": "B"
         }
       ],
-      "title": "Cache Hits vs Misses (last 1h)",
+      "title": "Cache Hits vs Misses (selected range)",
       "type": "timeseries"
     },
     {
@@ -318,12 +318,12 @@
       },
       "targets": [
         {
-          "expr": "sum by (operation, cache_type) (increase(onlinestore_cache_operation_duration_milliseconds_sum[1h])) / sum by (operation, cache_type) (increase(onlinestore_cache_operation_duration_milliseconds_count[1h]))",
+          "expr": "sum by (operation, cache_type) (rate(onlinestore_cache_operation_duration_milliseconds_sum[$__rate_interval])) / sum by (operation, cache_type) (rate(onlinestore_cache_operation_duration_milliseconds_count[$__rate_interval]))",
           "legendFormat": "{{operation}} - {{cache_type}}",
           "refId": "A"
         }
       ],
-      "title": "Cache Operation Duration (avg, last 1h)",
+      "title": "Cache Operation Duration (avg)",
       "type": "timeseries"
     }
   ],
@@ -344,5 +344,5 @@
   "timezone": "browser",
   "title": "OnlineStore Overview",
   "uid": "onlinestore-overview",
-  "version": 2
+  "version": 3
 }
