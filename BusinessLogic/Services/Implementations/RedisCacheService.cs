@@ -23,9 +23,17 @@ public sealed class RedisCacheService : ICacheService
         activity?.SetTag("cache.key", key);
         activity?.SetTag("cache.type", typeof(T).Name);
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
             var cached = await _cache.GetStringAsync(key, ct);
+
+            stopwatch.Stop();
+            OnlineStoreMetrics.CacheDuration.Record(
+                stopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("operation", "get"),
+                new KeyValuePair<string, object?>("cache.type", typeof(T).Name));
 
             if (cached == null)
             {
@@ -46,6 +54,7 @@ public sealed class RedisCacheService : ICacheService
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
@@ -59,6 +68,8 @@ public sealed class RedisCacheService : ICacheService
         if (expiry.HasValue)
             activity?.SetTag("cache.expiry_seconds", expiry.Value.TotalSeconds);
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
             var options = new DistributedCacheEntryOptions();
@@ -68,10 +79,17 @@ public sealed class RedisCacheService : ICacheService
             var serialized = JsonSerializer.Serialize(value);
             await _cache.SetStringAsync(key, serialized, options, ct);
 
+            stopwatch.Stop();
+            OnlineStoreMetrics.CacheDuration.Record(
+                stopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("operation", "set"),
+                new KeyValuePair<string, object?>("cache.type", typeof(T).Name));
+
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
@@ -82,13 +100,22 @@ public sealed class RedisCacheService : ICacheService
         using var activity = ActivitySource.StartActivity("Cache.Remove", ActivityKind.Internal);
         activity?.SetTag("cache.key", key);
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
             await _cache.RemoveAsync(key, ct);
+
+            stopwatch.Stop();
+            OnlineStoreMetrics.CacheDuration.Record(
+                stopwatch.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("operation", "remove"));
+
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
