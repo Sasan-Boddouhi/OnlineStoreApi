@@ -22,6 +22,7 @@ using Online_Store_Application.Extensions;
 using Online_Store_Application.Middleware;
 using Online_Store_Application.Services;
 using Serilog;
+using Serilog.Enrichers.Span;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -30,6 +31,7 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 Log.Logger = new LoggerConfiguration()
+    .Enrich.WithSpan()
     .ReadFrom.Configuration(builder.Configuration)
     .CreateLogger();
 
