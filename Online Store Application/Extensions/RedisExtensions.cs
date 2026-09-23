@@ -25,7 +25,7 @@ public static class RedisExtensions
             options.Configuration = redisOptions.Configuration;
             options.InstanceName = redisOptions.InstanceName;
             options.ConnectionMultiplexerFactory =
-                () => Task.FromResult(multiplexer);
+                () => Task.FromResult<IConnectionMultiplexer>(multiplexer);
         });
 
         return services;
