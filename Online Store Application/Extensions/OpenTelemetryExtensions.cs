@@ -71,8 +71,22 @@ public static class OpenTelemetryExtensions
                     .AddHttpClientInstrumentation()
                     .AddSource("OnlineStore.Auth")
                     .AddSource("OnlineStore.Services")
-                    .AddSource("OnlineStore.Cache")
-                    .AddOtlpExporter(otlp =>
+                    .AddSource("OnlineStore.Cache");
+
+                if (options.IncludeEfCore)
+                {
+                    tracing.AddEntityFrameworkCoreInstrumentation();
+                }
+
+                if (options.IncludeRedis)
+                {
+                    tracing.AddRedisInstrumentation(redisOptions =>
+                    {
+                        redisOptions.SetVerboseDatabaseStatements = false;
+                    });
+                }
+
+                tracing.AddOtlpExporter(otlp =>
                     {
                         otlp.Endpoint = new Uri(options.Endpoint);
                         otlp.TimeoutMilliseconds = options.ExportTimeoutMs;

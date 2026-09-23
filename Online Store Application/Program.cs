@@ -103,6 +103,15 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
+    ?? new RedisOptions
+    {
+        Configuration = "localhost:6379",
+        InstanceName = "OnlineStore_Test:"
+    };
+
+builder.Services.AddRedis(redisOptions);
+
 // Register OtelOptions with validation
 builder.Services.AddOpenTelemetryOptions(builder.Configuration);
 
@@ -129,12 +138,6 @@ builder.Services.AddOptions<DatabaseOptions>()
 
 builder.Services.AddDataLayerServices(databaseOptions);
 
-var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
-    ?? new RedisOptions
-    {
-        Configuration = "localhost:6379",
-        InstanceName = "OnlineStore_Test:"
-    };
 builder.Services.AddApplicationHealthChecks(databaseOptions, redisOptions);
 
 builder.Services.AddBusinessLogicServices();
@@ -311,8 +314,6 @@ if (!builder.Environment.IsEnvironment("Testing"))
         options.InstanceName = redisOptions.InstanceName;
     });
 }
-
-builder.Services.AddRedis(redisOptions);
 
 var app = builder.Build();
 
