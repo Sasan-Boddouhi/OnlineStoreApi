@@ -1,4 +1,5 @@
-﻿using Application.Interfaces.Services;
+﻿using System.Diagnostics;
+using Application.Interfaces.Services;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 
@@ -6,6 +7,8 @@ namespace BusinessLogic.Services.Implementations;
 
 public sealed class RedisCacheService : ICacheService
 {
+    private static readonly ActivitySource ActivitySource = new("OnlineStore.Cache");
+
     private readonly IDistributedCache _cache;
 
     public RedisCacheService(IDistributedCache cache)
@@ -15,22 +18,72 @@ public sealed class RedisCacheService : ICacheService
 
     public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default) where T : class
     {
-        var cached = await _cache.GetStringAsync(key, ct);
-        return cached == null ? null : JsonSerializer.Deserialize<T>(cached);
+        using var activity = ActivitySource.StartActivity("Cache.Get", ActivityKind.Internal);
+        activity?.SetTag("cache.key", key);
+        activity?.SetTag("cache.type", typeof(T).Name);
+
+        try
+        {
+            var cached = await _cache.GetStringAsync(key, ct);
+
+            if (cached == null)
+            {
+                activity?.SetTag("cache.hit", false);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                return null;
+            }
+
+            activity?.SetTag("cache.hit", true);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            return JsonSerializer.Deserialize<T>(cached);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null, CancellationToken ct = default) where T : class
     {
-        var options = new DistributedCacheEntryOptions();
+        using var activity = ActivitySource.StartActivity("Cache.Set", ActivityKind.Internal);
+        activity?.SetTag("cache.key", key);
+        activity?.SetTag("cache.type", typeof(T).Name);
         if (expiry.HasValue)
-            options.AbsoluteExpirationRelativeToNow = expiry;
+            activity?.SetTag("cache.expiry_seconds", expiry.Value.TotalSeconds);
 
-        var serialized = JsonSerializer.Serialize(value);
-        await _cache.SetStringAsync(key, serialized, options, ct);
+        try
+        {
+            var options = new DistributedCacheEntryOptions();
+            if (expiry.HasValue)
+                options.AbsoluteExpirationRelativeToNow = expiry;
+
+            var serialized = JsonSerializer.Serialize(value);
+            await _cache.SetStringAsync(key, serialized, options, ct);
+
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
-        await _cache.RemoveAsync(key, ct);
+        using var activity = ActivitySource.StartActivity("Cache.Remove", ActivityKind.Internal);
+        activity?.SetTag("cache.key", key);
+
+        try
+        {
+            await _cache.RemoveAsync(key, ct);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 }
