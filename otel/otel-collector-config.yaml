@@ -23,12 +23,6 @@ exporters:
     tls:
       insecure: true
 
-debug:
-  verbosity: detailed
-  use_internal_logger: false
-  output_paths:
-    - stderr
-
 service:
   telemetry:
     logs:
@@ -38,4 +32,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/jaeger, debug]
+      exporters: [otlp/jaeger]
