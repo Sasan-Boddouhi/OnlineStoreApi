@@ -52,6 +52,29 @@ services:
     networks:
       - onlinestore-network
 
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: onlinestore-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_LOG_LEVEL=warn
+    volumes:
+      - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./otel/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    mem_limit: 256m
+    depends_on:
+      - prometheus
+      - jaeger
+    networks:
+      - onlinestore-network
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.115.1
     container_name: onlinestore-otel-collector
@@ -114,6 +137,7 @@ volumes:
   sqlserver_data:
   redisdata:
   prometheus_data:
+  grafana_data:
 
 
 networks:
