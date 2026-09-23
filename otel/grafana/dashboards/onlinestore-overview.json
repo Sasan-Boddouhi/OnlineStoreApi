@@ -318,7 +318,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (operation, cache_type) (rate(onlinestore_cache_operation_duration_milliseconds_sum[$__rate_interval])) / sum by (operation, cache_type) (rate(onlinestore_cache_operation_duration_milliseconds_count[$__rate_interval]))",
+          "expr": "sum by (operation, cache_type) (onlinestore_cache_operation_duration_milliseconds_sum) / sum by (operation, cache_type) (onlinestore_cache_operation_duration_milliseconds_count)",
           "legendFormat": "{{operation}} - {{cache_type}}",
           "refId": "A"
         }
