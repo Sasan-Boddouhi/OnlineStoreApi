@@ -14,6 +14,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
+using Application.Diagnostics;
 
 public sealed class AuthService : IAuthService
 {
@@ -22,6 +24,8 @@ public sealed class AuthService : IAuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
     private readonly ILogger<AuthService> _logger;
+
+    private static readonly ActivitySource ActivitySource = new("OnlineStore.Auth");
 
     private static readonly TimeSpan AbsoluteExpirationPeriod = TimeSpan.FromDays(30);
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
@@ -44,6 +48,10 @@ public sealed class AuthService : IAuthService
     // ================= REGISTER =================
     public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
     {
+        using var activity = ActivitySource.StartActivity("RegisterUser", ActivityKind.Internal);
+        activity?.SetTag("user.first_name", dto.FirstName);
+        activity?.SetTag("user.last_name", dto.LastName);
+
         await _unitOfWork.BeginTransactionAsync(ct);
 
         try
@@ -52,7 +60,10 @@ public sealed class AuthService : IAuthService
                 .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, ct);
 
             if (exists)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, "Phone already exists");
                 throw new BusinessException("شماره تماس تکراری است.", "USER_PHONE_EXISTS");
+            }
 
             var user = new User
             {
@@ -76,7 +87,7 @@ public sealed class AuthService : IAuthService
 
             var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
 
-            _logger.LogInformation("User {UserId} registered and creating initial session from IP {IP}", user.UserId, dto.IpAddress);
+            _logger.LogInformation("User {UserId} registered and creating initial session", user.UserId);
 
             await _unitOfWork.Repository<UserSession>().AddAsync(session, ct);
             await _unitOfWork.SaveChangesAsync(ct);
@@ -86,11 +97,18 @@ public sealed class AuthService : IAuthService
 
             await _unitOfWork.CommitTransactionAsync(ct);
 
+            OnlineStoreMetrics.UserRegistrations.Add(1);
+
+            activity?.SetTag("user.id", user.UserId);
+            activity?.SetTag("session.id", session.Id);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
             return authResult;
         }
-        catch
+        catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(ct);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
     }
@@ -98,8 +116,12 @@ public sealed class AuthService : IAuthService
     // ================= LOGIN =================
     public async Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken ct = default)
     {
+        using var activity = ActivitySource.StartActivity("Login", ActivityKind.Internal);
+
         const int maxFailed = 5;
         const int lockMinutes = 15;
+
+        OnlineStoreMetrics.LoginAttempts.Add(1);
 
         var user = await _unitOfWork.Repository<User>()
             .FirstOrDefaultAsync(
@@ -113,12 +135,26 @@ public sealed class AuthService : IAuthService
 
         if (user is null)
         {
-            _logger.LogWarning("Login failed. User not found {Phone}", dto.PhoneNumber);
+            OnlineStoreMetrics.LoginFailure.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", "user_not_found"));
+
+            _logger.LogWarning("Login failed. User not found");
+            activity?.SetStatus(ActivityStatusCode.Error, "User not found");
             return null;
         }
 
+        activity?.SetTag("user.id", user.UserId);
+
         if (user.LockoutEnd.HasValue && user.LockoutEnd > DateTime.UtcNow)
+        {
+            OnlineStoreMetrics.LoginFailure.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", "account_locked"));
+
+            activity?.SetStatus(ActivityStatusCode.Error, "Account locked");
             return null;
+        }
 
         if (!_passwordHasher.Verify(dto.Password, user.PasswordHash))
         {
@@ -129,7 +165,13 @@ public sealed class AuthService : IAuthService
 
             await _unitOfWork.SaveChangesAsync(ct);
 
+            OnlineStoreMetrics.LoginFailure.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", "invalid_password"));
+
             _logger.LogWarning("Invalid password for {UserId}", user.UserId);
+            activity?.SetTag("auth.failed_attempts", user.FailedLoginAttempts);
+            activity?.SetStatus(ActivityStatusCode.Error, "Invalid password");
             return null;
         }
 
@@ -148,7 +190,7 @@ public sealed class AuthService : IAuthService
 
             var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
 
-            _logger.LogInformation("User {UserId} logged in from {IP}", user.UserId, dto.IpAddress);
+            _logger.LogInformation("User {UserId} logged in", user.UserId);
 
             await _unitOfWork.Repository<UserSession>().AddAsync(session, ct);
             await _unitOfWork.SaveChangesAsync(ct);
@@ -157,11 +199,17 @@ public sealed class AuthService : IAuthService
 
             await _unitOfWork.CommitTransactionAsync(ct);
 
+            activity?.SetTag("session.id", session.Id);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            OnlineStoreMetrics.LoginSuccess.Add(1);
+
             return result;
         }
-        catch
+        catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(ct);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
     }
@@ -169,6 +217,8 @@ public sealed class AuthService : IAuthService
     // ================= REFRESH =================
     public async Task<AuthResultDto?> RefreshTokenAsync(string refreshToken, CancellationToken ct = default)
     {
+        using var activity = ActivitySource.StartActivity("RefreshToken", ActivityKind.Internal);
+
         var identifier = ComputeSha256Hash(refreshToken);
 
         var token = await _unitOfWork.Repository<RefreshTokenEntity>()
@@ -183,7 +233,10 @@ public sealed class AuthService : IAuthService
                 ct);
 
         if (token is null)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "Token not found");
             return null;
+        }
 
         // If expired by expiry date -> revoke and return null
         if (token.ExpiryDate < DateTime.UtcNow)
@@ -192,8 +245,14 @@ public sealed class AuthService : IAuthService
             token.RevokedAtUtc = DateTime.UtcNow;
             await _unitOfWork.SaveChangesAsync(ct);
             _logger.LogInformation("Expired refresh token used (UserId={UserId}, SessionId={SessionId})", token.UserId, token.SessionId);
+            activity?.SetTag("user.id", token.UserId);
+            activity?.SetTag("session.id", token.SessionId);
+            activity?.SetStatus(ActivityStatusCode.Error, "Refresh token expired");
             return null;
         }
+
+        activity?.SetTag("user.id", token.UserId);
+        activity?.SetTag("session.id", token.SessionId);
 
         // Refresh token reuse detection:
         if (token.IsRevoked)
@@ -201,6 +260,8 @@ public sealed class AuthService : IAuthService
             if (token.ReplacedByTokenId == null)
             {
                 // token already revoked and not rotated -> possible reuse attack
+                OnlineStoreMetrics.RefreshTokenReuse.Add(1);
+
                 _logger.LogWarning("Refresh token reuse detected for UserId={UserId}, SessionId={SessionId}", token.UserId, token.SessionId);
                 if (token.Session != null)
                 {
@@ -213,6 +274,9 @@ public sealed class AuthService : IAuthService
                 // Token was revoked due to normal rotation (ReplacedByTokenId != null).
                 _logger.LogInformation("Stale refresh token presented after normal rotation (UserId={UserId}, SessionId={SessionId})", token.UserId, token.SessionId);
             }
+            activity?.SetStatus(ActivityStatusCode.Error, token.ReplacedByTokenId == null
+                ? "Refresh token reuse detected"
+                : "Stale refresh token");
             return null;
         }
 
@@ -221,6 +285,7 @@ public sealed class AuthService : IAuthService
         {
             // signature mismatch -> treat as suspicious and revoke session
             _logger.LogWarning("Refresh token signature mismatch for UserId={UserId}, SessionId={SessionId}", token.UserId, token.SessionId);
+            activity?.SetStatus(ActivityStatusCode.Error, "Refresh token signature mismatch");
             if (token.Session != null)
             {
                 await RevokeSessionAndTokensAsync(token.Session, "Refresh token signature mismatch", ct, useTransaction: false);
@@ -229,12 +294,16 @@ public sealed class AuthService : IAuthService
         }
 
         if (token.Session.Status != UserSession.SessionStatus.Active)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "Session inactive");
             return null;
+        }
 
         if (token.Session.IsIdleExpired(IdleTimeout) || token.Session.IsAbsoluteExpired())
         {
             token.Session.Status = UserSession.SessionStatus.Expired;
             await _unitOfWork.SaveChangesAsync(ct);
+            activity?.SetStatus(ActivityStatusCode.Error, "Session expired");
             return null;
         }
 
@@ -274,6 +343,8 @@ public sealed class AuthService : IAuthService
 
             await _unitOfWork.CommitTransactionAsync(ct);
 
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
             return new AuthResultDto
             {
                 AccessToken = accessToken,
@@ -291,11 +362,13 @@ public sealed class AuthService : IAuthService
                 token?.UserId,
                 token?.Id);
 
+            activity?.SetStatus(ActivityStatusCode.Error, "Refresh token concurrency conflict");
             return null;
         }
-        catch
+        catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(ct);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
     }
@@ -303,17 +376,28 @@ public sealed class AuthService : IAuthService
     // ================= LOGOUT =================
     public async Task LogoutSessionAsync(Guid sessionId, CancellationToken ct = default)
     {
+        using var activity = ActivitySource.StartActivity("LogoutSession", ActivityKind.Internal);
+        activity?.SetTag("session.id", sessionId);
+
         var session = await _unitOfWork.Repository<UserSession>()
             .GetByIdAsync(sessionId, ct);
 
-        if (session is null) return;
-
-        // if already not active, nothing to do
-        if (session.Status != UserSession.SessionStatus.Active)
+        if (session is null)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "Session not found");
             return;
+        }
 
-        // revoke session and all related refresh tokens
+        if (session.Status != UserSession.SessionStatus.Active)
+        {
+            activity?.SetStatus(ActivityStatusCode.Ok, "Already revoked");
+            return;
+        }
+
+        activity?.SetTag("user.id", session.UserId);
+
         await RevokeSessionAndTokensAsync(session, "User logout", ct);
+        activity?.SetStatus(ActivityStatusCode.Ok);
     }
 
     public async Task LogoutAllAsync(int userId, CancellationToken ct = default)

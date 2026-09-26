@@ -22,6 +22,7 @@ using Online_Store_Application.Extensions;
 using Online_Store_Application.Middleware;
 using Online_Store_Application.Services;
 using Serilog;
+using Serilog.Enrichers.Span;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -30,6 +31,7 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 Log.Logger = new LoggerConfiguration()
+    .Enrich.WithSpan()
     .ReadFrom.Configuration(builder.Configuration)
     .CreateLogger();
 
@@ -103,6 +105,23 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
+    ?? new RedisOptions
+    {
+        Configuration = "localhost:6379",
+        InstanceName = "OnlineStore_Test:"
+    };
+
+builder.Services.AddRedis(redisOptions);
+
+// Register OtelOptions with validation
+builder.Services.AddOpenTelemetryOptions(builder.Configuration);
+
+// Start OpenTelemetry SDK (traces + metrics, no logs yet)
+builder.Services.AddOpenTelemetryServices(
+    builder.Configuration,
+    builder.Environment);
+
 builder.Services.AddOptions<Application.Options.DatabaseOptions>()
     .Bind(builder.Configuration.GetSection(Application.Options.DatabaseOptions.SectionName))
     .ValidateDataAnnotations()
@@ -121,12 +140,6 @@ builder.Services.AddOptions<DatabaseOptions>()
 
 builder.Services.AddDataLayerServices(databaseOptions);
 
-var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
-    ?? new RedisOptions
-    {
-        Configuration = "localhost:6379",
-        InstanceName = "OnlineStore_Test:"
-    };
 builder.Services.AddApplicationHealthChecks(databaseOptions, redisOptions);
 
 builder.Services.AddBusinessLogicServices();
@@ -303,8 +316,6 @@ if (!builder.Environment.IsEnvironment("Testing"))
         options.InstanceName = redisOptions.InstanceName;
     });
 }
-
-builder.Services.AddRedis(redisOptions);
 
 var app = builder.Build();
 
