@@ -87,7 +87,7 @@ public sealed class AuthService : IAuthService
 
             var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
 
-            _logger.LogInformation("User {UserId} registered and creating initial session from IP {IP}", user.UserId, dto.IpAddress);
+            _logger.LogInformation("User {UserId} registered and creating initial session", user.UserId);
 
             await _unitOfWork.Repository<UserSession>().AddAsync(session, ct);
             await _unitOfWork.SaveChangesAsync(ct);
@@ -139,7 +139,7 @@ public sealed class AuthService : IAuthService
                 1,
                 new KeyValuePair<string, object?>("reason", "user_not_found"));
 
-            _logger.LogWarning("Login failed. User not found {Phone}", dto.PhoneNumber);
+            _logger.LogWarning("Login failed. User not found");
             activity?.SetStatus(ActivityStatusCode.Error, "User not found");
             return null;
         }
@@ -190,7 +190,7 @@ public sealed class AuthService : IAuthService
 
             var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
 
-            _logger.LogInformation("User {UserId} logged in from {IP}", user.UserId, dto.IpAddress);
+            _logger.LogInformation("User {UserId} logged in", user.UserId);
 
             await _unitOfWork.Repository<UserSession>().AddAsync(session, ct);
             await _unitOfWork.SaveChangesAsync(ct);

@@ -1,9 +1,7 @@
-﻿version: "3.8"
-
 services:
 
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
     container_name: onlinestore-sqlserver
     environment:
       ACCEPT_EULA: "Y"
@@ -12,29 +10,63 @@ services:
       - sqlserver_data:/var/opt/mssql
     networks:
       - onlinestore-network
+    restart: unless-stopped
+    mem_limit: 1g
 
   redis:
     image: redis:7-alpine
     container_name: onlinestore-redis
     volumes:
       - redisdata:/data
-    networks:
-      - onlinestore-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - onlinestore-network
+    restart: unless-stopped
+    mem_limit: 128m
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: onlinestore-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+      - MEMORY_MAX_TRACES=5000
+    ports:
+      - "127.0.0.1:16686:16686"
+    mem_limit: 256m
+    networks:
+      - onlinestore-network
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: onlinestore-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector-prod-config.yaml:/etc/otel-collector-config.yaml:ro
+    mem_limit: 256m
+    depends_on:
+      - jaeger
+    networks:
+      - onlinestore-network
+    restart: unless-stopped
 
   api:
-    image: ghcr.io/sasan-boddouhi/onlinestoreapi:latest
+    image: ghcr.io/sasan-boddouhi/onlinestoreapi:${IMAGE_TAG}
     container_name: onlinestore-api
+
     depends_on:
       - sqlserver
       - redis
+      - otel-collector
+
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ASPNETCORE_URLS: "http://+:80"
+      ASPNETCORE_URLS: "http://0.0.0.0:80"
       Swagger__Enabled: "false"
 
       ConnectionStrings__DefaultConnection: >-
@@ -45,26 +77,31 @@ services:
         TrustServerCertificate=True;
 
       Jwt__Key: ${JWT_KEY}
-      Jwt__Issuer: ${JWT_ISSUER:-OnlineStoreApi}
-      Jwt__Audience: ${JWT_AUDIENCE:-OnlineStoreClient}
+      Jwt__Issuer: "OnlineStoreApi"
+      Jwt__Audience: "OnlineStoreClient"
 
       Redis__Configuration: "redis:6379"
       Redis__InstanceName: "OnlineStore:"
 
+      OpenTelemetry__Enabled: ${OTEL__ENABLED:-true}
+      OpenTelemetry__Endpoint: "http://otel-collector:4317"
+      OpenTelemetry__TraceSamplingRatio: "0.1"
+      OpenTelemetry__ServiceName: "OnlineStoreApi"
+      OpenTelemetry__IncludeEfCore: "true"
+      OpenTelemetry__IncludeRedis: "true"
+
+      GIT_COMMIT: ${GIT_COMMIT}
+
     ports:
       - "5000:80"
-
+    mem_limit: 512m
     networks:
       - onlinestore-network
+    restart: unless-stopped
 
 volumes:
   sqlserver_data:
-    external: true
-    name: onlinestoreapi_sqlserver_data
-
   redisdata:
-    external: true
-    name: onlinestoreapi_redisdata
 
 networks:
   onlinestore-network:
