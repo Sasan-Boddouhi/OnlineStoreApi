@@ -186,6 +186,42 @@ jobs:
 
     steps:
 
+      - name: Checkout deployment configuration
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sync production deployment files
+        run: |
+          set -e
+          mkdir -p ~/onlinestore-prod/otel
+          cp docker-compose.prod.yml ~/onlinestore-prod/docker-compose.prod.yml
+          cp otel/otel-collector-prod-config.yaml ~/onlinestore-prod/otel/otel-collector-prod-config.yaml
+          echo "Production Compose and OTEL configuration synced from commit ${GITHUB_SHA}"
+
+      - name: Migrate legacy production network
+        run: |
+          set -e
+          cd ~/onlinestore-prod
+
+          LEGACY_FOUND=false
+          for c in onlinestore-redis onlinestore-otel-collector onlinestore-jaeger; do
+            if docker inspect "$c" >/dev/null 2>&1; then
+              project="$(docker inspect "$c" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
+              if [ "$project" = "onlinestoreapi" ]; then
+                LEGACY_FOUND=true
+              fi
+            fi
+          done
+
+          if [ "$LEGACY_FOUND" = "true" ]; then
+            echo "Legacy production Compose containers detected; running network migration."
+            chmod +x "$GITHUB_WORKSPACE/scripts/migrate-production-network.sh"
+            "$GITHUB_WORKSPACE/scripts/migrate-production-network.sh"
+          else
+            echo "No legacy production Compose containers detected; migration already complete."
+          fi
+
       # ═══════════════════════════════════════════════════════════
       # T4-I1
       # Capture the currently deployed production SHA.
