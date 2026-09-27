@@ -497,6 +497,35 @@ The key property is that **rollback is a recovery action, not a success override
 
 ---
 
+## Known Anomaly — Run #49
+
+During Run #49 (`36320012107`), the deployment of commit
+`40ce710f8a1f406e771df497d7e94e88915d83d3` completed successfully.
+
+Observed timeline:
+
+- `12:47:09.810` — `Capture Previous Version` returned `54f27a187558e542c46308106c0c1e0e395d85db`.
+- `12:47:12.821` — the new `onlinestore-api` container was created.
+- `12:47:13.392` — the new container started.
+- `12:47:33.763` — health verification passed.
+- `12:47:33.785` — `Verify Deployed Version` received a response containing the previous commit and the earlier `deployedAt` timestamp `12:47:09.798`.
+
+Subsequent read-only inspection confirmed that the running container used
+image `40ce710f8a1f406e771df497d7e94e88915d83d3`, had
+`GIT_COMMIT=40ce710f8a1f406e771df497d7e94e88915d83d3`, and returned the
+new commit from `/version`.
+
+The exact cause of the stale response was not reproduced and remains
+undetermined. Possible transient Docker port/routing behavior during
+container replacement was considered, but was not established as the
+root cause.
+
+No production configuration change was made as a result of this anomaly.
+The version verification now retries transient mismatches and fails the
+deployment job if the expected full SHA is still not observed.
+
+---
+
 ## Related Documentation
 
 - [`architecture.md`](architecture.md) — application architecture and dependency structure.

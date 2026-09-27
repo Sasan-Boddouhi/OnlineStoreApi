@@ -449,17 +449,40 @@ jobs:
         if: steps.verify-new.outcome == 'success'
         continue-on-error: true
         run: |
+          EXPECTED_SHA="$GITHUB_SHA"
+          MAX_ATTEMPTS=5
+          DELAY=3
+          RESPONSE=""
+          ACTUAL_SHA=""
 
-          RESPONSE=$(curl --silent --fail --max-time 10 \
-            http://localhost:5000/version || true)
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            RESPONSE=$(curl --silent --fail --max-time 10 \
+              http://localhost:5000/version || true)
 
-          echo "Response: $RESPONSE"
+            ACTUAL_SHA=$(echo "$RESPONSE" |
+              grep -oE '"commit":"[a-f0-9]{40}"' |
+              grep -oE '[a-f0-9]{40}' |
+              head -1 || true)
 
-          if echo "$RESPONSE" | grep -q "${GITHUB_SHA:0:7}"; then
-            echo "✅ Deployed commit matches ${GITHUB_SHA:0:7}"
-          else
-            echo "⚠️ Deployed commit does NOT match ${GITHUB_SHA:0:7}"
-          fi
+            echo "Attempt $attempt/$MAX_ATTEMPTS"
+            echo "Expected: $EXPECTED_SHA"
+            echo "Actual:   ${ACTUAL_SHA:-<empty>}"
+            echo "Response: $RESPONSE"
+
+            if [[ "$ACTUAL_SHA" == "$EXPECTED_SHA" ]]; then
+              echo "✅ Deployed commit matches $EXPECTED_SHA"
+              exit 0
+            fi
+
+            if (( attempt < MAX_ATTEMPTS )); then
+              echo "Version mismatch; retrying in ${DELAY}s..."
+              sleep "$DELAY"
+            fi
+          done
+
+          echo "❌ Deployed commit does NOT match $EXPECTED_SHA after $MAX_ATTEMPTS attempts"
+          echo "Last response: $RESPONSE"
+          exit 1
 
 
       # ═══════════════════════════════════════════════════════════
@@ -667,14 +690,18 @@ jobs:
       - name: Fail Job if Deployment Was Not Successful
         if: |
           always() &&
-          steps.verify-new.outcome != 'success'
+          (
+            steps.verify-new.outcome != 'success' ||
+            steps.verify-version.outcome == 'failure'
+          )
         run: |
 
           echo "❌ Production deployment did not complete successfully."
 
-          echo "Deploy outcome:     ${{ steps.deploy-new.outcome }}"
-          echo "New health outcome: ${{ steps.verify-new.outcome }}"
-          echo "Rollback outcome:   ${{ steps.rollback.outcome }}"
-          echo "Previous SHA:       ${{ steps.previous.outputs.previous_sha }}"
+          echo "Deploy outcome:        ${{ steps.deploy-new.outcome }}"
+          echo "New health outcome:    ${{ steps.verify-new.outcome }}"
+          echo "Rollback outcome:      ${{ steps.rollback.outcome }}"
+          echo "Version check outcome: ${{ steps.verify-version.outcome }}"
+          echo "Previous SHA:          ${{ steps.previous.outputs.previous_sha }}"
 
           exit 1
