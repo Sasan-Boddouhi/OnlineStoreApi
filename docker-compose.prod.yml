@@ -47,7 +47,7 @@ services:
     container_name: onlinestore-otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ./otel/otel-collector-prod-config.yaml:/etc/otel-collector-config.yaml:ro
+      - ${OTEL_CONFIG_PATH:-./otel/otel-collector-prod-config.yaml}:/etc/otel-collector-config.yaml:ro
     mem_limit: 256m
     depends_on:
       - jaeger
