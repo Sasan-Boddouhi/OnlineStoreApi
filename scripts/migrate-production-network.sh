@@ -78,7 +78,7 @@ done
 
 log "Verifying target network membership"
 for c in onlinestore-api onlinestore-sqlserver onlinestore-redis onlinestore-otel-collector onlinestore-jaeger; do
-  docker inspect "$c" --format '{{json .NetworkSettings.Networks}}' | grep -q "\"\$NETWORK\"" || die "$c is not connected to $NETWORK"
+  docker inspect "$c" --format '{{json .NetworkSettings.Networks}}' | grep -q "\"$NETWORK\"" || die "$c is not connected to $NETWORK"
 done
 
 log "Verifying API -> SQL and API -> Redis"
@@ -100,4 +100,4 @@ log "Migration completed successfully"
 echo "Backup: $BACKUP_DIR"
 echo "Project: $PROJECT"
 echo "Network: $NETWORK"
-echo "Legacy network may remain until explicitly removed."
+if docker network inspect "$LEGACY_NETWORK" >/dev/null 2>&1; then\n  attached="$(docker network inspect "$LEGACY_NETWORK" --format "{{len .Containers}}")"\n  if [[ "$attached" == "0" ]]; then\n    docker network rm "$LEGACY_NETWORK" >/dev/null || true\n    log "Removed empty legacy network $LEGACY_NETWORK"\n  else\n    log "Legacy network $LEGACY_NETWORK still has $attached attached container(s); leaving it untouched"\n  fi\nfi
