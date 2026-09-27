@@ -83,7 +83,7 @@ services:
       Redis__Configuration: "redis:6379"
       Redis__InstanceName: "OnlineStore:"
 
-      OpenTelemetry__Enabled: ${OTEL__ENABLED:-true}
+      OpenTelemetry__Enabled: "${OTEL_ENABLED:-true}"
       OpenTelemetry__Endpoint: "http://otel-collector:4317"
       OpenTelemetry__TraceSamplingRatio: "0.1"
       OpenTelemetry__ServiceName: "OnlineStoreApi"
