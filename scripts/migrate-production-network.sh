@@ -86,11 +86,11 @@ done
 log "Verifying API -> SQL and API -> Redis"
 curl --fail --silent --max-time 10 http://127.0.0.1:5000/health
 
-log "Verifying OTLP gRPC listener"
-docker exec onlinestore-api sh -c 'timeout 5 sh -c "</dev/tcp/otel-collector/4317"' >/dev/null 2>&1 || die "API container cannot reach otel-collector:4317"
+log "Verifying OTEL Collector OTLP/HTTP listener from API"
+docker exec onlinestore-api curl --silent --show-error --output /dev/null --connect-timeout 5 http://otel-collector:4318   || die "API container cannot reach otel-collector:4318"
 
-log "Verifying Jaeger OTLP listener"
-docker exec onlinestore-otel-collector sh -c 'timeout 5 sh -c "</dev/tcp/jaeger/4317"' >/dev/null 2>&1 || die "OTEL collector cannot reach jaeger:4317"
+log "Verifying Jaeger OTLP/HTTP listener from API"
+docker exec onlinestore-api curl --silent --show-error --output /dev/null --connect-timeout 5 http://jaeger:4318   || die "API container cannot reach jaeger:4318"
 
 log "Verifying Redis data volume"
 docker inspect onlinestore-redis --format '{{range .Mounts}}{{if eq .Name "onlinestoreapi_redisdata"}}OK{{end}}{{end}}' | grep -q '^OK$' || die "Redis external volume is not attached"
