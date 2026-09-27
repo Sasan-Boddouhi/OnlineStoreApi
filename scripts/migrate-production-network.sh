@@ -6,6 +6,8 @@ COMPOSE_FILE="${COMPOSE_FILE:-$COMPOSE_DIR/docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
 PROJECT="${PROJECT:-onlinestore-prod}"
 NETWORK="${NETWORK:-onlinestore-prod_onlinestore-network}"
+# Always resolve the collector config from the deployment directory during migration.
+export OTEL_CONFIG_PATH="${OTEL_CONFIG_PATH:-$COMPOSE_DIR/otel/otel-collector-prod-config.yaml}"
 STAMP="$(date -u +%Y%m%d_%H%M%S)"
 BACKUP_DIR="$COMPOSE_DIR/.network-migration-backup-$STAMP"
 
