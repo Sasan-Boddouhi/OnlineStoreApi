@@ -24,6 +24,73 @@ services:
     networks:
       - onlinestore-network
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: onlinestore-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+    mem_limit: 256m
+    networks:
+      - onlinestore-network
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: onlinestore-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    mem_limit: 256m
+    networks:
+      - onlinestore-network
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: onlinestore-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_LOG_LEVEL=warn
+    volumes:
+      - ./otel/grafana/provisioning/datasources/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./otel/grafana/provisioning/dashboards/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./otel/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    mem_limit: 256m
+    depends_on:
+      - prometheus
+      - jaeger
+    networks:
+      - onlinestore-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: onlinestore-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    mem_limit: 256m
+    depends_on:
+      - jaeger
+    networks:
+      - onlinestore-network
+
   api:
     build:
       context: .
@@ -34,6 +101,7 @@ services:
     depends_on:
       - sqlserver
       - redis
+      - otel-collector
 
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -54,17 +122,22 @@ services:
       Redis__Configuration: "redis:6379"
       Redis__InstanceName: "OnlineStore:"
 
+      OpenTelemetry__Enabled: "true"
+      OpenTelemetry__Endpoint: "http://otel-collector:4317"
+      OpenTelemetry__TraceSamplingRatio: "1.0"
+      OpenTelemetry__PrometheusExporterPort: "8889"
+
     ports:
       - "5000:80"
 
     networks:
       - onlinestore-network
 
-
 volumes:
   sqlserver_data:
   redisdata:
-
+  prometheus_data:
+  grafana_data:
 
 networks:
   onlinestore-network:

@@ -9,6 +9,7 @@ The repository is designed as a practical backend engineering project: applicati
 ## Table of Contents
 
 - [Features](#features)
+- [Key Highlights](#key-highlights)
 - [Architecture](#architecture)
 - [Query Pipeline](#query-pipeline)
 - [Authentication and Security](#authentication-and-security)
@@ -24,13 +25,20 @@ The repository is designed as a practical backend engineering project: applicati
 - [Health and Version Endpoints](#health-and-version-endpoints)
 - [Documentation](#documentation)
 - [Repository Workflow](#repository-workflow)
+- [Roadmap](#roadmap)
 - [License](#license)
 
 ---
 
 ## Features
 
-### Architecture
+### Key Highlights
+
+* End-to-end observability with OpenTelemetry
+
+---
+
+## Architecture
 
 - Layered architecture with dependency inversion
 - Repository Pattern
@@ -77,10 +85,15 @@ The repository is designed as a practical backend engineering project: applicati
 
 ### Observability
 
-- Structured logging with Serilog
-- Query metrics middleware
-- Health checks
-- Version/commit endpoint
+- OpenTelemetry (traces + metrics + structured logs)
+- Distributed tracing with Jaeger
+- Custom business spans (Auth, Services, Cache)
+- EF Core query spans
+- Redis command spans
+- Prometheus metrics with Grafana dashboards (Local)
+- TraceId/SpanId correlation in Serilog output
+- Configurable head sampling (100% dev / 10% prod)
+- Kill switch (`OpenTelemetry__Enabled=false`)
 
 ### Developer Experience
 
@@ -432,13 +445,14 @@ The exact directory contents can evolve with the implementation; the architectur
 - Session Management
 - Rate Limiting
 
-### Observability and caching
+### Observability
 
-- Serilog
-- Query Metrics Middleware
-- Memory Cache
-- Redis
-- Health Checks
+- OpenTelemetry SDK 1.19
+- OTel Collector (traces + metrics pipelines)
+- Jaeger (trace UI)
+- Prometheus (metrics, Local only)
+- Grafana (dashboards, Local only)
+- Serilog + Serilog.Enrichers.Span
 
 ### Testing
 
@@ -597,6 +611,21 @@ Deployment Result
 ```
 
 Documentation-only changes are excluded from the push-triggered CI workflow by the workflow's `paths-ignore` configuration. Pull requests targeting `main` continue to use the pull-request workflow trigger.
+
+---
+
+## Roadmap
+
+- [x] Rate Limiting (login & refresh)
+- [x] Docker Containerization
+- [x] Health Checks (SQL Server + Redis)
+- [x] Redis Distributed Cache
+- [x] OpenTelemetry + Jaeger + Prometheus + Grafana
+- [x] CI/CD Pipeline with Rollback Automation
+- [ ] API Versioning
+- [ ] Background Processing
+- [ ] CQRS + MediatR
+- [ ] Kubernetes Deployment
 
 ---
 

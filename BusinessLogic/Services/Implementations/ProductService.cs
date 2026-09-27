@@ -1,4 +1,5 @@
-﻿using Application.Common.Queries;
+﻿using System.Diagnostics;
+using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -14,6 +15,8 @@ namespace BusinessLogic.Services.Implementations;
 
 public sealed class ProductService : IProductService
 {
+    private static readonly ActivitySource ActivitySource = new("OnlineStore.Services");
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUserService;
@@ -37,7 +40,11 @@ public sealed class ProductService : IProductService
         QueryContract<Product> query,
         CancellationToken cancellationToken = default)
     {
-        var spec = query.ToSpec();
+        using var activity = ActivitySource.StartActivity("Product.GetByQuery", ActivityKind.Internal);
+
+        try
+        {
+            var spec = query.ToSpec();
 
         var items = await _unitOfWork.Repository<Product>()
             .ListAsync(spec, ProductQueryConfig.Projection, cancellationToken);
@@ -58,23 +65,50 @@ public sealed class ProductService : IProductService
             pageSize = query.Size ?? 20;
         }
 
-        return new PagedResult<ProductDto>
+            activity?.SetTag("products.count", totalCount);
+            activity?.SetTag("page.number", pageNumber);
+            activity?.SetTag("page.size", pageSize);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            return new PagedResult<ProductDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+        }
+        catch (Exception ex)
         {
-            Items = items,
-            TotalCount = totalCount,
-            PageNumber = pageNumber,
-            PageSize = pageSize
-        };
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     public async Task<ProductDto?> GetByIdAsync(
         int id,
         CancellationToken cancellationToken = default)
     {
-        var spec = new Spec<Product>().Where(p => p.ProductId == id).Where(p => p.IsActive);
+        using var activity = ActivitySource.StartActivity("Product.GetById", ActivityKind.Internal);
+        activity?.SetTag("product.id", id);
 
-        return await _unitOfWork.Repository<Product>()
-            .FirstOrDefaultAsync(spec, ProductQueryConfig.Projection, cancellationToken);
+        try
+        {
+            var spec = new Spec<Product>().Where(p => p.ProductId == id).Where(p => p.IsActive);
+
+            var result = await _unitOfWork.Repository<Product>()
+                .FirstOrDefaultAsync(spec, ProductQueryConfig.Projection, cancellationToken);
+
+            activity?.SetTag("product.found", result != null);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     #endregion
@@ -83,6 +117,11 @@ public sealed class ProductService : IProductService
 
     public async Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
     {
+        using var activity = ActivitySource.StartActivity("Product.Create", ActivityKind.Internal);
+        activity?.SetTag("product.name", dto.Name);
+        activity?.SetTag("product.price", dto.Price);
+        activity?.SetTag("product.subcategory_id", dto.SubcategoryId);
+
         _logger.LogInformation("Creating product with name: {ProductName}", dto.Name);
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
@@ -95,18 +134,22 @@ public sealed class ProductService : IProductService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogInformation("Product created successfully with ID: {ProductId}", entity.ProductId);
+            activity?.SetTag("product.id", entity.ProductId);
+            activity?.SetStatus(ActivityStatusCode.Ok);
             return _mapper.Map<ProductDto>(entity);
         }
         catch (BusinessException)
         {
             // اگر خطای تجاری است، فقط rollback و دوباره پرتاب کن (بدون تغییر پیام)
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw new BusinessException("خطا در ایجاد محصول", "PRODUCT_CREATE_ERROR");
         }
     }
