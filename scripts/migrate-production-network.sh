@@ -6,6 +6,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-$COMPOSE_DIR/docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
 PROJECT="${PROJECT:-onlinestore-prod}"
 NETWORK="${NETWORK:-onlinestore-prod_onlinestore-network}"
+LEGACY_NETWORK="${LEGACY_NETWORK:-onlinestoreapi_onlinestore-network}"
 # Always resolve the collector config from the deployment directory during migration.
 export OTEL_CONFIG_PATH="${OTEL_CONFIG_PATH:-$COMPOSE_DIR/otel/otel-collector-prod-config.yaml}"
 STAMP="$(date -u +%Y%m%d_%H%M%S)"
@@ -102,4 +103,14 @@ log "Migration completed successfully"
 echo "Backup: $BACKUP_DIR"
 echo "Project: $PROJECT"
 echo "Network: $NETWORK"
-if docker network inspect "$LEGACY_NETWORK" >/dev/null 2>&1; then\n  attached="$(docker network inspect "$LEGACY_NETWORK" --format "{{len .Containers}}")"\n  if [[ "$attached" == "0" ]]; then\n    docker network rm "$LEGACY_NETWORK" >/dev/null || true\n    log "Removed empty legacy network $LEGACY_NETWORK"\n  else\n    log "Legacy network $LEGACY_NETWORK still has $attached attached container(s); leaving it untouched"\n  fi\nfi
+# Cleanup: remove legacy network if it's empty
+if docker network inspect "$LEGACY_NETWORK" >/dev/null 2>&1; then
+  attached="$(docker network inspect "$LEGACY_NETWORK" --format '{{len .Containers}}')"
+
+  if [[ "$attached" == "0" ]]; then
+    docker network rm "$LEGACY_NETWORK" >/dev/null || true
+    log "Removed empty legacy network $LEGACY_NETWORK"
+  else
+    log "Legacy network $LEGACY_NETWORK still has $attached attached container(s); leaving it untouched"
+  fi
+fi
