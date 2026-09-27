@@ -49,8 +49,6 @@ public sealed class AuthService : IAuthService
     public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
     {
         using var activity = ActivitySource.StartActivity("RegisterUser", ActivityKind.Internal);
-        activity?.SetTag("user.first_name", dto.FirstName);
-        activity?.SetTag("user.last_name", dto.LastName);
 
         await _unitOfWork.BeginTransactionAsync(ct);
 
