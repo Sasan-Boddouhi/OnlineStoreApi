@@ -483,8 +483,6 @@ public interface IBackgroundJobQueue
         string idempotencyKey,
         CancellationToken cancellationToken);
 
-    ValueTask<BackgroundJobEnvelope> DequeueAsync(
-        CancellationToken cancellationToken);
 }
 
 public interface IBackgroundJobHandler<in TJob>
