@@ -364,3 +364,4 @@ Before M2.4 is closed, the reviewer must confirm:
 - [ ] No test depends on arbitrary sleeps or wall-clock timing.
 
 **M2.4 Testing Strategy: Documented for review.**
+
