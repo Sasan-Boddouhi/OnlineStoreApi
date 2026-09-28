@@ -469,7 +469,16 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-038** — `JobType` must be a stable contract name independent of CLR assembly-qualified names.
 - **D-039** — `IdempotencyKey` validation rejects null, whitespace, and values exceeding configured maximum length.
 - **D-040** — Retry inbox is bounded with `Wait` semantics and timeout; failed acceptance terminates with `RetrySchedulerStarvation` rather than dropping a retry.
-- **D-041** — `IBackgroundJobQueue` exposes a producer-only Application contract. `DequeueAsync` belongs to an Infrastructure-internal consumer interface to enforce D-011's clear responsibility boundary.
+- **D-041** — `IBackgroundJobQueue` exposes a producer-only Application contract. `DequeueAsync` belongs to the Infrastructure-internal interface `IBackgroundJobConsumer` to enforce D-011's clear responsibility boundary.
+- **D-042** — The queue detects host shutdown through `IHostApplicationLifetime.ApplicationStopping`. Once shutdown begins, `EnqueueAsync` returns `EnqueueStatus.ShuttingDown` immediately without writing to the channel.
+- **D-043** — Introduce a dedicated `Infrastructure` project.
+  - **Rationale:** The approved Design Spec assigns ownership of background-processing infrastructure to a layer that does not yet exist in the solution. Introducing a dedicated Infrastructure project preserves the approved separation between Application contracts and Infrastructure implementations (D-002, D-011).
+  - **Decision:** Add `Infrastructure.csproj`. It references `Application` only. The API project references `Infrastructure` for runtime composition. The existing `DataLayer` project is not modified by this decision and remains the owner of persistence concerns.
+  - **Ownership policy:** Infrastructure owns background processing (queue, worker, dispatcher, scheduler), cross-cutting non-persistence concerns, and future external service adapters. DataLayer owns persistence (EF Core, repositories, migrations) and storage-specific concerns.
+  - **Namespace convention:** `Infrastructure.BackgroundJobs.*`.
+  - **Test folder convention:** `OnlineStore.Tests.Unit/BackgroundJobs/`.
+  - **Solution integration:** The new Infrastructure project is added to the existing `Online Store Application.sln`; no new solution is introduced.
+  - **Reference direction:** `Application` is referenced by both `DataLayer` and `Infrastructure`; the API references both. `Infrastructure` does not reference `DataLayer`.
 
 ## 33. Contract Signatures
 
@@ -522,7 +531,9 @@ public interface IRetryPolicy
 }
 ```
 
-The remaining shared result and exception types are:
+### 33.3 Cross-Layer Result and Exception Types
+
+These types live in the Application project and are consumed by Infrastructure through its Application project reference. They are cross-layer contracts, not a separate architecture layer. Keeping their ownership explicit prevents duplicate definitions in Infrastructure.
 
 ```csharp
 public enum EnqueueStatus
