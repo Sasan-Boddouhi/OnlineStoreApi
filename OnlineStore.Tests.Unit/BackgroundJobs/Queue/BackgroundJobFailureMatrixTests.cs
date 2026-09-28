@@ -434,7 +434,7 @@ public sealed class BackgroundJobFailureMatrixTests
 
         await scheduler.StartAsync(stoppingCts.Token);
 
-        var retry = CreateEnvelope();
+        var retry = CreateEnvelope(time);
 
         (await scheduler.ScheduleAsync(
             retry,
