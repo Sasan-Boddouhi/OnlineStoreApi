@@ -34,17 +34,14 @@ public sealed class BackgroundJobWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        while (true)
         {
             BackgroundJobEnvelope envelope;
 
             try
             {
-                envelope = await _consumer.DequeueAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
+                // Queue shutdown completes the writer and lets accepted work drain.
+                envelope = await _consumer.DequeueAsync(CancellationToken.None).ConfigureAwait(false);
             }
             catch (ChannelClosedException)
             {
@@ -53,13 +50,11 @@ public sealed class BackgroundJobWorker : BackgroundService
 
             try
             {
-                await _dispatcher.DispatchAsync(envelope, stoppingToken).ConfigureAwait(false);
+                // Host shutdown does not cancel an accepted execution; graceful drain
+                // is bounded by the host's StopAsync cancellation token.
+                await _dispatcher.DispatchAsync(envelope, CancellationToken.None).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 var attempt = envelope.Attempt + 1;
                 var context = new BackgroundJobExecutionContext(
@@ -80,7 +75,7 @@ public sealed class BackgroundJobWorker : BackgroundService
                     if (await _retryScheduler.ScheduleAsync(
                             retryEnvelope,
                             delay,
-                            stoppingToken).ConfigureAwait(false))
+                            CancellationToken.None).ConfigureAwait(false))
                     {
                         _logger.LogWarning(
                             exception,
@@ -112,6 +107,17 @@ public sealed class BackgroundJobWorker : BackgroundService
                     attempt);
             }
         }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        var executeTask = ExecuteTask;
+        if (executeTask is null)
+            return;
+
+        await Task.WhenAny(
+            executeTask,
+            Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken)).ConfigureAwait(false);
     }
 
     private TimeSpan GetRetryDelay(int attempt)

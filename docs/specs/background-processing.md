@@ -631,3 +631,9 @@ The implementation must preserve these invariants:
 **Design status: Approved for implementation.**
 
 
+
+
+## M2.7 Obligations
+
+- **FP-F20** — dedicated scheduler backoff interruption during host shutdown. Add deterministic coverage for the scheduler while it is inside its delayed-backoff path.
+- **FP-F28** — dedicated retry observability assertion. Verify the retry scheduling observability contract as part of the M2.7 observability surface.
