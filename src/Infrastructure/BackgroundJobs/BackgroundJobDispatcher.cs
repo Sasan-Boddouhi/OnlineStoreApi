@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Application.BackgroundJobs;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,7 +26,7 @@ public sealed class BackgroundJobDispatcher
         _scopeFactory = scopeFactory;
         _registrations = registrations
             .GroupBy(x => x.JobTypeName)
-            .ToDictionary(x => x.Key, x => x.Single());
+            .ToDictionary(x => x.Key, x => x.First());
         _timeProvider = timeProvider;
         _options = options.Value;
         _options.Validate();
@@ -83,13 +84,20 @@ public sealed class BackgroundJobDispatcher
                 ?? throw new InvalidOperationException(
                     $"Handler method was not found for '{envelope.JobType}'.");
 
-            var task = (Task?)handleMethod.Invoke(
-                handler,
-                new object?[] { job, context, executionCts.Token });
-
-            if (task is null)
-                throw new InvalidOperationException(
-                    $"Handler returned no Task for '{envelope.JobType}'.");
+            Task task;
+            try
+            {
+                task = (Task?)handleMethod.Invoke(
+                    handler,
+                    new object?[] { job, context, executionCts.Token })
+                    ?? throw new InvalidOperationException(
+                        $"Handler returned no Task for '{envelope.JobType}'.");
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+                throw;
+            }
 
             await task.WaitAsync(
                 TimeSpan.FromSeconds(_options.JobTimeoutSeconds),
