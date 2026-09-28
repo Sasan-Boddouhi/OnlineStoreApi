@@ -32,11 +32,11 @@ public class ApiVersioningIntegrationTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task UnsupportedVersion_ReturnsBadRequest()
+    public async Task UnsupportedVersion_ReturnsNotFound()
     {
         var response = await Client.GetAsync("/api/v2/products?pageNumber=1&pageSize=1");
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
