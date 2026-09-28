@@ -44,7 +44,7 @@ The Retry Scheduler must use a wait mechanism that is driven by `TimeProvider`. 
 
 A raw `Task.Delay(delay, cancellationToken)` that bypasses `TimeProvider` is not acceptable for scheduler timing because `FakeTimeProvider.Advance()` would not deterministically wake the scheduler.
 
-ASP.NET Core hosted services are long-running `BackgroundService` implementations and are expected to honor cancellation during graceful shutdown. citeturn0search1
+ASP.NET Core hosted services are long-running `BackgroundService` implementations and are expected to honor cancellation during graceful shutdown.
 
 ### 3.3 Other test doubles
 
@@ -72,11 +72,11 @@ Tests must not replace the component under test with a mock of the same behavior
 
 ### Attempt invariant
 
-`Attempt` is incremented at actual execution start, in Worker/Dispatcher, immediately before handler invocation.
+`Attempt` is 0 when a job is initially enqueued. The Worker/Dispatcher increments it to 1 immediately before the first handler invocation, and increments it once before each subsequent retry execution.
 
 It must not be incremented by the Retry Scheduler or by queue enqueue/requeue operations.
 
-This preserves the invariant that `Attempt` equals the number of execution attempts that actually started, including the case where a retry cannot be re-enqueued because the main queue is full.
+This preserves the invariant that `Attempt` equals the number of execution attempts that actually started. A retry that cannot be re-enqueued because the main queue is full therefore does not change `Attempt`.
 
 ## 5. Test Project Structure
 
@@ -200,11 +200,11 @@ Requirements:
 | Dispatcher | Correct handler, missing handler, duplicate handler configuration |
 | Worker | Success, retry scheduling, permanent failure, terminal timeout, host shutdown |
 | Job timeout | Retryable timeout enters retry path; terminal timeout becomes Cancelled with JobTimeout |
-| Cancellation | HostShutdown, JobTimeout, RetryQueueStarvation |
+| Cancellation | HostShutdown, JobTimeout, RetryQueueStarvation, RetrySchedulerStarvation |
 | Scheduler ordering | Earliest DueAt executes first |
 | Scheduler wake-up | Earlier newly submitted DueAt interrupts current wait |
 | Scheduler shutdown | Pending backoff is interrupted; no new retry starts |
-| Retry inbox | Capacity limit and producer behavior |
+| Retry inbox | Capacity limit, Wait semantics, timeout, and RetrySchedulerStarvation behavior |
 | Main queue pressure | Due retry is held and requeued with bounded backoff |
 | Requeue attempts | Limit reached produces RetryQueueStarvation |
 | Observability | Required fields/events are emitted for key outcomes |
@@ -229,7 +229,7 @@ Requirements:
 | Trace/correlation | Envelope context reaches handler execution context |
 | Observability | Structured lifecycle events are emitted through the real DI pipeline |
 
-Hosted services are activated at application startup and receive cancellation during host shutdown; integration tests must verify the application's actual hosted-service lifecycle rather than only testing worker methods in isolation. citeturn0search1
+Hosted services are activated at application startup and receive cancellation during host shutdown; integration tests must verify the application's actual hosted-service lifecycle rather than only testing worker methods in isolation.
 
 ## 12. Test Matrix — API Level
 
@@ -261,27 +261,33 @@ Every row below maps to one or more concrete test cases. Test IDs are stable ide
 | FP-F09 | Backoff progression | Consecutive retryable failures | Exponential delay | 1s/2s/4s progression and cap verified using fake time | Unit |
 | FP-F10 | Retry scheduler ordering | Multiple due times | Earliest due item first | Priority ordering and execution order | Unit |
 | FP-F11 | Scheduler wake-up | New earlier retry arrives during later wait | Scheduler wakes early | Earlier item executes at its due time | Unit |
-| FP-F12 | Retry inbox full | Retry producer submits beyond bounded retry inbox capacity | Backpressure/rejection follows scheduler contract | Capacity remains bounded; no silent loss beyond defined result/handling | Unit |
+| FP-F12 | Retry inbox full | Retry producer submits beyond bounded retry inbox capacity | Retry remains pending until accepted or starvation policy terminates it | Capacity remains bounded; no silent drop; timeout and starvation behavior are explicit | Unit + Integration |
 | FP-F13 | Main queue full at retry due | Scheduler attempts to requeue due retry | Retry held and retried later | Scheduler remains responsive; bounded requeue attempts | Unit + Integration |
 | FP-F14 | Retry requeue starvation | Requeue limit exhausted | Cancelled / RetryQueueStarvation | Cancellation reason, no infinite retry loop | Unit + Integration |
 | FP-F15 | Attempt increment timing | Retry is scheduled but main queue requeue fails | Attempt unchanged | Attempt increments only immediately before actual handler invocation | Unit |
-| FP-F16 | Successful retry | First execution fails transiently; later execution succeeds | Succeeded | Same JobId/IdempotencyKey; Attempt increments exactly once per execution | Integration |
-| FP-F17 | Timeout + retryable policy | Handler exceeds JobTimeout and policy permits retry | WaitingForRetry | Not Cancelled; retry scheduled | Unit + Integration |
-| FP-F18 | Timeout + terminal policy | Handler exceeds JobTimeout and policy rejects retry | Cancelled / JobTimeout | Terminal cancellation reason is JobTimeout | Unit + Integration |
-| FP-F19 | Host shutdown during retry backoff | Host cancellation during delayed retry | Cancelled / shutdown path | Backoff interrupted; no new retry starts | Unit + Integration |
-| FP-F20 | Host shutdown while waiting for work | Worker waiting on queue when host stops | Worker exits promptly | No leaked worker task; shutdown completes | Unit + Integration |
-| FP-F21 | Graceful drain | Accepted jobs exist during shutdown | Accepted work drains until deadline | Completed jobs remain successful; deadline is honored | Integration |
-| FP-F22 | Handler scope isolation | Two executions resolve scoped dependency | Separate scopes | Scoped state is not shared between executions | Integration |
-| FP-F23 | Missing handler | Job type has no handler | Startup/configuration failure | Application refuses invalid configuration before traffic | Unit + Integration |
-| FP-F24 | Duplicate handler | More than one handler for same job type | Startup/configuration failure | Ambiguity detected before traffic | Unit + Integration |
-| FP-F25 | Correlation propagation | Job created inside traced request | Context preserved | CorrelationId/TraceId available in handler context | Unit + Integration |
-| FP-F26 | Observability on success | Handler succeeds | Started + Succeeded | Job identity, Attempt, duration and outcome fields present | Unit + Integration |
-| FP-F27 | Observability on retry | Handler fails transiently | RetryScheduled + later Started | Attempt and stable identity distinguish retry execution | Unit + Integration |
-| FP-F28 | Observability on cancellation | Shutdown/timeout/starvation | Cancelled event | Correct CancellationReason recorded | Unit + Integration |
-| FP-F29 | Concurrent producers | Multiple producers enqueue concurrently | No corruption/lost accepted work | Exact accepted count; bounded capacity; deterministic coordination | Unit + Integration |
-| FP-F30 | Idempotency propagation | Same caller key across retry | Key remains stable | Every execution observes identical IdempotencyKey | Unit + Integration |
-| FP-F31 | Unknown retry decision boundary | Policy receives exception at max attempts | No retry | Boundary condition is deterministic | Unit |
-| FP-F32 | Scheduler shutdown with pending items | Scheduler has future retries when host stops | Pending retries do not start | Cancellation observed; pending delayed work remains unstarted | Unit + Integration |
+| FP-F16 | First execution attempt | Newly enqueued job reaches handler | Handler observes `Attempt = 1` | Initial envelope has `Attempt = 0`; first handler entry observes exactly 1 | Unit + Integration |
+| FP-F17 | Successful retry | First execution fails transiently; later execution succeeds | Succeeded | Same JobId/IdempotencyKey; Attempt increments exactly once per execution | Integration |
+| FP-F18 | Timeout + retryable policy | Handler exceeds JobTimeout and policy permits retry | WaitingForRetry | Not Cancelled; retry scheduled | Unit + Integration |
+| FP-F19 | Timeout + terminal policy | Handler exceeds JobTimeout and policy rejects retry | Cancelled / JobTimeout | Terminal cancellation reason is JobTimeout | Unit + Integration |
+| FP-F20 | Host shutdown during retry backoff | Host cancellation during delayed retry | Cancelled / shutdown path | Backoff interrupted; no new retry starts | Unit + Integration |
+| FP-F21 | Host shutdown while waiting for work | Worker waiting on queue when host stops | Worker exits promptly | No leaked worker task; shutdown completes | Unit + Integration |
+| FP-F22 | Graceful drain | Accepted jobs exist during shutdown | Accepted work drains until deadline | Completed jobs remain successful; deadline is honored | Integration |
+| FP-F23 | Handler scope isolation | Two executions resolve scoped dependency | Separate scopes | Scoped state is not shared between executions | Integration |
+| FP-F24 | Missing handler | Job type has no handler | Startup/configuration failure | Application refuses invalid configuration before traffic | Unit + Integration |
+| FP-F25 | Duplicate handler | More than one handler for same job type | Startup/configuration failure | Ambiguity detected before traffic | Unit + Integration |
+| FP-F26 | Correlation propagation | Job created inside traced request | Context preserved | CorrelationId/TraceId available in handler context | Unit + Integration |
+| FP-F27 | Observability on success | Handler succeeds | Started + Succeeded | Job identity, Attempt, duration and outcome fields present | Unit + Integration |
+| FP-F28 | Observability on retry | Handler fails transiently | RetryScheduled + later Started | Attempt and stable identity distinguish retry execution | Unit + Integration |
+| FP-F29 | Observability on cancellation | Shutdown/timeout/starvation | Cancelled event | Correct CancellationReason recorded | Unit + Integration |
+| FP-F30 | Concurrent producers | Multiple producers enqueue concurrently | No corruption/lost accepted work | Exact accepted count; bounded capacity; deterministic coordination | Unit + Integration |
+| FP-F31 | Idempotency propagation | Same caller key across retry | Key remains stable | Every execution observes identical IdempotencyKey | Unit + Integration |
+| FP-F32 | Unknown retry decision boundary | Policy receives exception at max attempts | No retry | Boundary condition is deterministic | Unit |
+| FP-F33 | Scheduler shutdown with pending items | Scheduler has future retries when host stops | Pending retries do not start | Cancellation observed; pending delayed work remains unstarted | Unit + Integration |
+| FP-F34 | JobType stability | Registered job is enqueued | Stable contract name | JobType is explicit stable name and not assembly-qualified | Unit |
+| FP-F35 | Idempotency key too long | Key exceeds configured maximum | ArgumentOutOfRangeException | No envelope is created or accepted | Unit |
+| FP-F36 | Idempotency key whitespace | Key is empty or whitespace | ArgumentException | No envelope is created or accepted | Unit |
+| FP-F37 | Idempotency key null | Key is null | ArgumentNullException | No envelope is created or accepted | Unit |
+| FP-F38 | Retry inbox scheduler starvation | Retry producer cannot enqueue within configured timeout | Cancelled / RetrySchedulerStarvation | Retry is not silently dropped; bounded retry-scheduler starvation policy is applied | Unit + Integration |
 
 ### Test case mapping rule
 
@@ -334,7 +340,7 @@ The following are intentionally deferred:
 
 These concerns must be revisited before introducing the corresponding production capabilities.
 
-## 16. Decision Traceability (D-031..D-037)
+## 16. Decision Traceability (D-031..D-040)
 
 | Decision | Status | Testing consequence |
 |---|---|---|
@@ -345,6 +351,9 @@ These concerns must be revisited before introducing the corresponding production
 | **D-035 — Deterministic concurrency** | Accepted | Unit concurrency tests use Barrier/CountdownEvent; integration uses independent application contexts |
 | **D-036 — Test naming convention** | Accepted | Tests follow MethodName_Scenario_ExpectedOutcome |
 | **D-037 — Test isolation strategy** | Accepted | Unit shared-state scenarios use xUnit Collection where needed; integration tests use independent factory/context state |
+| **D-038 — JobType stability** | Accepted | A dedicated test proves JobType is an explicit stable contract name, not an assembly-qualified CLR name |
+| **D-039 — IdempotencyKey validation** | Accepted | Null, whitespace, and over-length keys have explicit rejection tests |
+| **D-040 — Retry Inbox Full behavior** | Accepted | Retry inbox is bounded with Wait/timeout semantics; failed acceptance results in RetrySchedulerStarvation rather than silent drop |
 
 ## Review Checklist
 
@@ -363,5 +372,6 @@ Before M2.4 is closed, the reviewer must confirm:
 - [ ] CI executes all new tests.
 - [ ] No test depends on arbitrary sleeps or wall-clock timing.
 
-**M2.4 Testing Strategy: Documented for review.**
+**M2.4 Testing Strategy: Revised for gate review.**
+
 
