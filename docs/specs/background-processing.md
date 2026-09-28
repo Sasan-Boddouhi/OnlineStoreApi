@@ -76,8 +76,8 @@ public sealed record BackgroundJobEnvelope(
 Invariants:
 - `JobId` is stable across retries.
 - `IdempotencyKey` is stable across retries.
-- `Attempt` starts at 1.
-- `Attempt` represents actual executions.
+- `Attempt` is 0 when the envelope is initially enqueued.
+- `Attempt` is incremented to 1 immediately before the first handler invocation and thereafter once per actual execution.
 - `JobType` is a stable contractual identifier.
 - `Payload` is independent of its source `JsonDocument` lifetime.
 - Payload obtained from a `JsonDocument` must use `JsonElement.Clone()`. (D-020)
@@ -86,9 +86,9 @@ The envelope is designed to be serialization/persistence-safe. (D-012)
 
 ## 6. Job Identity
 
-`JobId` identifies a queued execution, `IdempotencyKey` identifies the logical operation, and `Attempt` identifies the number of executions.
+`JobId` identifies a queued execution, `IdempotencyKey` identifies the logical operation, and `Attempt` identifies the number of executions that have started.
 
-Retry keeps JobId and IdempotencyKey and increments Attempt only for a new execution.
+An initially enqueued envelope has `Attempt = 0`. The Worker/Dispatcher increments it immediately before handler invocation, so the first execution observes `Attempt = 1`. Retry keeps JobId and IdempotencyKey and increments Attempt only when the retry execution actually starts.
 
 ## 7. Idempotency Contract
 
@@ -157,11 +157,12 @@ public enum JobCancellationReason
 {
     HostShutdown,
     RetryQueueStarvation,
+    RetrySchedulerStarvation,
     JobTimeout
 }
 ```
 
-Host shutdown, job timeout, and retry queue starvation are distinct reasons.
+Host shutdown, job timeout, retry queue starvation, and retry scheduler starvation are distinct reasons.
 
 ## 12. Retry Policy
 
@@ -247,6 +248,8 @@ External producer
 The PriorityQueue has a single logical owner. The scheduler uses an internal wake-up signal so a newly inserted earlier DueAt can interrupt its current wait.
 
 Retry scheduler capacity is 100 proposed MVP default. (D-025)
+
+The retry inbox uses bounded `Wait` semantics with a configurable enqueue timeout. If the retry inbox cannot accept an item within that timeout, the scheduler does not drop the retry. The retry remains owned by the producer until it can be accepted or the bounded retry-scheduler starvation policy terminates it.
 
 ## 18. Retry → Main Queue Backpressure
 
@@ -396,6 +399,7 @@ The following are **proposed MVP defaults**. They are not business requirements 
     "QueueCapacity": 1000,
     "EnqueueTimeoutSeconds": 5,
     "RetryQueueCapacity": 100,
+    "RetryEnqueueTimeoutSeconds": 5,
     "RetryBaseDelaySeconds": 1,
     "RetryMaxDelaySeconds": 300,
     "MaxExecutionAttempts": 5,
@@ -422,7 +426,8 @@ Deferred to implementation or later milestones:
 6. Concrete Activity naming.
 7. Concrete application job/use case.
 8. Exact handler discovery mechanism.
-9. Per-job timeout override mechanism.
+9. Per-job timeout override mechanism
+10. Exact retry-inbox enqueue timeout behavior if deployment-level tuning requires a different default..
 
 Future milestones may add durable retries, durable DLQ, Outbox, distributed idempotency, external brokers, multi-node coordination, and parallel workers.
 
@@ -448,6 +453,16 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-027** — Due retries use bounded requeue attempts when the main queue is full.
 - **D-028** — `IdempotencyKey` is caller-supplied and stable across retries; enforcement belongs to application logic.
 - **D-029** — Retry Scheduler is a dedicated `BackgroundService`.
+- **D-031** — `Attempt` is 0 at initial enqueue and increments at actual execution start in Worker/Dispatcher.
+- **D-032** — Scheduler timing is driven by `TimeProvider` so deterministic tests can use `FakeTimeProvider`.
+- **D-033** — MVP retry jitter is intentionally disabled and is a documented high-concurrency limitation.
+- **D-034** — Coverage is risk-based with no global numeric gate.
+- **D-035** — Concurrency tests use deterministic synchronization rather than timing assumptions.
+- **D-036** — Test methods use `MethodName_Scenario_ExpectedOutcome` naming.
+- **D-037** — Background Processing tests preserve repository-wide parallelism through isolated test state.
+- **D-038** — `JobType` must be a stable contract name independent of CLR assembly-qualified names.
+- **D-039** — `IdempotencyKey` validation rejects null, whitespace, and values exceeding configured maximum length.
+- **D-040** — Retry inbox is bounded with `Wait` semantics and timeout; failed acceptance terminates with `RetrySchedulerStarvation` rather than dropping a retry.
 
 ## 33. Contract Signatures
 
@@ -528,11 +543,11 @@ The implementation must preserve these invariants:
 4. Handlers must not implement retry loops.
 5. JobId remains stable across retries.
 6. IdempotencyKey remains stable across retries.
-7. Attempt counts actual executions, not queue push attempts.
+7. Attempt is 0 at initial enqueue and counts actual executions after increment at execution start, not queue push attempts.
 8. RequeueAttempts remains separate from Attempt.
 9. Unknown exceptions are not retried by default.
 10. Host-shutdown cancellation is not retried.
-11. Job timeout and host shutdown remain distinguishable.
+11. Job timeout, host shutdown, retry queue starvation, and retry scheduler starvation remain distinguishable.
 12. PriorityQueue has one logical owner.
 13. External producers communicate with the scheduler through its inbox.
 14. Retry memory remains bounded.
@@ -570,5 +585,10 @@ The implementation must preserve these invariants:
 - [x] Decision traceability.
 - [x] Design invariants.
 - [x] Proposed MVP configuration defaults.
+- [x] Retry inbox full behavior.
+- [x] Attempt initial value and execution-start increment semantics.
+- [x] JobType stability invariant.
+- [x] IdempotencyKey validation contract.
 
 **Design status: Approved for implementation.**
+
