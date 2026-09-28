@@ -1,3 +1,4 @@
+using Asp.Versioning;
 ﻿using Application.Interfaces;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +8,8 @@ namespace Online_Store_Application.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("api/orders")]
+    [ApiVersion(1.0)]
+    [Route("api/v{version:apiVersion}/orders")]
     public class OrdersController : ControllerBase
     {
         private readonly IOrderService _orderService;

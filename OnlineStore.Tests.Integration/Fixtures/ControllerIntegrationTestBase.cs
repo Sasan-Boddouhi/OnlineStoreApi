@@ -16,7 +16,7 @@ public abstract class ControllerIntegrationTestBase : BaseIntegrationTest
             DeviceId = "test-device"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/auth/login", loginData);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/login", loginData);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<TokenResponse>();

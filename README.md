@@ -192,25 +192,25 @@ This keeps parsing, normalization, validation, specification construction, and d
 Filtering:
 
 ```http
-GET /api/products?filter=price gt 1000
+GET /api/v1/products?filter=price gt 1000
 ```
 
 Sorting:
 
 ```http
-GET /api/products?sort=-price,name
+GET /api/v1/products?sort=-price,name
 ```
 
 Pagination:
 
 ```http
-GET /api/products?page=1&size=10
+GET /api/v1/products?page=1&size=10
 ```
 
 Combined query:
 
 ```http
-GET /api/products?filter=price gt 1000 and category.name eq 'electronics'&sort=-price&page=2&size=10
+GET /api/v1/products?filter=price gt 1000 and category.name eq 'electronics'&sort=-price&page=2&size=10
 ```
 
 The exact supported query syntax is defined by the query parser, query contract, policy, and specification infrastructure in the source code.
@@ -529,6 +529,32 @@ The exact local URL depends on the launch profile and development configuration.
 
 ---
 
+## API Versioning
+
+The public API uses explicit URL-segment versioning.
+
+The current API version is **v1**:
+
+```text
+/api/v1/products
+/api/v1/users
+/api/v1/auth/login
+/api/v1/employees
+/api/v1/employeetypes
+/api/v1/orders
+```
+
+API versioning is implemented with the ASP.NET API Versioning stack. Version information is reported through the standard API-version response headers, and Swagger exposes the versioned OpenAPI document at `/swagger/v1/swagger.json`.
+
+Unversioned business API routes such as `/api/products` are not supported. Operational endpoints remain version-neutral:
+
+```text
+GET /health
+GET /version
+```
+
+Only a genuine incompatible API contract change should introduce a new version such as `v2`.
+
 ## API Documentation
 
 Swagger/OpenAPI is configurable by environment.
@@ -622,7 +648,7 @@ Documentation-only changes are excluded from the push-triggered CI workflow by t
 - [x] Redis Distributed Cache
 - [x] OpenTelemetry + Jaeger + Prometheus + Grafana
 - [x] CI/CD Pipeline with Rollback Automation
-- [ ] API Versioning
+- [x] API Versioning
 - [ ] Background Processing
 - [ ] CQRS + MediatR
 - [ ] Kubernetes Deployment

@@ -27,7 +27,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             DeviceId = "test-device"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/auth/login", loginDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/login", loginDto);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var result = await response.Content.ReadFromJsonAsync<AuthResultDto>();
@@ -47,7 +47,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             DeviceId = "test-device"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/auth/login", loginDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/login", loginDto);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -62,7 +62,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             // DeviceId حذف شده
         };
 
-        var response = await Client.PostAsJsonAsync("/api/auth/login", loginDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/login", loginDto);
         // اعتبارسنجی FluentValidation -> 422 UnprocessableEntity
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
@@ -83,7 +83,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             DateOfBirth = "1370/01/01"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/auth/register", registerDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var result = await response.Content.ReadFromJsonAsync<AuthResultDto>();
@@ -105,10 +105,10 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         // ثبت اول
-        await Client.PostAsJsonAsync("/api/auth/register", registerDto);
+        await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
 
         // تلاش دوباره با همان شماره
-        var response = await Client.PostAsJsonAsync("/api/auth/register", registerDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
         // BusinessException -> 400 BadRequest
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -127,7 +127,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             // DateOfBirth حذف شده
         };
 
-        var response = await Client.PostAsJsonAsync("/api/auth/register", registerDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
         // FluentValidation -> 422 UnprocessableEntity
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
@@ -142,7 +142,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/auth/me");
+        var response = await Client.GetAsync("/api/v1/auth/me");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var content = await response.Content.ReadAsStringAsync();
@@ -155,7 +155,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
     [Fact]
     public async Task Me_Unauthenticated_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/auth/me");
+        var response = await Client.GetAsync("/api/v1/auth/me");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -172,12 +172,12 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             Password = "Test@123",
             DeviceId = "test-device"
         };
-        var loginResponse = await Client.PostAsJsonAsync("/api/auth/login", loginDto);
+        var loginResponse = await Client.PostAsJsonAsync("/api/v1/auth/login", loginDto);
         var authResult = await loginResponse.Content.ReadFromJsonAsync<AuthResultDto>();
 
         // حالا refresh
         var refreshDto = new { RefreshToken = authResult!.RefreshToken };
-        var response = await Client.PostAsJsonAsync("/api/auth/refresh", refreshDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/refresh", refreshDto);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var newAuth = await response.Content.ReadFromJsonAsync<AuthResultDto>();
@@ -190,7 +190,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
     public async Task Refresh_InvalidToken_ReturnsUnauthorized()
     {
         var refreshDto = new { RefreshToken = "invalid-refresh-token" };
-        var response = await Client.PostAsJsonAsync("/api/auth/refresh", refreshDto);
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/refresh", refreshDto);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -204,15 +204,15 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             Password = "Test@123",
             DeviceId = "test-device"
         };
-        var loginResponse = await Client.PostAsJsonAsync("/api/auth/login", loginDto);
+        var loginResponse = await Client.PostAsJsonAsync("/api/v1/auth/login", loginDto);
         var authResult = await loginResponse.Content.ReadFromJsonAsync<AuthResultDto>();
 
         // با همان توکن دوباره refresh کن (باید یک‌بار مصرف باشد)
         var refreshDto = new { RefreshToken = authResult!.RefreshToken };
-        var firstRefresh = await Client.PostAsJsonAsync("/api/auth/refresh", refreshDto);
+        var firstRefresh = await Client.PostAsJsonAsync("/api/v1/auth/refresh", refreshDto);
         firstRefresh.StatusCode.Should().Be(HttpStatusCode.OK); // بار اول موفق
 
-        var secondRefresh = await Client.PostAsJsonAsync("/api/auth/refresh", refreshDto);
+        var secondRefresh = await Client.PostAsJsonAsync("/api/v1/auth/refresh", refreshDto);
         // بنابر پیاده‌سازی AuthService، توکن قبلی revoked می‌شود -> Reuse Detection فعال شده و 401 برمی‌گرداند
         secondRefresh.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -227,18 +227,18 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.PostAsync("/api/auth/logout", null);
+        var response = await Client.PostAsync("/api/v1/auth/logout", null);
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // بعد از خروج، همان توکن دیگر معتبر نیست
-        var meResponse = await Client.GetAsync("/api/auth/me");
+        var meResponse = await Client.GetAsync("/api/v1/auth/me");
         meResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task Logout_WithoutToken_ReturnsUnauthorized()
     {
-        var response = await Client.PostAsync("/api/auth/logout", null);
+        var response = await Client.PostAsync("/api/v1/auth/logout", null);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

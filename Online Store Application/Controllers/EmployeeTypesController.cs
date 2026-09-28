@@ -7,8 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Online_Store_Application.Controllers;
 
+using Asp.Versioning;
+
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion(1.0)]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class EmployeeTypesController : ControllerBase
 {
     private readonly IEmployeeTypeService _employeeTypeService;

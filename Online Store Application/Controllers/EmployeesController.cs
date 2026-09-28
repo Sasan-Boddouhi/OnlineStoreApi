@@ -9,8 +9,11 @@ using System.Security.Claims;
 
 namespace Online_Store_Application.Controllers;
 
+using Asp.Versioning;
+
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion(1.0)]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class EmployeesController : ControllerBase
 {
     private readonly IEmployeeService _employeeService;

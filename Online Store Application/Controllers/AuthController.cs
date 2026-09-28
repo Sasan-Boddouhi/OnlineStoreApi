@@ -1,3 +1,4 @@
+using Asp.Versioning;
 ﻿using BusinessLogic.DTOs.Auth;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,8 @@ using BusinessLogic.DTOs.User;
 namespace WebApi.Controllers
 {
     [ApiController]
-    [Route("api/auth")]
+    [ApiVersion(1.0)]
+    [Route("api/v{version:apiVersion}/auth")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;

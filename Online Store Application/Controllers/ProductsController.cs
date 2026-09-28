@@ -10,8 +10,11 @@ using Microsoft.AspNetCore.OutputCaching;
 
 namespace Online_Store_Application.Controllers;
 
+using Asp.Versioning;
+
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion(1.0)]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
