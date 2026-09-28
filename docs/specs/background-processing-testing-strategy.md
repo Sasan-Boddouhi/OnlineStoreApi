@@ -92,7 +92,7 @@ Suggested organization:
 
 ```text
 OnlineStore.Tests.Unit
-  BackgroundProcessing
+  BackgroundJobs
     Queue
     Retry
     Scheduler
@@ -116,7 +116,7 @@ OnlineStore.Tests.Shared
     Assertions
 ```
 
-The exact folder layout may follow existing repository conventions if they differ during implementation.
+Background Processing unit tests use the `BackgroundJobs` root to align with the `Application.BackgroundJobs` and `Infrastructure.BackgroundJobs` namespace conventions.
 
 ## 6. Naming Convention
 
