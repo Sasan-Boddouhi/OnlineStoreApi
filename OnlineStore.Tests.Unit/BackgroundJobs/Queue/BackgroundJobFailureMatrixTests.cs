@@ -460,10 +460,10 @@ public sealed class BackgroundJobFailureMatrixTests
         using var dequeueTimeout = new CancellationTokenSource(
             TimeSpan.FromMilliseconds(100));
 
-        var dequeueTask = queue.DequeueAsync(
-            dequeueTimeout.Token).AsTask();
+        Func<Task> dequeue = async () =>
+            await queue.DequeueAsync(dequeueTimeout.Token).AsTask();
 
-        await dequeueTask
+        await dequeue
             .Should()
             .ThrowAsync<OperationCanceledException>();
 
