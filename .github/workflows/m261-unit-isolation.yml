@@ -1,0 +1,22 @@
+name: M2.6.1 Unit Isolation
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  targeted-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet restore "Online Store Application.sln"
+      - run: dotnet build "Online Store Application.sln" --configuration Release --no-restore
+      - run: >
+          dotnet test "OnlineStore.Tests.Unit/OnlineStore.Tests.Unit.csproj"
+          --configuration Release
+          --no-build
+          --filter "FullyQualifiedName~BackgroundJobFailureMatrixTests"
