@@ -44,7 +44,7 @@ The Retry Scheduler must use a wait mechanism that is driven by `TimeProvider`. 
 
 A raw `Task.Delay(delay, cancellationToken)` that bypasses `TimeProvider` is not acceptable for scheduler timing because `FakeTimeProvider.Advance()` would not deterministically wake the scheduler.
 
-ASP.NET Core hosted services are long-running `BackgroundService` implementations and are expected to honor cancellation during graceful shutdown.
+ASP.NET Core hosted services are long-running `BackgroundService` implementations and are expected to honor cancellation during graceful shutdown. See: https://learn.microsoft.com/en-us/aspnet/core/fundamentals/host/hosted-services
 
 ### 3.3 Other test doubles
 
@@ -229,7 +229,7 @@ Requirements:
 | Trace/correlation | Envelope context reaches handler execution context |
 | Observability | Structured lifecycle events are emitted through the real DI pipeline |
 
-Hosted services are activated at application startup and receive cancellation during host shutdown; integration tests must verify the application's actual hosted-service lifecycle rather than only testing worker methods in isolation.
+Hosted services are activated at application startup and receive cancellation during host shutdown; integration tests must verify the application's actual hosted-service lifecycle rather than only testing worker methods in isolation. See: https://learn.microsoft.com/en-us/aspnet/core/fundamentals/host/hosted-services
 
 ## 12. Test Matrix — API Level
 
@@ -373,5 +373,6 @@ Before M2.4 is closed, the reviewer must confirm:
 - [ ] No test depends on arbitrary sleeps or wall-clock timing.
 
 **M2.4 Testing Strategy: Revised for gate review.**
+
 
 
