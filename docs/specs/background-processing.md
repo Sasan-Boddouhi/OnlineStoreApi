@@ -517,6 +517,7 @@ public enum JobCancellationReason
 {
     HostShutdown,
     RetryQueueStarvation,
+    RetrySchedulerStarvation,
     JobTimeout
 }
 
@@ -591,4 +592,5 @@ The implementation must preserve these invariants:
 - [x] IdempotencyKey validation contract.
 
 **Design status: Approved for implementation.**
+
 
