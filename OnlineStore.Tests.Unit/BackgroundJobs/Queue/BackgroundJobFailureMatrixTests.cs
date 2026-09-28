@@ -234,7 +234,8 @@ public sealed class BackgroundJobFailureMatrixTests
         await dispatcher.DispatchAsync(requeued, default);
 
         recorder.JobIds.Should().HaveCount(2);
-        recorder.JobIds.Should().OnlyHaveUniqueItems();
+        recorder.JobIds.Distinct().Should().ContainSingle()
+            .Which.Should().Be(initial.JobId);
         recorder.Attempts.OrderBy(x => x).Should().Equal(1, 2);
         recorder.IdempotencyKeys.Should().OnlyContain(x => x == "stable-key");
     }
@@ -416,6 +417,57 @@ public sealed class BackgroundJobFailureMatrixTests
 
         var action = () => dequeue;
         await action.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task RetryScheduler_ShutdownDuringBackoff_InterruptsWaitAndDoesNotStartRetry()
+    {
+        var time = new SignalingFakeTimeProvider(DateTimeOffset.UtcNow);
+        var lifetime = new TestHostApplicationLifetime();
+        var queue = CreateQueue(lifetime: lifetime, timeProvider: time);
+        var scheduler = CreateScheduler(queue, time);
+
+        using var stoppingCts = new CancellationTokenSource();
+
+        await scheduler.StartAsync(stoppingCts.Token);
+
+        var retry = CreateEnvelope(time);
+
+        (await scheduler.ScheduleAsync(
+            retry,
+            TimeSpan.FromSeconds(30),
+            stoppingCts.Token))
+            .Should().BeTrue();
+
+        // Ensure the scheduler has entered the future-due backoff wait.
+        await time.TimerCreated.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        // Shutdown must interrupt the scheduler's backoff wait.
+        stoppingCts.Cancel();
+
+        var stopTask = scheduler.StopAsync(CancellationToken.None);
+
+        var completed = await Task.WhenAny(
+            stopTask,
+            Task.Delay(TimeSpan.FromSeconds(2)));
+
+        completed.Should().Be(stopTask);
+        stopTask.IsCompletedSuccessfully.Should().BeTrue();
+
+        // The pending retry must never reach the main queue.
+        time.Advance(TimeSpan.FromSeconds(30));
+
+        using var dequeueTimeout = new CancellationTokenSource(
+            TimeSpan.FromMilliseconds(100));
+
+        var dequeueTask = queue.DequeueAsync(
+            dequeueTimeout.Token).AsTask();
+
+        await dequeueTask
+            .Should()
+            .ThrowAsync<OperationCanceledException>();
+
+        scheduler.Dispose();
     }
 
     [Fact]

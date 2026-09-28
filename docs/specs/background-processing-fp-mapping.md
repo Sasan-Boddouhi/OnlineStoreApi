@@ -26,7 +26,7 @@ This table maps every failure-matrix identifier to the concrete test method curr
 | FP-F17 | `BackgroundJobFailureMatrixTests.Dispatcher_RetryEnvelopeAfterTransientFailure_ExecutesSuccessfullyWithStableIdentity` | Covered |
 | FP-F18 | `BackgroundJobFailureMatrixTests.StaticRetryPolicy_TimeoutBeforeMaximumAttempts_ReturnsRetry` | Covered |
 | FP-F19 | `BackgroundJobFailureMatrixTests.DispatchAsync_TimeoutCancellation_EmitsCancellationReason` | Covered |
-| FP-F20 | No dedicated scheduler backoff interruption test during host shutdown | Deferred to M2.7 |
+| FP-F20 | `BackgroundJobFailureMatrixTests.RetryScheduler_ShutdownDuringBackoff_InterruptsWaitAndDoesNotStartRetry` | Covered |
 | FP-F21 | `BackgroundProcessingHostedServiceTests.Worker_HostShutdownWhileWaiting_StopsPromptly` | Covered |
 | FP-F22 | `BackgroundProcessingHostedServiceTests.Worker_GracefulShutdown_DrainsAcceptedWorkBeforeStopCompletes` | Covered |
 | FP-F23 | `BackgroundProcessingHostedServiceTests.Dispatcher_ScopedHandler_CreatesSeparateScopePerExecution` | Covered |
