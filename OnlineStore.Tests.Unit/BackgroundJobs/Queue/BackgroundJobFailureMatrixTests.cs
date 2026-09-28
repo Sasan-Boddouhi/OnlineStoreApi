@@ -19,7 +19,7 @@ public sealed class BackgroundJobFailureMatrixTests
     [Fact]
     public async Task EnqueueAsync_CallerCancellationWhileQueueIsFull_ThrowsOperationCanceledException()
     {
-        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var time = TimeProvider.System;
         var lifetime = new TestHostApplicationLifetime();
         var queue = CreateQueue(1, 5, time, lifetime);
 
@@ -197,7 +197,7 @@ public sealed class BackgroundJobFailureMatrixTests
         envelope.Attempt.Should().Be(1);
 
         var filler = await queue.DequeueAsync(default);
-        filler.IdempotencyKey.Should().Be("key");
+        filler.IdempotencyKey.Should().Be("filler");
     }
 
     [Fact]
