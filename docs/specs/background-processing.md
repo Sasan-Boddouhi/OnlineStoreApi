@@ -111,7 +111,7 @@ public interface IBackgroundJobQueue
 }
 ```
 
-Keys must be non-null, non-empty, non-whitespace, and bounded by configuration. Queue transport does not enforce business uniqueness; application/handler logic owns enforcement. (D-028)
+Keys must be non-null, non-empty, non-whitespace, and bounded by configuration. The proposed MVP default for `MaxIdempotencyKeyLength` is 256 characters. Keys longer than the configured maximum are rejected at enqueue time with `ArgumentOutOfRangeException`, before envelope construction. (D-028, D-044) Queue transport does not enforce business uniqueness; application/handler logic owns enforcement.
 
 ## 8. Queue Semantics
 
@@ -404,6 +404,7 @@ The following are **proposed MVP defaults**. They are not business requirements 
   "BackgroundJobs": {
     "QueueCapacity": 1000,
     "EnqueueTimeoutSeconds": 5,
+    "MaxIdempotencyKeyLength": 256,
     "RetryQueueCapacity": 100,
     "RetryEnqueueTimeoutSeconds": 5,
     "RetryBaseDelaySeconds": 1,
@@ -471,6 +472,7 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-040** — Retry inbox is bounded with `Wait` semantics and timeout; failed acceptance terminates with `RetrySchedulerStarvation` rather than dropping a retry.
 - **D-041** — `IBackgroundJobQueue` exposes a producer-only Application contract. `DequeueAsync` belongs to the Infrastructure-internal interface `IBackgroundJobConsumer` to enforce D-011's clear responsibility boundary.
 - **D-042** — The queue detects host shutdown through `IHostApplicationLifetime.ApplicationStopping`. Once shutdown begins, `EnqueueAsync` returns `EnqueueStatus.ShuttingDown` immediately without writing to the channel.
+- **D-044** — Maximum `IdempotencyKey` length is 256 characters. The proposed MVP default is configurable; keys exceeding the configured maximum are rejected at enqueue time with `ArgumentOutOfRangeException` before envelope construction.
 - **D-043** — Introduce a dedicated `Infrastructure` project.
   - **Rationale:** The approved Design Spec assigns ownership of background-processing infrastructure to a layer that does not yet exist in the solution. Introducing a dedicated Infrastructure project preserves the approved separation between Application contracts and Infrastructure implementations (D-002, D-011).
   - **Decision:** Add `Infrastructure.csproj`. It references `Application` only. The API project references `Infrastructure` for runtime composition. The existing `DataLayer` project is not modified by this decision and remains the owner of persistence concerns.
