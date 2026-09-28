@@ -103,7 +103,9 @@ public sealed class RetryScheduler : BackgroundService
                 }
 
                 var wait = next.DueAt - now;
-                var delayTask = Task.Delay(wait, _timeProvider, stoppingToken);
+                var delayTask = _timeProvider is TimeProvider.System
+                    ? Task.Delay(wait, stoppingToken)
+                    : Task.Delay(wait, _timeProvider, stoppingToken);
                 var wakeTask = _wakeSignal.WaitAsync(stoppingToken);
 
                 await Task.WhenAny(delayTask, wakeTask).ConfigureAwait(false);
