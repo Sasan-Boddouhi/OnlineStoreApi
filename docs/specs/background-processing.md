@@ -84,6 +84,12 @@ Invariants:
 
 The envelope is designed to be serialization/persistence-safe. (D-012)
 
+### Application dependency note
+
+The Application project targets .NET 8 and has no explicit `System.Text.Json` package reference; `JsonElement` is provided by the .NET shared framework. Its use in the Application contract is intentional because the envelope must retain a serialization/persistence-safe JSON payload while remaining independent of a concrete queue transport. (D-012, D-020)
+
+The repository convention for this layer is the `Application.*` namespace root; the background-job contracts therefore use `Application.BackgroundJobs`.
+
 ## 6. Job Identity
 
 `JobId` identifies a queued execution, `IdempotencyKey` identifies the logical operation, and `Attempt` identifies the number of executions that have started.
@@ -92,7 +98,7 @@ An initially enqueued envelope has `Attempt = 0`. The Worker/Dispatcher incremen
 
 ## 7. Idempotency Contract
 
-The caller supplies the idempotency key:
+The caller supplies the idempotency key. The Application queue contract is producer-only; consumer-side dequeue is intentionally kept out of the Application contract and belongs to an Infrastructure-internal consumer abstraction. (D-028, D-041)
 
 ```csharp
 public interface IBackgroundJobQueue
@@ -102,8 +108,6 @@ public interface IBackgroundJobQueue
         string idempotencyKey,
         CancellationToken cancellationToken);
 
-    ValueTask<BackgroundJobEnvelope> DequeueAsync(
-        CancellationToken cancellationToken);
 }
 ```
 
@@ -305,6 +309,8 @@ The contract exposes no queue, scheduler, retry, or HTTP implementation details.
 
 The dispatcher belongs to Infrastructure. It identifies the job type, resolves exactly one handler from DI, creates execution context, invokes the handler, and returns the execution outcome.
 
+The dispatcher consumes jobs through an Infrastructure-internal consumer abstraction; `IBackgroundJobQueue` remains producer-only at the Application boundary. (D-041)
+
 It contains no business logic.
 
 ## 23. DI Validation
@@ -463,8 +469,11 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-038** — `JobType` must be a stable contract name independent of CLR assembly-qualified names.
 - **D-039** — `IdempotencyKey` validation rejects null, whitespace, and values exceeding configured maximum length.
 - **D-040** — Retry inbox is bounded with `Wait` semantics and timeout; failed acceptance terminates with `RetrySchedulerStarvation` rather than dropping a retry.
+- **D-041** — `IBackgroundJobQueue` exposes a producer-only Application contract. `DequeueAsync` belongs to an Infrastructure-internal consumer interface to enforce D-011's clear responsibility boundary.
 
 ## 33. Contract Signatures
+
+The Application-facing queue contract is producer-only. Infrastructure defines its consumer-side dequeue abstraction internally; the consumer contract is not exposed by the Application project. (D-041)
 
 ```csharp
 public interface IBackgroundJobQueue
