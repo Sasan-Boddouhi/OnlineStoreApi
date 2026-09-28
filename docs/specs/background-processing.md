@@ -473,7 +473,9 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 
 ## 33. Contract Signatures
 
-The Application-facing queue contract is producer-only. Infrastructure defines its consumer-side dequeue abstraction internally; the consumer contract is not exposed by the Application project. (D-041)
+### 33.1 Application Contracts
+
+The Application-facing queue contract is producer-only. Consumer-side dequeue is intentionally kept out of the Application contract. (D-041)
 
 ```csharp
 public interface IBackgroundJobQueue
@@ -482,7 +484,6 @@ public interface IBackgroundJobQueue
         TJob job,
         string idempotencyKey,
         CancellationToken cancellationToken);
-
 }
 
 public interface IBackgroundJobHandler<in TJob>
@@ -500,6 +501,18 @@ public sealed record BackgroundJobExecutionContext(
     string IdempotencyKey,
     string? CorrelationId,
     string? TraceId);
+```
+
+### 33.2 Infrastructure Contracts
+
+These contracts are owned by Infrastructure and are not exposed by the Application project. The queue consumer abstraction provides the dequeue boundary used by the worker/dispatcher. (D-011, D-041)
+
+```csharp
+public interface IBackgroundJobConsumer
+{
+    ValueTask<BackgroundJobEnvelope> DequeueAsync(
+        CancellationToken cancellationToken);
+}
 
 public interface IRetryPolicy
 {
@@ -507,7 +520,11 @@ public interface IRetryPolicy
         Exception exception,
         BackgroundJobExecutionContext context);
 }
+```
 
+The remaining shared result and exception types are:
+
+```csharp
 public enum EnqueueStatus
 {
     Enqueued,
@@ -540,7 +557,6 @@ public sealed class NonRetryableJobException : Exception
 ```
 
 The final shape of `RetryDecision` is an implementation detail, constrained by the MVP decision in the Testing/Implementation phase to a binary retry/no-retry decision.
-
 ## 34. Design Constraints
 
 The implementation must preserve these invariants:
