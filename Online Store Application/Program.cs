@@ -410,7 +410,7 @@ app.MapGet("/version", () => new
     version = "v2",
     commit = Environment.GetEnvironmentVariable("GIT_COMMIT") ?? "unknown",
     deployedAt = DateTime.UtcNow
-});
+}).CacheOutput(policy => policy.NoCache());
 
 
 Log.Information("Online Store API started successfully");
