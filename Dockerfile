@@ -9,6 +9,7 @@ COPY ["Online Store Application/Online Store Application(API).csproj", "Online S
 COPY ["Application/Application.csproj", "Application/"]
 COPY ["BusinessLogic/BusinessLogic.csproj", "BusinessLogic/"]
 COPY ["DataLayer/DataLayer.csproj", "DataLayer/"]
+COPY ["src/Infrastructure/Infrastructure.csproj", "src/Infrastructure/"]
 
 # 2. Restore وابستگی‌ها
 RUN dotnet restore "Online Store Application/Online Store Application(API).csproj"

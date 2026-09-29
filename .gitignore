@@ -6,8 +6,8 @@
 *.sln.docstates
 
 # Build results
-bin/
-obj/
+**/[Bb]in/
+**/[Oo]bj/
 [Dd]ebug/
 [Rr]elease/
 [Dd]ebugPublic/
@@ -26,7 +26,6 @@ Out/
 *.log
 *.tmp
 *.rsp
-**/AssemblyInfo.cs
 *.nupkg
 
 # User-specific / Local settings
