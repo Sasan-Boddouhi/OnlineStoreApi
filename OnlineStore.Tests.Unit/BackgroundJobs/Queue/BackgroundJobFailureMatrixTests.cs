@@ -179,7 +179,7 @@ public sealed class BackgroundJobFailureMatrixTests
     [Fact]
     public async Task RequeueAsync_MainQueueFull_PreservesEnvelopeAttempt()
     {
-        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var time = TimeProvider.System;
         var lifetime = new TestHostApplicationLifetime();
         var queue = CreateQueue(
             capacity: 1,
