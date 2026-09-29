@@ -88,7 +88,8 @@ public sealed class ChannelBackgroundJobQueue :
             idempotencyKey,
             activity?.GetBaggageItem("correlation.id")
                 ?? activity?.GetBaggageItem("correlationId"),
-            activity?.TraceId.ToString());
+            activity?.TraceId.ToString(),
+            activity?.SpanId.ToString());
     }
 
     private async ValueTask<EnqueueResult> WriteAsync(

@@ -471,6 +471,12 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-039** — `IdempotencyKey` validation rejects null, whitespace, and values exceeding configured maximum length.
 - **D-040** — Retry inbox is bounded with `Wait` semantics and timeout; failed acceptance terminates with `RetrySchedulerStarvation` rather than dropping a retry. Proposed MVP timeout value: `RetryEnqueueTimeoutSeconds = 5`.
 - **D-045** — `RetryEnqueueTimeoutSeconds = 5` is the proposed MVP timeout for bounded retry-inbox acceptance. The value is configurable and completes the concrete timeout policy introduced by D-040.
+
+- **D-046** — Reflection-based dispatch must unwrap `TargetInvocationException` before passing the exception to `IRetryPolicy`. Otherwise the real exception type (e.g. `HttpRequestException`) is hidden behind the reflection wrapper, and transient failures are misclassified as permanent.
+
+- **D-047** — M2.7 Observability is producer-focused, not infrastructure-focused. The existing Serilog + OTel + OTLP wiring in `main` is treated as the foundation; M2.7 adds `ActivitySource`, `Meter`, health checks, and proves the HTTP → BackgroundJob correlation path. Re-establishing existing observability infrastructure is explicitly out of scope.
+
+- **D-048** — `BackgroundJobEnvelope` is extended with an optional `ParentSpanId` (`string?`) to preserve W3C trace context across the queue boundary. Without `SpanId`, `ActivityContext` cannot be reconstructed in W3C format, and HTTP → BackgroundJob → Handler trace continuation would be broken. ActivitySource name: `"Infrastructure.BackgroundJobs"`.
 - **D-041** — `IBackgroundJobQueue` exposes a producer-only Application contract. `DequeueAsync` belongs to the Infrastructure-internal interface `IBackgroundJobConsumer` to enforce D-011's clear responsibility boundary.
 - **D-042** — The queue detects host shutdown through `IHostApplicationLifetime.ApplicationStopping`. Once shutdown begins, `EnqueueAsync` returns `EnqueueStatus.ShuttingDown` immediately without writing to the channel.
 - **D-044** — Maximum `IdempotencyKey` length is 256 characters. The proposed MVP default is configurable; keys exceeding the configured maximum are rejected at enqueue time with `ArgumentOutOfRangeException` before envelope construction.

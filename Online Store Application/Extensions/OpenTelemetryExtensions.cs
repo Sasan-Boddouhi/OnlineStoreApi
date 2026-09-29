@@ -5,6 +5,7 @@ using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Infrastructure.BackgroundJobs;
 
 namespace Online_Store_Application.Extensions;
 
@@ -71,7 +72,8 @@ public static class OpenTelemetryExtensions
                     .AddHttpClientInstrumentation()
                     .AddSource("OnlineStore.Auth")
                     .AddSource("OnlineStore.Services")
-                    .AddSource("OnlineStore.Cache");
+                    .AddSource("OnlineStore.Cache")
+                    .AddSource(BackgroundJobActivitySource.Name);
 
                 if (options.IncludeEfCore)
                 {

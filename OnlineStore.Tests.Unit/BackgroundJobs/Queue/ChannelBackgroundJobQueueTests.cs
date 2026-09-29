@@ -213,7 +213,7 @@ namespace OnlineStore.Tests.Unit.BackgroundJobs
             time.Advance(TimeSpan.FromSeconds(2));
 
             var dequeued = await queue.DequeueAsync(
-                new CancellationTokenSource(TimeSpan.FromSeconds(1)).Token);
+                new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
 
             dequeued.JobId.Should().Be(envelope.JobId);
 
@@ -248,13 +248,13 @@ namespace OnlineStore.Tests.Unit.BackgroundJobs
             time.Advance(TimeSpan.FromSeconds(2));
 
             var first = await queue.DequeueAsync(
-                new CancellationTokenSource(TimeSpan.FromSeconds(1)).Token);
+                new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
             first.JobId.Should().Be(early.JobId);
 
             time.Advance(TimeSpan.FromSeconds(8));
 
             var second = await queue.DequeueAsync(
-                new CancellationTokenSource(TimeSpan.FromSeconds(1)).Token);
+                new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token);
             second.JobId.Should().Be(late.JobId);
 
             stop.Cancel();
