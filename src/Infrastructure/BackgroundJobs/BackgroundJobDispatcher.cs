@@ -1,10 +1,11 @@
-using System.Reflection;
-using System.Runtime.ExceptionServices;
-using System.Text.Json;
 using Application.BackgroundJobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Text.Json;
 
 namespace Infrastructure.BackgroundJobs;
 
@@ -66,6 +67,29 @@ public sealed class BackgroundJobDispatcher
             CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
         var startedAt = _timeProvider.GetTimestamp();
+
+        var parentContext = default(ActivityContext);
+
+        if (!string.IsNullOrEmpty(envelope.TraceId) &&
+            !string.IsNullOrEmpty(envelope.ParentSpanId) &&
+            ActivityContext.TryParse(
+                $"00-{envelope.TraceId}-{envelope.ParentSpanId}-01",
+                traceState: null,
+                out var parsed))
+        {
+            parentContext = parsed;
+        }
+
+        using var activity = BackgroundJobActivitySource.Instance
+            .StartActivity(
+                "background_job.execute",
+                ActivityKind.Consumer,
+                parentContext);
+
+        activity?.SetTag("job.id", context.JobId);
+        activity?.SetTag("job.type", context.JobType);
+        activity?.SetTag("job.attempt", context.Attempt);
+        activity?.SetTag("idempotency.key", context.IdempotencyKey);
 
         _logger.LogInformation(
             "BackgroundJobStarted JobId={JobId} JobType={JobType} Attempt={Attempt} IdempotencyKey={IdempotencyKey} CorrelationId={CorrelationId} TraceId={TraceId}",

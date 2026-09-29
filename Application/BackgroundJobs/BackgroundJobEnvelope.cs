@@ -10,4 +10,5 @@ public sealed record BackgroundJobEnvelope(
     int Attempt,
     string IdempotencyKey,
     string? CorrelationId,
-    string? TraceId);
+    string? TraceId,
+    string? ParentSpanId = null);
