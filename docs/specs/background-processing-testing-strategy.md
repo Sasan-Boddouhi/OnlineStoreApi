@@ -1,7 +1,8 @@
 # Background Processing — Testing Strategy
 
-**Status:** Approved Approach — Document Pending Review  
-**Document:** `docs/specs/background-processing-testing-strategy.md`  
+**Status:** Implemented — M2.7 Closed  
+**Document:** `docs/specs/background-processing-testing-strategy.md`
+**Closure:** M2.7  
 **Target Framework:** .NET 8 / ASP.NET Core 8  
 **Scope:** Tests for the in-process background job processing subsystem
 
@@ -357,22 +358,22 @@ These concerns must be revisited before introducing the corresponding production
 
 ## Review Checklist
 
-Before M2.4 is closed, the reviewer must confirm:
+The M2.7 closure review confirms:
 
-- [ ] Failure Matrix covers queue pressure, retry, timeout, scheduler, shutdown, starvation, DI validation, observability, idempotency, and concurrency.
-- [ ] Every Failure Matrix row maps to at least one named test case.
-- [ ] Time-based tests use TimeProvider/FakeTimeProvider.
-- [ ] Shutdown tests use cancellation tokens or host StopAsync, not fake time.
-- [ ] Attempt semantics match D-031.
-- [ ] JobTimeout semantics match the approved N-2 interpretation.
-- [ ] RetryDecision remains binary: Retry/DoNotRetry.
-- [ ] Dequeue remains an Infrastructure concern.
-- [ ] No jitter is treated as a documented limitation.
-- [ ] Test isolation does not disable repository-wide parallelism.
-- [ ] CI executes all new tests.
-- [ ] No test depends on arbitrary sleeps or wall-clock timing.
+- [x] Failure Matrix covers queue pressure, retry, timeout, scheduler, shutdown, starvation, DI validation, observability, idempotency, and concurrency.
+- [x] Every Failure Matrix row maps to at least one named test case.
+- [x] Time-based tests use TimeProvider/FakeTimeProvider.
+- [x] Shutdown tests use cancellation tokens or host StopAsync, not fake time.
+- [x] Attempt semantics match D-031.
+- [x] JobTimeout semantics match the approved N-2 interpretation.
+- [x] RetryDecision remains binary: Retry/DoNotRetry.
+- [x] Dequeue remains an Infrastructure concern.
+- [x] No jitter is treated as a documented limitation.
+- [x] Test isolation does not disable repository-wide parallelism.
+- [x] CI executes all new tests.
+- [x] No test depends on arbitrary sleeps or wall-clock timing.
 
-**M2.4 Testing Strategy: Revised for gate review.**
+**M2.7 Testing Strategy: Closed.**
 
 ### M2.7.5 Coverage Status
 

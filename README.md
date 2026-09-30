@@ -1,6 +1,6 @@
 # Online Store API
 
-A production-style e-commerce REST API built with **ASP.NET Core 8**, with a layered architecture, reusable application infrastructure, specification-based querying, JWT authentication, automated testing, structured logging, caching, and containerized deployment.
+A production-style e-commerce REST API built with **ASP.NET Core 8**, with layered architecture, reusable application infrastructure, specification-based querying, JWT authentication, automated testing, structured logging, caching, background processing, API versioning, OpenTelemetry observability, and containerized deployment.
 
 The repository is designed as a practical backend engineering project: application behavior, infrastructure concerns, security, testing, and deployment are separated into explicit components rather than being concentrated in controllers.
 
@@ -35,6 +35,9 @@ The repository is designed as a practical backend engineering project: applicati
 ### Key Highlights
 
 * End-to-end observability with OpenTelemetry
+* Bounded background processing with retry scheduling, graceful shutdown, trace propagation, metrics, and health checks
+* Explicit URL-segment API versioning with v1 Swagger/OpenAPI
+* Gated GitHub Actions CI/CD with Docker publishing and production rollback automation
 
 ---
 
@@ -87,6 +90,7 @@ The repository is designed as a practical backend engineering project: applicati
 
 - OpenTelemetry (traces + metrics + structured logs)
 - Distributed tracing with Jaeger
+- Background-job traces and metrics across the HTTP-to-queue boundary
 - Custom business spans (Auth, Services, Cache)
 - EF Core query spans
 - Redis command spans
@@ -127,7 +131,7 @@ BusinessLogic          DataLayer
           Application
 ```
 
-The API project references the application, business-logic, and data-layer projects. BusinessLogic and DataLayer depend on Application contracts and abstractions.
+The API project references Application, BusinessLogic, DataLayer, and Infrastructure. BusinessLogic and DataLayer depend on Application contracts and abstractions, while Infrastructure owns background-processing implementations and other non-persistence infrastructure concerns.
 
 ### Runtime request flow
 
@@ -297,7 +301,7 @@ The solution contains dedicated unit, integration, and shared testing projects.
 
 The testing stack includes xUnit, FluentAssertions, Moq, WebApplicationFactory, SQLite In-Memory, and ReportGenerator.
 
-The current suite contains **330 automated tests: 216 unit tests and 114 integration tests**.
+The current suite contains **381 automated tests: 251 unit tests and 130 integration tests**.
 
 Run all tests locally:
 
@@ -404,15 +408,23 @@ DataLayer/
 ├── Persistence/
 └── Security/
 
+Infrastructure/
+├── BackgroundJobs/
+└── HealthChecks/
+
 Online Store Application/
 ├── Controllers/
 ├── Middleware/
 └── Configuration/
 
-tests/
-├── OnlineStore.Tests.Unit/
-├── OnlineStore.Tests.Integration/
-└── OnlineStore.Tests.Shared/
+OnlineStore.Tests.Unit/
+├── BackgroundJobs/
+
+OnlineStore.Tests.Integration/
+├── BackgroundProcessing/
+
+OnlineStore.Tests.Shared/
+├── BackgroundProcessing/
 ```
 
 The exact directory contents can evolve with the implementation; the architecture documentation describes the responsibility of each layer in more detail.
@@ -577,7 +589,11 @@ http://localhost:5000/swagger
 GET /health
 ```
 
-The health endpoint exposes application health information and checks the configured infrastructure dependencies.
+The health endpoints expose application health information through the existing dependency-aware endpoint and dedicated liveness/readiness endpoints:
+
+- `GET /health` — existing dependency health endpoint
+- `GET /health/live` — liveness only
+- `GET /health/ready` — readiness for the background-job queue and scheduler
 
 ### Version
 
@@ -599,6 +615,9 @@ The repository documentation is maintained in English.
 | [`docs/authentication.md`](docs/authentication.md) | Authentication, JWT, sessions, refresh tokens, and authorization |
 | [`docs/deployment.md`](docs/deployment.md) | Docker and production deployment behavior |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | GitHub Actions pipeline, deployment gates, verification, and rollback |
+| [`docs/observability.md`](docs/observability.md) | OpenTelemetry traces, metrics, logs, and deployment topology |
+| [`docs/features/background-processing.md`](docs/features/background-processing.md) | Background job queue, worker, retry, and scheduler behavior |
+| [`docs/specs/2026-09-28-api-versioning-design.md`](docs/specs/2026-09-28-api-versioning-design.md) | API versioning design and route contract |
 | [`TESTING.md`](TESTING.md) | Unit/integration testing and coverage workflow |
 
 The workflow implementation remains the authoritative source for CI/CD behavior, and the source code remains authoritative for runtime application behavior.
@@ -649,7 +668,7 @@ Documentation-only changes are excluded from the push-triggered CI workflow by t
 - [x] OpenTelemetry + Jaeger + Prometheus + Grafana
 - [x] CI/CD Pipeline with Rollback Automation
 - [x] API Versioning
-- [ ] Background Processing
+- [x] Background Processing
 - [ ] CQRS + MediatR
 - [ ] Kubernetes Deployment
 

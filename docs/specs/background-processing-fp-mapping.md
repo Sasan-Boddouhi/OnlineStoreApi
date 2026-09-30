@@ -1,6 +1,6 @@
 # Background Processing — Failure Matrix Mapping
 
-**Status:** M2.6 review artifact  
+**Status:** M2.7 closure artifact  
 **Scope:** FP-F01 through FP-F38
 
 This table maps every failure-matrix identifier to the concrete test method currently present in the repository. A row marked **Gap** is intentionally not represented by a dedicated test method yet; it must not be interpreted as covered merely because adjacent code paths are exercised.
@@ -34,7 +34,7 @@ This table maps every failure-matrix identifier to the concrete test method curr
 | FP-F25 | `BackgroundProcessingHostedServiceTests.RegistrationValidator_DuplicateHandler_FailsApplicationStartup` | Covered |
 | FP-F26 | `BackgroundJobFailureMatrixTests.Dispatcher_TraceAndCorrelationContext_PropagatesToHandler` | Covered |
 | FP-F27 | `BackgroundJobFailureMatrixTests.Dispatcher_Success_EmitsStartedAndSucceededObservabilityEvents` | Covered |
-| FP-F28 | No dedicated retry observability assertion | Deferred to M2.7 |
+| FP-F28 | `BackgroundJobFailureMatrixTests.RetryScenario_EmitsRetryScheduledEventAndRetryMetrics` | Covered |
 | FP-F29 | `BackgroundJobFailureMatrixTests.Dispatcher_TimeoutCancellation_EmitsCancellationReason` | Covered |
 | FP-F30 | `BackgroundJobFailureMatrixTests.EnqueueAsync_ConcurrentProducers_AcceptAllCoordinatedWrites` | Covered |
 | FP-F31 | `BackgroundJobFailureMatrixTests.Dispatcher_RetryEnvelopeAfterTransientFailure_ExecutesSuccessfullyWithStableIdentity` | Covered |
@@ -48,4 +48,4 @@ This table maps every failure-matrix identifier to the concrete test method curr
 
 ## Review conclusion
 
-M2.6.1 closes the dedicated coverage gaps required for bounded queue behavior, retry execution, shutdown, scope isolation, registration validation, concurrency, and the currently mockable observability paths. FP-F20 and FP-F28 remain explicit M2.7 obligations rather than being treated as incidentally covered.
+M2.7 closes the remaining dedicated observability and shutdown coverage obligations. FP-F20 and FP-F28 are covered by explicit tests, and Health Checks are covered by dedicated integration tests.

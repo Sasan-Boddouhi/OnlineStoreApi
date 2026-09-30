@@ -250,9 +250,9 @@ Jaeger UI is bound to `127.0.0.1:16686` (VM-local only).
 ### 7.1 Local — Trace in Jaeger
 
 1. `docker compose up -d`
-2. `curl http://localhost:5000/api/products`
+2. `curl http://localhost:5000/api/v1/products`
 3. Open `http://localhost:16686`
-4. Search: Service = `OnlineStoreApi`, Operation = `GET api/Products`
+4. Search: Service = `OnlineStoreApi`, Operation = `GET api/v1/Products`
 
 Expected span tree:
 

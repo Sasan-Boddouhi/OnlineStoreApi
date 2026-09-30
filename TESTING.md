@@ -1,8 +1,10 @@
 ﻿# Testing Guide
 
-[![CI](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/dotnet.yml/badge.svg)](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/dotnet.yml)
+[![CI](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/dotnet.yml)
 
 This document describes the testing architecture, execution workflow, coverage reporting, and testing conventions used throughout the OnlineStore solution.
+
+The current CI test run contains **381 automated tests: 251 unit tests and 130 integration tests**.
 
 ---
 
