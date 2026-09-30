@@ -74,8 +74,6 @@ public sealed class BackgroundJobWorker : BackgroundService
                     var delay = GetRetryDelay(attempt);
                     var retryEnvelope = envelope with { Attempt = attempt };
 
-                    OnlineStoreMetrics.BackgroundJobsRetryDelay.Record(delay.TotalSeconds);
-
                     if (await _retryScheduler.ScheduleAsync(
                             retryEnvelope,
                             delay,
@@ -88,6 +86,8 @@ public sealed class BackgroundJobWorker : BackgroundService
                             envelope.JobType,
                             attempt,
                             delay.TotalSeconds);
+
+                        OnlineStoreMetrics.BackgroundJobsRetryDelay.Record(delay.TotalSeconds);
 
                         OnlineStoreMetrics.BackgroundJobsRetried.Add(
                             1,
