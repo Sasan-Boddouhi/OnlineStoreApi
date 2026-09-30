@@ -655,5 +655,8 @@ The implementation must preserve these invariants:
 
 ## M2.7 Obligations
 
-- **FP-F20** — dedicated scheduler backoff interruption during host shutdown. **Done** — covered by `RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry` integration test; existing unit coverage retained.
-- **FP-F28** — dedicated retry observability assertion. **Done** — covered by `RetryScenario_EmitsRetryScheduledEventAndRetryMetrics`, asserting the retry scheduling event plus `background_jobs.retried` and `background_jobs.retry.delay`.
+- **FP-F20** — Done in M2.7.5 (PR #25)
+- **FP-F28** — Done in M2.7.5 (PR #25)
+- **Health Checks** — Done in M2.7.6
+
+- [x] Health checks exposed at /health/ready and /health/live.

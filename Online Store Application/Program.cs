@@ -364,6 +364,7 @@ app.UseRouting();
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
+    Predicate = check => !check.Tags.Contains("ready"),
     ResponseWriter = async (context, report) =>
     {
         context.Response.ContentType = "application/json";
@@ -385,6 +386,16 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 
         await context.Response.WriteAsJsonAsync(result);
     }
+});
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
 });
 
 if (!app.Environment.IsEnvironment("Testing"))

@@ -51,6 +51,8 @@ public sealed class ChannelBackgroundJobQueue :
             description: "Current depth of the main execution queue");
     }
 
+    public bool IsShuttingDown => Volatile.Read(ref _isShuttingDown) != 0;
+
     public async ValueTask<EnqueueResult> EnqueueAsync<TJob>(
         TJob job,
         string idempotencyKey,

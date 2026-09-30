@@ -1,4 +1,5 @@
 using Application.BackgroundJobs;
+using Infrastructure.BackgroundJobs.HealthChecks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -59,6 +60,14 @@ public static class BackgroundJobServiceCollectionExtensions
         services.AddSingleton<IRetryPolicy, StaticRetryPolicy>();
         services.AddSingleton<RetryScheduler>();
         services.AddSingleton<BackgroundJobDispatcher>();
+
+        services.AddHealthChecks()
+            .AddCheck<BackgroundJobQueueHealthCheck>(
+                "background-job-queue",
+                tags: new[] { "ready" })
+            .AddCheck<BackgroundJobSchedulerHealthCheck>(
+                "background-job-scheduler",
+                tags: new[] { "ready" });
 
         services.AddHostedService<BackgroundJobRegistrationValidator>();
         services.AddHostedService(sp => sp.GetRequiredService<RetryScheduler>());
