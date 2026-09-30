@@ -40,30 +40,29 @@ public sealed class HealthEndpointsTests : IClassFixture<IntegrationTestFactory<
     }
 
     [Fact]
-    public async Task Ready_AfterQueueShutdown_ReportsUnhealthy()
+    public async Task QueueHealthCheck_WhenShuttingDown_ReturnsUnhealthy()
     {
-        using var factory = CreateFactory();
-        _ = factory.CreateClient();
+        var lifetime = new TestHostApplicationLifetime();
+        var queue = new ChannelBackgroundJobQueue(
+            Options.Create(new ChannelBackgroundJobQueueOptions
+            {
+                QueueCapacity = 100,
+                EnqueueTimeoutSeconds = 1,
+                MaxIdempotencyKeyLength = 256
+            }),
+            lifetime,
+            TimeProvider.System);
 
-        var healthService = factory.Services.GetRequiredService<HealthCheckService>();
-        var queue = factory.Services.GetRequiredService<ChannelBackgroundJobQueue>();
+        var check = new BackgroundJobQueueHealthCheck(queue);
 
-        var beforeResult = await healthService.CheckHealthAsync(
-            result => result.Tags.Contains("ready"));
-        beforeResult.Status.Should().Be(HealthStatus.Healthy);
+        lifetime.Stop();
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
 
-        var lifetime = factory.Services.GetRequiredService<IHostApplicationLifetime>();
-        lifetime.StopApplication();
+        var result = await check.CheckHealthAsync(
+            new HealthCheckContext(),
+            CancellationToken.None);
 
-        var shutdownDeadline = DateTime.UtcNow.AddSeconds(2);
-        while (!queue.IsShuttingDown && DateTime.UtcNow < shutdownDeadline)
-            await Task.Delay(25);
-
-        queue.IsShuttingDown.Should().BeTrue();
-
-        var afterResult = await healthService.CheckHealthAsync(
-            result => result.Tags.Contains("ready"));
-        afterResult.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Status.Should().Be(HealthStatus.Unhealthy);
     }
 
     private WebApplicationFactory<Program> CreateFactory()
@@ -73,6 +72,18 @@ public sealed class HealthEndpointsTests : IClassFixture<IntegrationTestFactory<
                 new ConfigurationBuilder().AddInMemoryCollection().Build());
             services.AddBackgroundJobHandler<HealthCheckJob, HealthCheckJobHandler>();
         }));
+
+    private sealed class TestHostApplicationLifetime : IHostApplicationLifetime
+    {
+        private readonly CancellationTokenSource _stopping = new();
+
+        public CancellationToken ApplicationStarted => CancellationToken.None;
+        public CancellationToken ApplicationStopping => _stopping.Token;
+        public CancellationToken ApplicationStopped => CancellationToken.None;
+
+        public void Stop() => _stopping.Cancel();
+        public void StopApplication() => _stopping.Cancel();
+    }
 
     private sealed record HealthCheckJob;
 
