@@ -6,7 +6,9 @@ using FluentAssertions;
 using Infrastructure.BackgroundJobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OnlineStore.Tests.Integration.Infrastructure;
+using OnlineStore.Tests.Shared.BackgroundProcessing;
 
 namespace OnlineStore.Tests.Integration.BackgroundProcessing;
 
