@@ -1,3 +1,4 @@
+using Infrastructure.BackgroundJobs;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Infrastructure.BackgroundJobs.HealthChecks;
