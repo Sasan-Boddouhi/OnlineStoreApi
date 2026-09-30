@@ -1,21 +1,22 @@
 # CI/CD Pipeline Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** Implementation merged. Production deployment verification remains environment-dependent because the production self-hosted runner was not available during the documented CI validation.
 
 **Goal:** Replace the separate CI and Docker workflows with one gated CI/CD workflow that tests on GitHub-hosted runners, publishes the Docker image to GHCR, and deploys only trusted `main` pushes to the `onlinestore-prod` self-hosted runner.
 
-**Architecture:** A single `.github/workflows/ci-cd.yml` contains three gates: `build-and-test` on `ubuntu-latest`, `docker` on `ubuntu-latest` after successful tests, and `deploy` on the production self-hosted runner after a successful image push. The deployment job never checks out repository code; it executes the already validated production Compose file under `~/onlinestore-prod`, recreates only the API service, and verifies `/health` and `/version`.
+**Architecture:** A single `.github/workflows/ci-cd.yml` contains four jobs: `build-and-test`, `coverage-report`, `docker`, and `deploy`. Build/test and Docker run on GitHub-hosted Ubuntu runners; production deployment runs on the self-hosted runner after a successful image build/publish. The deployment job uses trusted main-branch deployment configuration, recreates only the API service, verifies `/health` and `/version`, and supports controlled rollback testing through `workflow_dispatch`.
 
 **Tech Stack:** GitHub Actions, .NET 8, Docker Buildx, GitHub Container Registry (GHCR), Docker Compose, Ubuntu self-hosted runner.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-ci-cd-design.md`
+**Spec:** `docs/specs/2026-09-15-ci-cd-design.md`
 
 ## Global Constraints
 
 - For pushes to `main`, build/test must succeed before Docker publish, and Docker publish must succeed before production deployment.
 - Pull requests targeting `main` run build/test/coverage only; production deployment must never run for pull requests.
-- The deploy job runs on `[self-hosted, Linux, X64, onlinestore-prod]` and is restricted to `github.event_name == 'push' && github.ref == 'refs/heads/main'`.
-- Do not run checkout or untrusted PR code on the production runner.
+- The deploy job runs on `[self-hosted, Linux, X64, onlinestore-prod]` and is restricted to a push to `refs/heads/main` or a manual `workflow_dispatch` on `refs/heads/main`.
+- Never execute untrusted pull-request code on the production runner.
+- The deployment job may check out trusted main-branch deployment configuration.
 - Deploy only the API service using `~/onlinestore-prod/docker-compose.prod.yml`.
 - Do not remove, recreate, prune, or migrate SQL Server and Redis volumes during deployment.
 - Preserve GHCR `latest` and commit-SHA image tags.
@@ -60,7 +61,7 @@ env:
 
 - [ ] **Step 2: Port the existing build/test/coverage job**
 
-Create `build-and-test` on `ubuntu-latest`, preserving the existing restore, Release build, coverage collection, coverage artifact upload, and `coverage-report` job behavior from the current `.github/workflows/dotnet.yml`. The test command remains:
+Create `build-and-test` on `ubuntu-latest`, preserving the existing restore, Release build, coverage collection, coverage artifact upload, and `coverage-report` job behavior from the current `.github/workflows/ci-cd.yml`. The test command remains:
 
 ```bash
 dotnet test "Online Store Application.sln" --configuration Release --no-build --collect:"XPlat Code Coverage" --settings coverlet.runsettings
@@ -86,11 +87,11 @@ Create `deploy` with:
 
 ```yaml
 needs: docker
-if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
 runs-on: [self-hosted, Linux, X64, onlinestore-prod]
 ```
 
-Do not use `actions/checkout` in this job. Run only the existing production Compose commands from the VM:
+The deployment job checks out the trusted deployment configuration and runs the existing production Compose commands from the VM:
 
 ```bash
 cd ~/onlinestore-prod
@@ -136,8 +137,8 @@ git commit -m "ci: add unified CI/CD pipeline"
 ### Task 2: Remove the superseded independent workflows
 
 **Files:**
-- Delete: `.github/workflows/dotnet.yml`
-- Delete: `.github/workflows/docker-publish.yml`
+- Remove the superseded standalone CI workflow.
+- Remove the superseded standalone Docker publishing workflow.
 
 **Interfaces:**
 - Consumes: validated `.github/workflows/ci-cd.yml` from Task 1.
@@ -145,18 +146,18 @@ git commit -m "ci: add unified CI/CD pipeline"
 
 - [ ] **Step 1: Confirm the unified workflow is the intended replacement**
 
-Compare its jobs against the old files before deletion. The current CI workflow contains build/test and coverage reporting, while the Docker workflow publishes `latest` and `${{ github.sha }}`; the new workflow must contain both behaviors plus the deployment gate.
+Compare its jobs against the superseded standalone workflows before deletion. The current CI workflow contains build/test and coverage reporting, while the Docker workflow publishes `latest` and `${{ github.sha }}`; the new workflow must contain both behaviors plus the deployment gate.
 
 - [ ] **Step 2: Delete the old CI workflow**
 
 ```bash
-git rm .github/workflows/dotnet.yml
+Remove the superseded standalone CI workflow from the repository.
 ```
 
 - [ ] **Step 3: Delete the old Docker publish workflow**
 
 ```bash
-git rm .github/workflows/docker-publish.yml
+Remove the superseded standalone Docker publishing workflow from the repository.
 ```
 
 - [ ] **Step 4: Review workflow directory state**
@@ -186,7 +187,7 @@ git commit -m "ci: remove superseded workflows"
 
 - [ ] **Step 1: Push the feature branch and open a pull request targeting `main`**
 
-Push the implementation branch and open a PR to `main`. The PR event must exercise `build-and-test` and `coverage-report`; it must not execute `deploy` because the deploy condition requires a `push` event to `refs/heads/main`.
+Push the implementation branch and open a PR to `main`. The PR event must exercise `build-and-test` and `coverage-report`; it must not execute `deploy` because the deploy condition accepts only `push` or `workflow_dispatch` on `refs/heads/main`.
 
 - [ ] **Step 2: Verify PR Actions results**
 
@@ -203,7 +204,7 @@ If the workflow parser rejects the YAML, correct only the workflow syntax and re
 
 - [ ] **Step 3: Merge the validated PR to `main`**
 
-After PR checks succeed, merge to `main`. The resulting `push` event is the only event that should execute the complete production path.
+After PR checks succeed, merge to `main`. The resulting `push` event executes the normal production path; manual dispatch on `main` is reserved for controlled rollback testing.
 
 - [ ] **Step 4: Verify the `main` pipeline gates**
 
@@ -236,13 +237,13 @@ Use the repository's normal merge flow after the PR and `main` workflow have pas
 | --- | --- |
 | Push to `develop` | `build-and-test` and coverage run; no production deploy |
 | PR to `main` | `build-and-test` and coverage run; no production deploy |
-| Manual `workflow_dispatch` | Build/test and Docker publish may run; deploy condition remains false |
+| Manual `workflow_dispatch` on `main` | Build/test, Docker publish, and controlled production rollback testing may run |
 | Push to `main` | Build/test → Docker publish → production deploy |
 | Build/test failure | Docker and deploy do not run |
 | Docker publish failure | Deploy does not run |
 | `/health` failure after deploy | Deploy job fails |
 | `/version` failure after deploy | Deploy job fails |
-| Production runner | No repository checkout/untrusted PR code |
+| Production runner | Trusted main-branch deployment configuration only; no PR execution |
 | SQL Server/Redis persistence | Existing named volumes remain untouched |
 
 ## Spec Coverage / Self-Review
@@ -254,5 +255,5 @@ Use the repository's normal merge flow after the PR and `main` workflow have pas
 - GHCR `latest` and commit-SHA tags are covered by Task 1 Step 3.
 - Health/version failure behavior is covered by Task 1 Step 5 and Task 3 Step 5.
 - Migration from the two old workflows is covered by Task 2.
-- No placeholders such as TBD/TODO are used.
+- No unresolved placeholders remain.
 - No application-code, Dockerfile, Compose-volume, or database-persistence changes are introduced.
