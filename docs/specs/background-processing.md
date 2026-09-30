@@ -437,6 +437,7 @@ Deferred to implementation or later milestones:
 8. Exact handler discovery mechanism.
 9. Per-job timeout override mechanism
 10. Exact retry-inbox enqueue timeout behavior if deployment-level tuning requires a different default..
+- Health Checks — Addressed in M2.7.6
 
 Future milestones may add durable retries, durable DLQ, Outbox, distributed idempotency, external brokers, multi-node coordination, and parallel workers.
 
@@ -647,16 +648,15 @@ The implementation must preserve these invariants:
 - [x] Attempt initial value and execution-start increment semantics.
 - [x] JobType stability invariant.
 - [x] IdempotencyKey validation contract.
+- [x] Health checks exposed at /health/live and /health/ready.
 
 **Design status: Approved for implementation.**
 
 
 
 
-## M2.7 Obligations
+## M2.7 Obligations (CLOSED)
 
-- **FP-F20** — Done in M2.7.5 (PR #25)
-- **FP-F28** — Done in M2.7.5 (PR #25)
-- **Health Checks** — Done in M2.7.6
-
-- [x] Health checks exposed at /health/ready and /health/live.
+- **FP-F20** — Dedicated scheduler backoff interruption during host shutdown. Done in M2.7.5 (PR #25).
+- **FP-F28** — Dedicated retry observability assertion. Done in M2.7.5 (PR #25).
+- **Health Checks** — Done in M2.7.6 (PR #26).
