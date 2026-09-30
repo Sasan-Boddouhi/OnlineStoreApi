@@ -87,7 +87,9 @@ public sealed class BackgroundJobWorker : BackgroundService
                             attempt,
                             delay.TotalSeconds);
 
-                        OnlineStoreMetrics.BackgroundJobsRetryDelay.Record(delay.TotalSeconds);
+                        OnlineStoreMetrics.BackgroundJobsRetryDelay.Record(
+                            delay.TotalSeconds,
+                            new KeyValuePair<string, object?>("job.type", envelope.JobType));
 
                         OnlineStoreMetrics.BackgroundJobsRetried.Add(
                             1,
