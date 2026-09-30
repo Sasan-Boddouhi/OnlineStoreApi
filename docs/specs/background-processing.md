@@ -70,7 +70,8 @@ public sealed record BackgroundJobEnvelope(
     int Attempt,
     string IdempotencyKey,
     string? CorrelationId,
-    string? TraceId);
+    string? TraceId,
+    string? ParentSpanId = null);
 ```
 
 Invariants:
@@ -81,6 +82,7 @@ Invariants:
 - `JobType` is a stable contractual identifier.
 - `Payload` is independent of its source `JsonDocument` lifetime.
 - Payload obtained from a `JsonDocument` must use `JsonElement.Clone()`. (D-020)
+- `ParentSpanId` is nullable; when present it enables W3C trace continuation across the queue boundary. (D-048)
 
 The envelope is designed to be serialization/persistence-safe. (D-012)
 
@@ -429,8 +431,8 @@ Deferred to implementation or later milestones:
 2. Exact retry inbox implementation.
 3. Exact DI registration API.
 4. Exact JSON serializer options.
-5. Concrete OpenTelemetry metric instruments.
-6. Concrete Activity naming.
+5. Concrete OpenTelemetry metric instruments. (Addressed in M2.7.4, D-049)
+6. Concrete Activity naming. (Addressed in M2.7.3, D-048)
 7. Concrete application job/use case.
 8. Exact handler discovery mechanism.
 9. Per-job timeout override mechanism
@@ -487,6 +489,8 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-048** — `BackgroundJobEnvelope` is extended with an optional `ParentSpanId` (`string?`) to preserve W3C trace context across the queue boundary. Without `SpanId`, `ActivityContext` cannot be reconstructed in W3C format, and HTTP → BackgroundJob → Handler trace continuation would be broken. ActivitySource name: `"Infrastructure.BackgroundJobs"`.
 - **D-049** — Background job metrics follow the repository OTel convention: dot-separated SDK names under Meter `"OnlineStore.BackgroundJobs"` (matching `OnlineStore.Auth`, `OnlineStore.Cache`). Prometheus-side normalization (underscore, `_total` suffix) is exporter responsibility. Registry: `OnlineStoreMetrics`. Version: `1.0.0`.
 
+*Note: D-030 was a process-level decision recorded during Design Spec development and is intentionally omitted from architectural traceability.*
+
 
 ## 33. Contract Signatures
 
@@ -518,6 +522,17 @@ public sealed record BackgroundJobExecutionContext(
     string IdempotencyKey,
     string? CorrelationId,
     string? TraceId);
+
+public sealed record BackgroundJobEnvelope(
+    Guid JobId,
+    string JobType,
+    JsonElement Payload,
+    DateTimeOffset EnqueuedAt,
+    int Attempt,
+    string IdempotencyKey,
+    string? CorrelationId,
+    string? TraceId,
+    string? ParentSpanId = null);
 ```
 
 ### 33.2 Infrastructure Contracts
