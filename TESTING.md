@@ -1,6 +1,6 @@
 ﻿# Testing Guide
 
-[![CI](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/dotnet.yml)
+[![CI](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Sasan-Boddouhi/OnlineStoreApi/actions/workflows/ci-cd.yml)
 
 This document describes the testing architecture, execution workflow, coverage reporting, and testing conventions used throughout the OnlineStore solution.
 
