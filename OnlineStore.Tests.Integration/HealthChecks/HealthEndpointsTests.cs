@@ -1,5 +1,9 @@
+using Application.BackgroundJobs;
 using FluentAssertions;
+using Infrastructure.BackgroundJobs.HealthChecks;
 using Infrastructure.BackgroundJobs;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
