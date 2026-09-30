@@ -1,9 +1,11 @@
-﻿using Application.BackgroundJobs;
+﻿using Asp.Versioning;
+using Application.BackgroundJobs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace OnlineStore.Tests.Integration.BackgroundProcessing;
 
 [ApiController]
+[ApiVersionNeutral]
 [Route("test/enqueue")]
 public sealed class TestEnqueueController : ControllerBase
 {
