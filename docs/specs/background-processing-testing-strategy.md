@@ -379,5 +379,13 @@ Before M2.4 is closed, the reviewer must confirm:
 - FP-F20: Covered by unit coverage and `RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry` integration coverage.
 - FP-F28: Covered by `RetryScenario_EmitsRetryScheduledEventAndRetryMetrics` integration coverage, including retry scheduling event, `background_jobs.retried`, and `background_jobs.retry.delay`.
 
+## 17. M2.7 Closure Summary
 
+M2.7 covered the following obligations:
 
+| Obligation | Status | Evidence |
+|---|---|---|
+| FP-F20 | Covered | RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry |
+| FP-F28 | Covered | RetryScenario_EmitsRetryScheduledEventAndRetryMetrics |
+| Health Checks | Covered | /health/live and /health/ready integration tests |
+| Retry Delay Metric Tag | Fixed | commit d568e39 — job.type tag added |
