@@ -103,6 +103,7 @@ public static class OpenTelemetryExtensions
                     .AddRuntimeInstrumentation()
                     .AddMeter(OnlineStoreMetrics.AuthMeterName)
                     .AddMeter(OnlineStoreMetrics.CacheMeterName)
+                    .AddMeter(OnlineStoreMetrics.BackgroundJobsMeterName)
                     .AddOtlpExporter(otlp =>
                     {
                         otlp.Endpoint = new Uri(options.Endpoint);

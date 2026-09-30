@@ -1,8 +1,10 @@
 using Application.BackgroundJobs;
+using Application.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
@@ -100,6 +102,9 @@ public sealed class BackgroundJobDispatcher
             context.CorrelationId,
             context.TraceId);
 
+        var outcome = "exception";
+        JobCancellationReason? cancellationReason = null;
+
         try
         {
             var handleMethod = handlerServiceType.GetMethod(
@@ -134,9 +139,14 @@ public sealed class BackgroundJobDispatcher
                 context.JobType,
                 context.Attempt,
                 _timeProvider.GetElapsedTime(startedAt).TotalMilliseconds);
+
+            outcome = "succeeded";
         }
         catch (TimeoutException)
         {
+            cancellationReason = JobCancellationReason.JobTimeout;
+            outcome = "cancelled";
+
             executionCts.Cancel();
 
             _logger.LogWarning(
@@ -144,19 +154,46 @@ public sealed class BackgroundJobDispatcher
                 context.JobId,
                 context.JobType,
                 context.Attempt,
-                JobCancellationReason.JobTimeout);
+                cancellationReason.Value);
 
             throw;
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
+            cancellationReason = JobCancellationReason.HostShutdown;
+            outcome = "cancelled";
+
             _logger.LogInformation(
                 "BackgroundJobCancelled JobId={JobId} JobType={JobType} Attempt={Attempt} CancellationReason={Reason}",
                 context.JobId,
                 context.JobType,
                 context.Attempt,
-                JobCancellationReason.HostShutdown);
+                cancellationReason.Value);
+
             throw;
+        }
+        finally
+        {
+            var durationSeconds = _timeProvider.GetElapsedTime(startedAt).TotalSeconds;
+
+            OnlineStoreMetrics.BackgroundJobsExecutionDuration.Record(
+                durationSeconds,
+                new KeyValuePair<string, object?>("outcome", outcome),
+                new KeyValuePair<string, object?>("job.type", context.JobType));
+
+            if (outcome == "succeeded")
+            {
+                OnlineStoreMetrics.BackgroundJobsCompleted.Add(
+                    1,
+                    new KeyValuePair<string, object?>("job.type", context.JobType));
+            }
+            else if (cancellationReason.HasValue)
+            {
+                OnlineStoreMetrics.BackgroundJobsCancelled.Add(
+                    1,
+                    new KeyValuePair<string, object?>("reason", cancellationReason.Value.ToString()),
+                    new KeyValuePair<string, object?>("job.type", context.JobType));
+            }
         }
     }
 }

@@ -94,4 +94,96 @@ public static class OnlineStoreMetrics
             name: "cache.operation.duration",
             unit: "ms",
             description: "Duration of cache operations in milliseconds");
+
+
+    // ══════════════════════════════════════════════════════════
+    // Background Jobs Metrics
+    // ══════════════════════════════════════════════════════════
+
+    public const string BackgroundJobsMeterName = "OnlineStore.BackgroundJobs";
+
+    public static readonly Meter BackgroundJobsMeter =
+        new(BackgroundJobsMeterName, "1.0.0");
+
+    /// <summary>
+    /// Total jobs successfully written to the main execution queue.
+    /// Does not count retry re-enqueues.
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsEnqueued =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.enqueued",
+            unit: "{jobs}",
+            description: "Total jobs written to the main execution queue");
+
+    /// <summary>
+    /// Total jobs that completed successfully.
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsCompleted =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.completed",
+            unit: "{jobs}",
+            description: "Total background jobs completed successfully");
+
+    /// <summary>
+    /// Total jobs that failed permanently (no retry).
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsFailed =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.failed",
+            unit: "{jobs}",
+            description: "Total background jobs that failed permanently");
+
+    /// <summary>
+    /// Total cancelled jobs. Reason is a JobCancellationReason value.
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsCancelled =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.cancelled",
+            unit: "{jobs}",
+            description: "Total cancelled background jobs");
+
+    /// <summary>
+    /// Total jobs scheduled for retry.
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsRetried =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.retried",
+            unit: "{jobs}",
+            description: "Total background jobs scheduled for retry");
+
+    /// <summary>
+    /// Total enqueue attempts rejected. Reason: "QueueFull" or "ShuttingDown".
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsEnqueueRejected =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.enqueue_rejected",
+            unit: "{jobs}",
+            description: "Total enqueue attempts rejected by the queue");
+
+    /// <summary>
+    /// Duration of background job execution. Outcome: "succeeded", "cancelled", "exception".
+    /// </summary>
+    public static readonly Histogram<double> BackgroundJobsExecutionDuration =
+        BackgroundJobsMeter.CreateHistogram<double>(
+            name: "background_jobs.execution.duration",
+            unit: "s",
+            description: "Duration of background job execution");
+
+    /// <summary>
+    /// Computed retry delay for scheduled retries.
+    /// </summary>
+    public static readonly Histogram<double> BackgroundJobsRetryDelay =
+        BackgroundJobsMeter.CreateHistogram<double>(
+            name: "background_jobs.retry.delay",
+            unit: "s",
+            description: "Computed retry delay for scheduled retries");
+
+    /// <summary>
+    /// Total retry queue starvation events.
+    /// </summary>
+    public static readonly Counter<long> BackgroundJobsRetryQueueStarvation =
+        BackgroundJobsMeter.CreateCounter<long>(
+            name: "background_jobs.retry_queue.starvation",
+            unit: "{jobs}",
+            description: "Total retry queue starvation events");
 }

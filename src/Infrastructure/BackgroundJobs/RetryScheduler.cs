@@ -1,8 +1,10 @@
 using System.Threading.Channels;
 using Application.BackgroundJobs;
+using Application.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.Metrics;
 
 namespace Infrastructure.BackgroundJobs;
 
@@ -36,6 +38,13 @@ public sealed class RetryScheduler : BackgroundService
                 SingleWriter = false,
                 AllowSynchronousContinuations = false
             });
+
+
+        OnlineStoreMetrics.BackgroundJobsMeter.CreateObservableGauge<long>(
+            name: "background_jobs.retry_queue.depth",
+            observeValue: () => _pending.Count,
+            unit: "{jobs}",
+            description: "Current depth of the retry scheduler pending queue");
     }
 
     public async ValueTask<bool> ScheduleAsync(
@@ -145,6 +154,11 @@ public sealed class RetryScheduler : BackgroundService
                 item.Envelope.JobType,
                 item.Envelope.Attempt,
                 JobCancellationReason.HostShutdown);
+
+            OnlineStoreMetrics.BackgroundJobsCancelled.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", JobCancellationReason.HostShutdown.ToString()),
+                new KeyValuePair<string, object?>("job.type", item.Envelope.JobType));
             return;
         }
 
@@ -158,6 +172,15 @@ public sealed class RetryScheduler : BackgroundService
                 item.Envelope.JobType,
                 item.Envelope.Attempt,
                 JobCancellationReason.RetryQueueStarvation);
+
+            OnlineStoreMetrics.BackgroundJobsCancelled.Add(
+                1,
+                new KeyValuePair<string, object?>("reason", JobCancellationReason.RetryQueueStarvation.ToString()),
+                new KeyValuePair<string, object?>("job.type", item.Envelope.JobType));
+
+            OnlineStoreMetrics.BackgroundJobsRetryQueueStarvation.Add(
+                1,
+                new KeyValuePair<string, object?>("job.type", item.Envelope.JobType));
             return;
         }
 
