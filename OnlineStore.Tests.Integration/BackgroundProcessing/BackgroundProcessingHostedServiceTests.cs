@@ -1,4 +1,5 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using Application.BackgroundJobs;
 using FluentAssertions;
 using Infrastructure.BackgroundJobs;
@@ -7,6 +8,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OnlineStore.Tests.Shared.BackgroundProcessing;
 using OnlineStore.Tests.Integration.Infrastructure;
 
 namespace OnlineStore.Tests.Integration.BackgroundProcessing;
@@ -16,6 +19,28 @@ public sealed class BackgroundProcessingHostedServiceTests : IClassFixture<Integ
     private readonly IntegrationTestFactory<Program> _factory;
 
     public BackgroundProcessingHostedServiceTests(IntegrationTestFactory<Program> factory) => _factory = factory;
+
+    [Fact]
+    public async Task RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry()
+    {
+        using var factory = CreateFactory<TransientThenSuccessHandler>(retryBaseDelaySeconds: 10);
+        _ = factory.CreateClient();
+        var queue = factory.Services.GetRequiredService<IBackgroundJobQueue>();
+        var recorder = factory.Services.GetRequiredService<RetryAttemptRecorder>();
+        var logger = factory.Services.GetRequiredService<RecordingLogger<BackgroundJobWorker>>();
+        (await queue.EnqueueAsync(new TestJob(1), "f20-shutdown", default)).IsAccepted.Should().BeTrue();
+        await recorder.FirstAttemptFailed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await logger.RetryScheduled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        recorder.ExecutionCount.Should().Be(1);
+        var stopwatch = Stopwatch.StartNew();
+        var lifetime = factory.Services.GetRequiredService<IHostApplicationLifetime>();
+        lifetime.StopApplication();
+        lifetime.ApplicationStopped.WaitHandle.WaitOne(TimeSpan.FromSeconds(5)).Should().BeTrue("Host must shut down within bounded time");
+        stopwatch.Stop();
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+        recorder.ExecutionCount.Should().Be(1, "retry must not start during shutdown");
+    }
 
     [Fact]
     public async Task Worker_HostShutdownWhileWaiting_StopsPromptly()
@@ -92,18 +117,25 @@ public sealed class BackgroundProcessingHostedServiceTests : IClassFixture<Integ
             .Where(x => x.ToString().Contains("background job handler"));
     }
 
-    private WebApplicationFactory<Program> CreateFactory<THandler>()
+    private WebApplicationFactory<Program> CreateFactory<THandler>(int? retryBaseDelaySeconds = null)
         where THandler : class, IBackgroundJobHandler<TestJob>
-        => _factory.WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services =>
+        => _factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<DrainRecorder>();
+            services.AddSingleton<ScopedInstanceRecorder>();
+            services.AddSingleton<RetryAttemptRecorder>();
+            services.AddScoped<ScopedMarker>();
+            var values = new Dictionary<string, string?>();
+            if (retryBaseDelaySeconds.HasValue)
+                values["BackgroundJobs:RetryBaseDelaySeconds"] = retryBaseDelaySeconds.Value.ToString();
+            services.AddBackgroundProcessing(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+            services.AddBackgroundJobHandler<TestJob, THandler>();
+            if (retryBaseDelaySeconds.HasValue)
             {
-                services.AddSingleton<DrainRecorder>();
-                services.AddSingleton<ScopedInstanceRecorder>();
-                services.AddScoped<ScopedMarker>();
-                services.AddBackgroundProcessing(
-                    new ConfigurationBuilder().AddInMemoryCollection().Build());
-                services.AddBackgroundJobHandler<TestJob, THandler>();
-            }));
+                services.AddSingleton<RecordingLogger<BackgroundJobWorker>>();
+                services.AddSingleton<ILogger<BackgroundJobWorker>>(sp => sp.GetRequiredService<RecordingLogger<BackgroundJobWorker>>());
+            }
+        }));
 
     private WebApplicationFactory<Program> CreateFactoryWithoutHandlers()
         => _factory.WithWebHostBuilder(builder =>
@@ -122,6 +154,29 @@ public sealed class BackgroundProcessingHostedServiceTests : IClassFixture<Integ
             }));
 
     public sealed record TestJob(int Value);
+
+    public sealed class RetryAttemptRecorder
+    {
+        private int _executionCount;
+        public int ExecutionCount => Volatile.Read(ref _executionCount);
+        public TaskCompletionSource<object?> FirstAttemptFailed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Increment() => Interlocked.Increment(ref _executionCount);
+    }
+
+    public sealed class TransientThenSuccessHandler : IBackgroundJobHandler<TestJob>
+    {
+        private readonly RetryAttemptRecorder _recorder;
+        public TransientThenSuccessHandler(RetryAttemptRecorder recorder) => _recorder = recorder;
+        public Task HandleAsync(TestJob job, BackgroundJobExecutionContext context, CancellationToken cancellationToken)
+        {
+            if (_recorder.Increment() == 1)
+            {
+                _recorder.FirstAttemptFailed.TrySetResult(null);
+                throw new HttpRequestException("transient");
+            }
+            return Task.CompletedTask;
+        }
+    }
 
     public sealed class WaitingJobHandler : IBackgroundJobHandler<TestJob>
     {

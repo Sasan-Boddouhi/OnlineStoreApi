@@ -269,7 +269,7 @@ Every row below maps to one or more concrete test cases. Test IDs are stable ide
 | FP-F17 | Successful retry | First execution fails transiently; later execution succeeds | Succeeded | Same JobId/IdempotencyKey; Attempt increments exactly once per execution | Integration |
 | FP-F18 | Timeout + retryable policy | Handler exceeds JobTimeout and policy permits retry | WaitingForRetry | Not Cancelled; retry scheduled | Unit + Integration |
 | FP-F19 | Timeout + terminal policy | Handler exceeds JobTimeout and policy rejects retry | Cancelled / JobTimeout | Terminal cancellation reason is JobTimeout | Unit + Integration |
-| FP-F20 | Host shutdown during retry backoff | Host cancellation during delayed retry | Cancelled / shutdown path | Backoff interrupted; no new retry starts | Unit + Integration |
+| FP-F20 | Host shutdown during retry backoff | Host cancellation during delayed retry | Cancelled / shutdown path | Backoff interrupted; no new retry starts; integration coverage: `RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry` | Unit + Integration |
 | FP-F21 | Host shutdown while waiting for work | Worker waiting on queue when host stops | Worker exits promptly | No leaked worker task; shutdown completes | Unit + Integration |
 | FP-F22 | Graceful drain | Accepted jobs exist during shutdown | Accepted work drains until deadline | Completed jobs remain successful; deadline is honored | Integration |
 | FP-F23 | Handler scope isolation | Two executions resolve scoped dependency | Separate scopes | Scoped state is not shared between executions | Integration |
@@ -277,7 +277,7 @@ Every row below maps to one or more concrete test cases. Test IDs are stable ide
 | FP-F25 | Duplicate handler | More than one handler for same job type | Startup/configuration failure | Ambiguity detected before traffic | Unit + Integration |
 | FP-F26 | Correlation propagation | Job created inside traced request | Context preserved | CorrelationId/TraceId available in handler context | Unit + Integration |
 | FP-F27 | Observability on success | Handler succeeds | Started + Succeeded | Job identity, Attempt, duration and outcome fields present | Unit + Integration |
-| FP-F28 | Observability on retry | Handler fails transiently | RetryScheduled + later Started | Attempt and stable identity distinguish retry execution | Unit + Integration |
+| FP-F28 | Observability on retry | Handler fails transiently | RetryScheduled + later Started | Attempt and stable identity distinguish retry execution; integration coverage: `RetryScenario_EmitsRetryScheduledEventAndRetryMetrics` verifies event, `retried`, and `retry.delay` | Unit + Integration |
 | FP-F29 | Observability on cancellation | Shutdown/timeout/starvation | Cancelled event | Correct CancellationReason recorded | Unit + Integration |
 | FP-F30 | Concurrent producers | Multiple producers enqueue concurrently | No corruption/lost accepted work | Exact accepted count; bounded capacity; deterministic coordination | Unit + Integration |
 | FP-F31 | Idempotency propagation | Same caller key across retry | Key remains stable | Every execution observes identical IdempotencyKey | Unit + Integration |
@@ -373,6 +373,11 @@ Before M2.4 is closed, the reviewer must confirm:
 - [ ] No test depends on arbitrary sleeps or wall-clock timing.
 
 **M2.4 Testing Strategy: Revised for gate review.**
+
+### M2.7.5 Coverage Status
+
+- FP-F20: Covered by unit coverage and `RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry` integration coverage.
+- FP-F28: Covered by `RetryScenario_EmitsRetryScheduledEventAndRetryMetrics` integration coverage, including retry scheduling event, `background_jobs.retried`, and `background_jobs.retry.delay`.
 
 
 
