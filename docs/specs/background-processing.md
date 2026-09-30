@@ -655,5 +655,5 @@ The implementation must preserve these invariants:
 
 ## M2.7 Obligations
 
-- **FP-F20** — dedicated scheduler backoff interruption during host shutdown. Add deterministic coverage for the scheduler while it is inside its delayed-backoff path.
-- **FP-F28** — dedicated retry observability assertion. Verify the retry scheduling observability contract as part of the M2.7 observability surface.
+- **FP-F20** — dedicated scheduler backoff interruption during host shutdown. **Done** — covered by `RetryScheduler_HostShutdownDuringBackoff_DoesNotExecuteRetry` integration test; existing unit coverage retained.
+- **FP-F28** — dedicated retry observability assertion. **Done** — covered by `RetryScenario_EmitsRetryScheduledEventAndRetryMetrics`, asserting the retry scheduling event plus `background_jobs.retried` and `background_jobs.retry.delay`.
