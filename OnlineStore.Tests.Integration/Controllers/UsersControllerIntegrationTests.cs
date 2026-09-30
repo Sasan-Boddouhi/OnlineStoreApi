@@ -13,7 +13,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
     public UsersControllerIntegrationTests(IntegrationTestFactory<Program> factory) : base(factory) { }
 
     // ============================================================
-    // GET /api/users/me
+    // GET /api/v1/users/me
     // ============================================================
     [Fact]
     public async Task GetMyProfile_Authenticated_ReturnsOk()
@@ -21,7 +21,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/users/me");
+        var response = await Client.GetAsync("/api/v1/users/me");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var user = await response.Content.ReadFromJsonAsync<UserDto>();
@@ -32,12 +32,12 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
     [Fact]
     public async Task GetMyProfile_Unauthenticated_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/users/me");
+        var response = await Client.GetAsync("/api/v1/users/me");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     // ============================================================
-    // GET /api/users
+    // GET /api/v1/users
     // ============================================================
     [Fact]
     public async Task GetUsers_ReturnsOk_WithPagination()
@@ -45,7 +45,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/users?pageNumber=1&pageSize=5");
+        var response = await Client.GetAsync("/api/v1/users?pageNumber=1&pageSize=5");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -55,12 +55,12 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/users?filter=invalidField eq 'x'");
+        var response = await Client.GetAsync("/api/v1/users?filter=invalidField eq 'x'");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ============================================================
-    // GET /api/users/{id}
+    // GET /api/v1/users/{id}
     // ============================================================
     [Fact]
     public async Task GetUserById_Existing_ReturnsOk()
@@ -69,7 +69,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         // admin has userId=1 (based on seed)
-        var response = await Client.GetAsync("/api/users/1");
+        var response = await Client.GetAsync("/api/v1/users/1");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var user = await response.Content.ReadFromJsonAsync<UserDto>();
@@ -83,12 +83,12 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/users/99999");
+        var response = await Client.GetAsync("/api/v1/users/99999");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     // ============================================================
-    // POST /api/users
+    // POST /api/v1/users
     // ============================================================
     [Fact]
     public async Task CreateUser_ValidData_ReturnsCreated()
@@ -105,7 +105,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
             DateOfBirth = "1370/01/01"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/users", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/users", dto);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var created = await response.Content.ReadFromJsonAsync<UserDto>();
@@ -131,12 +131,12 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
             DateOfBirth = "1370/01/01"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/users", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/users", dto);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ============================================================
-    // PUT /api/users/{id}
+    // PUT /api/v1/users/{id}
     // ============================================================
     [Fact]
     public async Task UpdateUser_ValidData_ReturnsNoContent()
@@ -153,7 +153,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
             LastName = "Update",
             DateOfBirth = "1370/01/01"
         };
-        var createResponse = await Client.PostAsJsonAsync("/api/users", createDto);
+        var createResponse = await Client.PostAsJsonAsync("/api/v1/users", createDto);
         var created = await createResponse.Content.ReadFromJsonAsync<UserDto>();
 
         // Update that user
@@ -165,7 +165,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
             LastName = "Update"
         };
 
-        var response = await Client.PutAsJsonAsync($"/api/users/{created.UserId}", updateDto);
+        var response = await Client.PutAsJsonAsync($"/api/v1/users/{created.UserId}", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
@@ -176,12 +176,12 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var updateDto = new UpdateUserDto { UserId = 5 };
-        var response = await Client.PutAsJsonAsync("/api/users/10", updateDto);
+        var response = await Client.PutAsJsonAsync("/api/v1/users/10", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 
     // ============================================================
-    // PATCH /api/users/{id}
+    // PATCH /api/v1/users/{id}
     // ============================================================
     [Fact]
     public async Task PatchUserStatus_ValidData_ReturnsNoContent()
@@ -190,16 +190,16 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var patchDto = new { userId = 1, isActive = false };
-        var response = await Client.PatchAsJsonAsync("/api/users/1", patchDto);
+        var response = await Client.PatchAsJsonAsync("/api/v1/users/1", patchDto);
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Restore active status for other tests
         var restoreDto = new { userId = 1, isActive = true };
-        await Client.PatchAsJsonAsync("/api/users/1", restoreDto);
+        await Client.PatchAsJsonAsync("/api/v1/users/1", restoreDto);
     }
 
     // ============================================================
-    // DELETE /api/users/{id}
+    // DELETE /api/v1/users/{id}
     // ============================================================
     [Fact]
     public async Task DeleteUser_Existing_ReturnsNoContent()
@@ -216,10 +216,10 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
             LastName = "Delete",
             DateOfBirth = "1370/01/01"
         };
-        var createResponse = await Client.PostAsJsonAsync("/api/users", createDto);
+        var createResponse = await Client.PostAsJsonAsync("/api/v1/users", createDto);
         var created = await createResponse.Content.ReadFromJsonAsync<UserDto>();
 
-        var response = await Client.DeleteAsync($"/api/users/{created!.UserId}");
+        var response = await Client.DeleteAsync($"/api/v1/users/{created!.UserId}");
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
@@ -229,7 +229,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.DeleteAsync("/api/users/99999");
+        var response = await Client.DeleteAsync("/api/v1/users/99999");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

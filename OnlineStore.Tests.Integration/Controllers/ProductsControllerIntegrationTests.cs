@@ -15,7 +15,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         : base(factory) { }
 
     // ============================================================
-    // POST /api/products
+    // POST /api/v1/products
     // ============================================================
     [Fact]
     public async Task CreateProduct_Valid_ReturnsCreated()
@@ -33,7 +33,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         // Act
-        var response = await Client.PostAsJsonAsync("/api/products", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/products", dto);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -56,7 +56,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             SubcategoryId = 1
         };
 
-        var response = await Client.PostAsJsonAsync("/api/products", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/products", dto);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -74,7 +74,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             SubcategoryId = 9999
         };
 
-        var response = await Client.PostAsJsonAsync("/api/products", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/products", dto);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -92,12 +92,12 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             SubcategoryId = 1
         };
 
-        var response = await Client.PostAsJsonAsync("/api/products", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/products", dto);
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity); // ۴۲۲
     }
 
     // ============================================================
-    // GET /api/products
+    // GET /api/v1/products
     // ============================================================
     [Fact]
     public async Task GetProducts_ReturnsOk_WithPagination()
@@ -109,7 +109,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
 
         for (int i = 1; i <= 3; i++)
         {
-            await Client.PostAsJsonAsync("/api/products", new CreateProductDto
+            await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
             {
                 Name = $"List Product {i}",
                 Price = i * 10,
@@ -119,7 +119,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
 
         Client.DefaultRequestHeaders.Authorization = null; // GET anonymous
 
-        var response = await Client.GetAsync("/api/products?pageNumber=1&pageSize=2");
+        var response = await Client.GetAsync("/api/v1/products?pageNumber=1&pageSize=2");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var result = await response.Content.ReadFromJsonAsync<PagedResult<ProductDto>>();
@@ -131,12 +131,12 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
     [Fact]
     public async Task GetProducts_WithInvalidFilter_ReturnsBadRequest()
     {
-        var response = await Client.GetAsync("/api/products?filter=invalidField eq 'x'");
+        var response = await Client.GetAsync("/api/v1/products?filter=invalidField eq 'x'");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ============================================================
-    // GET /api/products/{id}
+    // GET /api/v1/products/{id}
     // ============================================================
     [Fact]
     public async Task GetProduct_ExistingId_ReturnsOk()
@@ -146,7 +146,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        var createdResponse = await Client.PostAsJsonAsync("/api/products", new CreateProductDto
+        var createdResponse = await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
         {
             Name = "Single Product",
             Price = 20,
@@ -156,7 +156,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
 
         Client.DefaultRequestHeaders.Authorization = null;
 
-        var response = await Client.GetAsync($"/api/products/{created!.ProductId}");
+        var response = await Client.GetAsync($"/api/v1/products/{created!.ProductId}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var product = await response.Content.ReadFromJsonAsync<ProductDto>();
         product!.Name.Should().Be("Single Product");
@@ -165,12 +165,12 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
     [Fact]
     public async Task GetProduct_NonExistingId_ReturnsNotFound()
     {
-        var response = await Client.GetAsync("/api/products/99999");
+        var response = await Client.GetAsync("/api/v1/products/99999");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     // ============================================================
-    // PUT /api/products/{id}
+    // PUT /api/v1/products/{id}
     // ============================================================
     [Fact]
     public async Task UpdateProduct_Valid_ReturnsOk()
@@ -179,7 +179,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        var createdResponse = await Client.PostAsJsonAsync("/api/products", new CreateProductDto
+        var createdResponse = await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
         {
             Name = "Before Update",
             Price = 50,
@@ -195,7 +195,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             SubcategoryId = 1
         };
 
-        var response = await Client.PutAsJsonAsync($"/api/products/{created.ProductId}", updateDto);
+        var response = await Client.PutAsJsonAsync($"/api/v1/products/{created.ProductId}", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await response.Content.ReadFromJsonAsync<ProductDto>();
         updated!.Name.Should().Be("After Update");
@@ -217,7 +217,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             SubcategoryId = 1
         };
 
-        var response = await Client.PutAsJsonAsync("/api/products/10", updateDto);
+        var response = await Client.PutAsJsonAsync("/api/v1/products/10", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -231,12 +231,12 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             Price = 1,
             SubcategoryId = 1
         };
-        var response = await Client.PutAsJsonAsync("/api/products/1", updateDto);
+        var response = await Client.PutAsJsonAsync("/api/v1/products/1", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     // ============================================================
-    // DELETE /api/products/{id}
+    // DELETE /api/v1/products/{id}
     // ============================================================
     [Fact]
     public async Task DeleteProduct_Existing_ReturnsNoContent()
@@ -245,7 +245,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        var createdResponse = await Client.PostAsJsonAsync("/api/products", new CreateProductDto
+        var createdResponse = await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
         {
             Name = "To Delete",
             Price = 1,
@@ -253,12 +253,12 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         });
         var created = await createdResponse.Content.ReadFromJsonAsync<ProductDto>();
 
-        var response = await Client.DeleteAsync($"/api/products/{created!.ProductId}");
+        var response = await Client.DeleteAsync($"/api/v1/products/{created!.ProductId}");
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Confirm soft‑deleted (با GET)
         Client.DefaultRequestHeaders.Authorization = null;
-        var getResponse = await Client.GetAsync($"/api/products/{created.ProductId}");
+        var getResponse = await Client.GetAsync($"/api/v1/products/{created.ProductId}");
         getResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -269,14 +269,14 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.DeleteAsync("/api/products/99999");
+        var response = await Client.DeleteAsync("/api/v1/products/99999");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task DeleteProduct_Unauthorized_Returns401()
     {
-        var response = await Client.DeleteAsync("/api/products/1");
+        var response = await Client.DeleteAsync("/api/v1/products/1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

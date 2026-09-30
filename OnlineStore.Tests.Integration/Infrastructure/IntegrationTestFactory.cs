@@ -44,6 +44,7 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["Jwt:ExpireMinutes"] = "60",
                 ["Redis:Configuration"] = "localhost:6379",
                 ["Redis:InstanceName"] = "OnlineStore_Test:",
+                ["Swagger:Enabled"] = "true",
                 ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:"
             });
         });

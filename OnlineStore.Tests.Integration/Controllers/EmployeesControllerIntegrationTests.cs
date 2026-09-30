@@ -51,7 +51,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         return created.EmployeeId;
     }
 
-    // ========== GET /api/employees/me ==========
+    // ========== GET /api/v1/employees/me ==========
     [Fact]
     public async Task GetMyProfile_Authenticated_ReturnsOk()
     {
@@ -59,7 +59,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/employees/me");
+        var response = await Client.GetAsync("/api/v1/employees/me");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var employee = await response.Content.ReadFromJsonAsync<EmployeeDto>();
@@ -70,11 +70,11 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
     [Fact]
     public async Task GetMyProfile_Unauthenticated_ReturnsUnauthorized()
     {
-        var response = await Client.GetAsync("/api/employees/me");
+        var response = await Client.GetAsync("/api/v1/employees/me");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // ========== GET /api/employees ==========
+    // ========== GET /api/v1/employees ==========
     [Fact]
     public async Task GetEmployees_ReturnsOk_WithPagination()
     {
@@ -82,7 +82,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/employees?pageNumber=1&pageSize=5");
+        var response = await Client.GetAsync("/api/v1/employees?pageNumber=1&pageSize=5");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -92,11 +92,11 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/employees?filter=invalidField eq 'x'");
+        var response = await Client.GetAsync("/api/v1/employees?filter=invalidField eq 'x'");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // ========== GET /api/employees/{id} ==========
+    // ========== GET /api/v1/employees/{id} ==========
     [Fact]
     public async Task GetById_Existing_ReturnsOk()
     {
@@ -104,7 +104,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync($"/api/employees/{empId}");
+        var response = await Client.GetAsync($"/api/v1/employees/{empId}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var employee = await response.Content.ReadFromJsonAsync<EmployeeDto>();
@@ -118,11 +118,11 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.GetAsync("/api/employees/99999");
+        var response = await Client.GetAsync("/api/v1/employees/99999");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // ========== POST /api/employees ==========
+    // ========== POST /api/v1/employees ==========
     [Fact]
     public async Task CreateEmployee_ValidData_ReturnsCreated()
     {
@@ -159,7 +159,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
             HireDate = DateTime.Today
         };
 
-        var response = await Client.PostAsJsonAsync("/api/employees", dto);
+        var response = await Client.PostAsJsonAsync("/api/v1/employees", dto);
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var created = await response.Content.ReadFromJsonAsync<EmployeeDto>();
@@ -168,12 +168,12 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         response.Headers.Location!.AbsolutePath.Should().Contain(created.EmployeeId.ToString());
     }
 
-    // ========== PUT /api/employees/{id} ==========
+    // ========== PUT /api/v1/employees/{id} ==========
     [Fact]
     public async Task UpdateEmployee_ValidData_ReturnsNoContent()
     {
         var empId = await CreateEmployeeForAdminAsync();
-        var getResponse = await Client.GetAsync($"/api/employees/{empId}");
+        var getResponse = await Client.GetAsync($"/api/v1/employees/{empId}");
         var current = await getResponse.Content.ReadFromJsonAsync<EmployeeDto>();
 
         var updateDto = new UpdateEmployeeDto
@@ -184,7 +184,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
             Salary = 6000
         };
 
-        var response = await Client.PutAsJsonAsync($"/api/employees/{empId}", updateDto);
+        var response = await Client.PutAsJsonAsync($"/api/v1/employees/{empId}", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
@@ -195,11 +195,11 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var updateDto = new UpdateEmployeeDto { EmployeeId = 5 };
-        var response = await Client.PutAsJsonAsync("/api/employees/10", updateDto);
+        var response = await Client.PutAsJsonAsync("/api/v1/employees/10", updateDto);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // ========== DELETE /api/employees/{id} ==========
+    // ========== DELETE /api/v1/employees/{id} ==========
     [Fact]
     public async Task DeleteEmployee_Existing_ReturnsNoContent()
     {
@@ -207,7 +207,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.DeleteAsync($"/api/employees/{empId}");
+        var response = await Client.DeleteAsync($"/api/v1/employees/{empId}");
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
@@ -217,7 +217,7 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await Client.DeleteAsync("/api/employees/99999");
+        var response = await Client.DeleteAsync("/api/v1/employees/99999");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

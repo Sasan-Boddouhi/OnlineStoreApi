@@ -53,7 +53,7 @@ Swagger should expose v1 as the current API contract.
 
 ### 7. Controllers
 
-Version ProductsController, UsersController, and AuthController.
+Version all six API controllers: ProductsController, UsersController, AuthController, EmployeeTypesController, EmployeesController, and OrdersController.
 
 Leave business logic, DTOs, repositories, authentication, caching, rate limiting, and persistence unchanged.
 

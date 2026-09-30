@@ -1,4 +1,5 @@
-﻿using Application.Common.Specifications;
+﻿using Asp.Versioning;
+using Application.Common.Specifications;
 using Application.Entities;
 using Application.Interfaces;
 using Application.Interfaces.Security;
@@ -21,6 +22,7 @@ using Microsoft.IdentityModel.Tokens;
 using Online_Store_Application.Extensions;
 using Online_Store_Application.Middleware;
 using Online_Store_Application.Services;
+using Online_Store_Application.Swagger;
 using Serilog;
 using Serilog.Enrichers.Span;
 using System.Security.Claims;
@@ -76,6 +78,19 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
     };
 });
 
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = false;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+})
+.AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -104,6 +119,8 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
+
+builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 
 var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
     ?? new RedisOptions
@@ -355,7 +372,17 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        var provider = app.Services.GetRequiredService<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider>();
+
+        foreach (var description in provider.ApiVersionDescriptions)
+        {
+            options.SwaggerEndpoint(
+                $"/swagger/{description.GroupName}/swagger.json",
+                description.GroupName.ToUpperInvariant());
+        }
+    });
 }
 
 app.UseStaticFiles();
