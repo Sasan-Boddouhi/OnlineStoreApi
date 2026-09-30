@@ -1,4 +1,5 @@
 using Application.BackgroundJobs;
+using Infrastructure.BackgroundJobs.HealthChecks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
