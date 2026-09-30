@@ -137,8 +137,8 @@ git commit -m "ci: add unified CI/CD pipeline"
 ### Task 2: Remove the superseded independent workflows
 
 **Files:**
-- Delete: `.github/workflows/dotnet.yml`
-- Delete: `.github/workflows/docker-publish.yml`
+- Remove the superseded standalone CI workflow.
+- Remove the superseded standalone Docker publishing workflow.
 
 **Interfaces:**
 - Consumes: validated `.github/workflows/ci-cd.yml` from Task 1.
@@ -146,18 +146,18 @@ git commit -m "ci: add unified CI/CD pipeline"
 
 - [ ] **Step 1: Confirm the unified workflow is the intended replacement**
 
-Compare its jobs against the old files before deletion. The current CI workflow contains build/test and coverage reporting, while the Docker workflow publishes `latest` and `${{ github.sha }}`; the new workflow must contain both behaviors plus the deployment gate.
+Compare its jobs against the superseded standalone workflows before deletion. The current CI workflow contains build/test and coverage reporting, while the Docker workflow publishes `latest` and `${{ github.sha }}`; the new workflow must contain both behaviors plus the deployment gate.
 
 - [ ] **Step 2: Delete the old CI workflow**
 
 ```bash
-git rm .github/workflows/dotnet.yml
+Remove the superseded standalone CI workflow from the repository.
 ```
 
 - [ ] **Step 3: Delete the old Docker publish workflow**
 
 ```bash
-git rm .github/workflows/docker-publish.yml
+Remove the superseded standalone Docker publishing workflow from the repository.
 ```
 
 - [ ] **Step 4: Review workflow directory state**
