@@ -1,8 +1,10 @@
 using System.Threading.Channels;
 using Application.BackgroundJobs;
+using Application.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.Metrics;
 
 namespace Infrastructure.BackgroundJobs;
 
@@ -72,6 +74,8 @@ public sealed class BackgroundJobWorker : BackgroundService
                     var delay = GetRetryDelay(attempt);
                     var retryEnvelope = envelope with { Attempt = attempt };
 
+                    OnlineStoreMetrics.BackgroundJobsRetryDelay.Record(delay.TotalSeconds);
+
                     if (await _retryScheduler.ScheduleAsync(
                             retryEnvelope,
                             delay,
@@ -84,6 +88,10 @@ public sealed class BackgroundJobWorker : BackgroundService
                             envelope.JobType,
                             attempt,
                             delay.TotalSeconds);
+
+                        OnlineStoreMetrics.BackgroundJobsRetried.Add(
+                            1,
+                            new KeyValuePair<string, object?>("job.type", envelope.JobType));
                     }
                     else
                     {
@@ -94,6 +102,11 @@ public sealed class BackgroundJobWorker : BackgroundService
                             envelope.JobType,
                             attempt,
                             JobCancellationReason.RetrySchedulerStarvation);
+
+                        OnlineStoreMetrics.BackgroundJobsCancelled.Add(
+                            1,
+                            new KeyValuePair<string, object?>("reason", JobCancellationReason.RetrySchedulerStarvation.ToString()),
+                            new KeyValuePair<string, object?>("job.type", envelope.JobType));
                     }
 
                     continue;
@@ -105,6 +118,10 @@ public sealed class BackgroundJobWorker : BackgroundService
                     envelope.JobId,
                     envelope.JobType,
                     attempt);
+
+                OnlineStoreMetrics.BackgroundJobsFailed.Add(
+                    1,
+                    new KeyValuePair<string, object?>("job.type", envelope.JobType));
             }
         }
     }

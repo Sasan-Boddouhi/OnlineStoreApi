@@ -4,6 +4,8 @@ using System.Threading.Channels;
 using Application.BackgroundJobs;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.Metrics;
+using Application.Diagnostics;
 
 namespace Infrastructure.BackgroundJobs;
 
@@ -16,6 +18,8 @@ public sealed class ChannelBackgroundJobQueue :
     private readonly ChannelBackgroundJobQueueOptions _options;
     private readonly TimeProvider _timeProvider;
     private int _isShuttingDown;
+    private readonly ObservableGauge<long> _queueDepthGauge;
+    private long _depth;
 
     public ChannelBackgroundJobQueue(
         IOptions<ChannelBackgroundJobQueueOptions> options,
@@ -38,6 +42,13 @@ public sealed class ChannelBackgroundJobQueue :
         applicationLifetime.ApplicationStopping.Register(
             static state => ((ChannelBackgroundJobQueue)state!).BeginShutdown(),
             this);
+
+
+        _queueDepthGauge = OnlineStoreMetrics.BackgroundJobsMeter.CreateObservableGauge<long>(
+            name: "background_jobs.queue.depth",
+            observeValue: () => Interlocked.Read(ref _depth),
+            unit: "{jobs}",
+            description: "Current depth of the main execution queue");
     }
 
     public async ValueTask<EnqueueResult> EnqueueAsync<TJob>(
@@ -48,19 +59,36 @@ public sealed class ChannelBackgroundJobQueue :
         ValidateIdempotencyKey(idempotencyKey);
 
         if (Volatile.Read(ref _isShuttingDown) != 0)
+        {
+            EmitEnqueueRejected("ShuttingDown");
             return new EnqueueResult(EnqueueStatus.ShuttingDown);
+        }
 
         var envelope = CreateEnvelope(job, idempotencyKey);
 
         if (Volatile.Read(ref _isShuttingDown) != 0)
+        {
+            EmitEnqueueRejected("ShuttingDown");
             return new EnqueueResult(EnqueueStatus.ShuttingDown);
+        }
 
-        return await WriteAsync(envelope, cancellationToken).ConfigureAwait(false);
+        var result = await WriteAsync(envelope, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsAccepted)
+        {
+            OnlineStoreMetrics.BackgroundJobsEnqueued.Add(
+                1,
+                new KeyValuePair<string, object?>("job.type", envelope.JobType));
+        }
+        else
+        {
+            EmitEnqueueRejected(result.Status == EnqueueStatus.ShuttingDown
+                ? "ShuttingDown"
+                : "QueueFull");
+        }
+
+        return result;
     }
-
-    public ValueTask<BackgroundJobEnvelope> DequeueAsync(
-        CancellationToken cancellationToken) =>
-        _channel.Reader.ReadAsync(cancellationToken);
 
     public async ValueTask<EnqueueStatus> RequeueAsync(
         BackgroundJobEnvelope envelope,
@@ -70,6 +98,14 @@ public sealed class ChannelBackgroundJobQueue :
             return EnqueueStatus.ShuttingDown;
 
         return (await WriteAsync(envelope, cancellationToken).ConfigureAwait(false)).Status;
+    }
+
+    public async ValueTask<BackgroundJobEnvelope> DequeueAsync(
+        CancellationToken cancellationToken)
+    {
+        var envelope = await _channel.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        Interlocked.Decrement(ref _depth);
+        return envelope;
     }
 
     private BackgroundJobEnvelope CreateEnvelope<TJob>(
@@ -123,6 +159,7 @@ public sealed class ChannelBackgroundJobQueue :
                         ? EnqueueStatus.ShuttingDown
                         : EnqueueStatus.QueueFull);
 
+            Interlocked.Increment(ref _depth);
             return new EnqueueResult(EnqueueStatus.Enqueued);
         }
         catch (TimeoutException)
@@ -159,5 +196,12 @@ public sealed class ChannelBackgroundJobQueue :
     {
         if (Interlocked.Exchange(ref _isShuttingDown, 1) == 0)
             _channel.Writer.TryComplete();
+    }
+
+    private static void EmitEnqueueRejected(string reason)
+    {
+        OnlineStoreMetrics.BackgroundJobsEnqueueRejected.Add(
+            1,
+            new KeyValuePair<string, object?>("reason", reason));
     }
 }

@@ -70,7 +70,8 @@ public sealed record BackgroundJobEnvelope(
     int Attempt,
     string IdempotencyKey,
     string? CorrelationId,
-    string? TraceId);
+    string? TraceId,
+    string? ParentSpanId = null);
 ```
 
 Invariants:
@@ -81,6 +82,7 @@ Invariants:
 - `JobType` is a stable contractual identifier.
 - `Payload` is independent of its source `JsonDocument` lifetime.
 - Payload obtained from a `JsonDocument` must use `JsonElement.Clone()`. (D-020)
+- `ParentSpanId` is nullable; when present it enables W3C trace continuation across the queue boundary. (D-048)
 
 The envelope is designed to be serialization/persistence-safe. (D-012)
 
@@ -429,8 +431,8 @@ Deferred to implementation or later milestones:
 2. Exact retry inbox implementation.
 3. Exact DI registration API.
 4. Exact JSON serializer options.
-5. Concrete OpenTelemetry metric instruments.
-6. Concrete Activity naming.
+5. Concrete OpenTelemetry metric instruments. (Addressed in M2.7.4, D-049)
+6. Concrete Activity naming. (Addressed in M2.7.3, D-048)
 7. Concrete application job/use case.
 8. Exact handler discovery mechanism.
 9. Per-job timeout override mechanism
@@ -470,16 +472,8 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
 - **D-038** — `JobType` must be a stable contract name independent of CLR assembly-qualified names.
 - **D-039** — `IdempotencyKey` validation rejects null, whitespace, and values exceeding configured maximum length.
 - **D-040** — Retry inbox is bounded with `Wait` semantics and timeout; failed acceptance terminates with `RetrySchedulerStarvation` rather than dropping a retry. Proposed MVP timeout value: `RetryEnqueueTimeoutSeconds = 5`.
-- **D-045** — `RetryEnqueueTimeoutSeconds = 5` is the proposed MVP timeout for bounded retry-inbox acceptance. The value is configurable and completes the concrete timeout policy introduced by D-040.
-
-- **D-046** — Reflection-based dispatch must unwrap `TargetInvocationException` before passing the exception to `IRetryPolicy`. Otherwise the real exception type (e.g. `HttpRequestException`) is hidden behind the reflection wrapper, and transient failures are misclassified as permanent.
-
-- **D-047** — M2.7 Observability is producer-focused, not infrastructure-focused. The existing Serilog + OTel + OTLP wiring in `main` is treated as the foundation; M2.7 adds `ActivitySource`, `Meter`, health checks, and proves the HTTP → BackgroundJob correlation path. Re-establishing existing observability infrastructure is explicitly out of scope.
-
-- **D-048** — `BackgroundJobEnvelope` is extended with an optional `ParentSpanId` (`string?`) to preserve W3C trace context across the queue boundary. Without `SpanId`, `ActivityContext` cannot be reconstructed in W3C format, and HTTP → BackgroundJob → Handler trace continuation would be broken. ActivitySource name: `"Infrastructure.BackgroundJobs"`.
 - **D-041** — `IBackgroundJobQueue` exposes a producer-only Application contract. `DequeueAsync` belongs to the Infrastructure-internal interface `IBackgroundJobConsumer` to enforce D-011's clear responsibility boundary.
 - **D-042** — The queue detects host shutdown through `IHostApplicationLifetime.ApplicationStopping`. Once shutdown begins, `EnqueueAsync` returns `EnqueueStatus.ShuttingDown` immediately without writing to the channel.
-- **D-044** — Maximum `IdempotencyKey` length is 256 characters. The proposed MVP default is configurable; keys exceeding the configured maximum are rejected at enqueue time with `ArgumentOutOfRangeException` before envelope construction.
 - **D-043** — Introduce a dedicated `Infrastructure` project.
   - **Rationale:** The approved Design Spec assigns ownership of background-processing infrastructure to a layer that does not yet exist in the solution. Introducing a dedicated Infrastructure project preserves the approved separation between Application contracts and Infrastructure implementations (D-002, D-011).
   - **Decision:** Add `Infrastructure.csproj`. It references `Application` only. The API project references `Infrastructure` for runtime composition. The existing `DataLayer` project is not modified by this decision and remains the owner of persistence concerns.
@@ -488,6 +482,15 @@ Future milestones may add durable retries, durable DLQ, Outbox, distributed idem
   - **Test folder convention:** `OnlineStore.Tests.Unit/BackgroundJobs/`.
   - **Solution integration:** The new Infrastructure project is added to the existing `Online Store Application.sln`; no new solution is introduced.
   - **Reference direction:** `Application` is referenced by both `DataLayer` and `Infrastructure`; the API references both. `Infrastructure` does not reference `DataLayer`.
+- **D-044** — Maximum `IdempotencyKey` length is 256 characters. The proposed MVP default is configurable; keys exceeding the configured maximum are rejected at enqueue time with `ArgumentOutOfRangeException` before envelope construction.
+- **D-045** — `RetryEnqueueTimeoutSeconds = 5` is the proposed MVP timeout for bounded retry-inbox acceptance. The value is configurable and completes the concrete timeout policy introduced by D-040.
+- **D-046** — Reflection-based dispatch must unwrap `TargetInvocationException` before passing the exception to `IRetryPolicy`. Otherwise the real exception type (e.g. `HttpRequestException`) is hidden behind the reflection wrapper, and transient failures are misclassified as permanent.
+- **D-047** — M2.7 Observability is producer-focused, not infrastructure-focused. The existing Serilog + OTel + OTLP wiring in `main` is treated as the foundation; M2.7 adds `ActivitySource`, `Meter`, health checks, and proves the HTTP → BackgroundJob correlation path. Re-establishing existing observability infrastructure is explicitly out of scope.
+- **D-048** — `BackgroundJobEnvelope` is extended with an optional `ParentSpanId` (`string?`) to preserve W3C trace context across the queue boundary. Without `SpanId`, `ActivityContext` cannot be reconstructed in W3C format, and HTTP → BackgroundJob → Handler trace continuation would be broken. ActivitySource name: `"Infrastructure.BackgroundJobs"`.
+- **D-049** — Background job metrics follow the repository OTel convention: dot-separated SDK names under Meter `"OnlineStore.BackgroundJobs"` (matching `OnlineStore.Auth`, `OnlineStore.Cache`). Prometheus-side normalization (underscore, `_total` suffix) is exporter responsibility. Registry: `OnlineStoreMetrics`. Version: `1.0.0`.
+
+*Note: D-030 was a process-level decision recorded during Design Spec development and is intentionally omitted from architectural traceability.*
+
 
 ## 33. Contract Signatures
 
@@ -519,6 +522,17 @@ public sealed record BackgroundJobExecutionContext(
     string IdempotencyKey,
     string? CorrelationId,
     string? TraceId);
+
+public sealed record BackgroundJobEnvelope(
+    Guid JobId,
+    string JobType,
+    JsonElement Payload,
+    DateTimeOffset EnqueuedAt,
+    int Attempt,
+    string IdempotencyKey,
+    string? CorrelationId,
+    string? TraceId,
+    string? ParentSpanId = null);
 ```
 
 ### 33.2 Infrastructure Contracts
