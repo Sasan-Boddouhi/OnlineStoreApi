@@ -60,6 +60,14 @@ public static class BackgroundJobServiceCollectionExtensions
         services.AddSingleton<RetryScheduler>();
         services.AddSingleton<BackgroundJobDispatcher>();
 
+        services.AddHealthChecks()
+            .AddCheck<BackgroundJobQueueHealthCheck>(
+                "background-job-queue",
+                tags: new[] { "ready" })
+            .AddCheck<BackgroundJobSchedulerHealthCheck>(
+                "background-job-scheduler",
+                tags: new[] { "ready" });
+
         services.AddHostedService<BackgroundJobRegistrationValidator>();
         services.AddHostedService(sp => sp.GetRequiredService<RetryScheduler>());
         services.AddHostedService<BackgroundJobWorker>();
