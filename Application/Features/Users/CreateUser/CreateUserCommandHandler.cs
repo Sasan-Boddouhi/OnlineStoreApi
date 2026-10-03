@@ -3,6 +3,7 @@ using Application.Exceptions;
 using Application.Helper;
 using Application.Interfaces;
 using Application.Interfaces.Security;
+using Application.Interfaces.Services;
 using AutoMapper;
 using MediatR;
 using Microsoft.Extensions.Logging;
