@@ -1,5 +1,4 @@
-﻿using Application.DTOs.Order;
-using Application.Entities;
+﻿using Application.Entities;
 using AutoMapper;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.Common.Mapping;

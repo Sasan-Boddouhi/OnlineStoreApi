@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Application.DTOs.Order
+namespace BusinessLogic.DTOs.Order
 {
     public class OrderDto
     {
@@ -8,7 +8,7 @@ namespace Application.DTOs.Order
         public DateTime OrderDate { get; set; }
         public decimal TotalAmount { get; set; }
         public string Status { get; set; } = string.Empty;
-        public string ShippingFullName { get; internal set; } = null!;
+        public string ShippingFullName { get; set; } = null!;
         public string ShippingAddress { get; internal set; } = null!;
         public string ShippingPhoneNumber { get; internal set; } = null!;
     }
