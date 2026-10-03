@@ -1,6 +1,6 @@
 using Asp.Versioning;
 using Application.Interfaces;
-using BusinessLogic.DTOs.Order;
+using Application.DTOs.Order;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
