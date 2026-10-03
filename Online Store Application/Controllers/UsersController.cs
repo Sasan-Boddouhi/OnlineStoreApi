@@ -1,10 +1,13 @@
 ﻿using Application.Common.Queries;
 using Application.Entities;
+using Application.Exceptions;
+using Application.Features.Users.CreateUser;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -18,6 +21,7 @@ using Asp.Versioning;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly ISender _sender;
     private readonly ILogger<UsersController> _logger;
 
     private static readonly QueryParseContext<User> QueryContext = new()
@@ -27,9 +31,13 @@ public class UsersController : ControllerBase
         CaseInsensitive = true
     };
 
-    public UsersController(IUserService userService, ILogger<UsersController> logger)
+    public UsersController(
+        IUserService userService,
+        ISender sender,
+        ILogger<UsersController> logger)
     {
         _userService = userService;
+        _sender = sender;
         _logger = logger;
     }
 
@@ -101,8 +109,41 @@ public class UsersController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
         try
         {
-            var created = await _userService.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetUserById), new { id = created.UserId }, created);
+            var userId = await _sender.Send(
+                new CreateUserCommand(
+                    dto.FirstName,
+                    dto.LastName,
+                    dto.PhoneNumber,
+                    dto.Password,
+                    dto.Email,
+                    dto.DateOfBirth,
+                    dto.Addresses?
+                        .Select(a => new CreateUserAddressCommand(
+                            a.CityId,
+                            a.Plaque,
+                            a.Unit,
+                            a.PostalCode,
+                            a.RecipientFirstName,
+                            a.RecipientLastName,
+                            a.ExtraDescription,
+                            a.IsDefault))
+                        .ToList()));
+
+            var created = await _userService.GetByIdAsync(
+                userId,
+                includeRoles: true);
+
+            if (created is null)
+            {
+                throw new BusinessException(
+                    "خطا در ایجاد کاربر",
+                    "USER_CREATION_FAILED");
+            }
+
+            return CreatedAtAction(
+                nameof(GetUserById),
+                new { id = created.UserId },
+                created);
         }
         catch (Exception ex)
         {
