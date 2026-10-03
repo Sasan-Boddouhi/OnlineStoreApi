@@ -208,12 +208,14 @@ public class OrderServiceTests
     public async Task GetOrdersAsync_ReturnsMappedDtos()
     {
         var orders = new List<Order> { CreateValidOrder(1), CreateValidOrder(2) };
+        _customerRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Customer>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { CustomerId = 1, UserId = 10 });
         _orderRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(orders);
         _mapperMock.Setup(m => m.Map<IEnumerable<OrderDto>>(orders))
             .Returns(orders.Select(o => new OrderDto { OrderId = o.OrderId }));
 
-        var result = await _service.GetOrdersAsync(1);
+        var result = await _service.GetOrdersAsync(10);
         result.Should().HaveCount(2);
     }
 
@@ -226,10 +228,12 @@ public class OrderServiceTests
         order.AddItem(item);
         order.Invoice = CreateInvoiceWithStatus(InvoiceStatus.Paid);
 
+        _customerRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Customer>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { CustomerId = 1, UserId = 10 });
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
 
-        var result = await _service.GetOrderDetailsAsync(1);
+        var result = await _service.GetOrderDetailsAsync(10, 1);
         result.Should().NotBeNull();
         result!.Items.Should().HaveCount(1);
         result.InvoiceNumber.Should().Be("INV-001");
@@ -239,9 +243,35 @@ public class OrderServiceTests
     [Fact]
     public async Task GetOrderDetailsAsync_OrderNotFound_ReturnsNull()
     {
+        _customerRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Customer>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { CustomerId = 1, UserId = 10 });
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Order?)null);
-        var result = await _service.GetOrderDetailsAsync(1);
+        var result = await _service.GetOrderDetailsAsync(10, 1);
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetOrderDetailsAsync_NonOwnedOrder_ReturnsNull()
+    {
+        _customerRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Customer>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Customer { CustomerId = 2, UserId = 20 });
+        _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Order?)null);
+
+        var result = await _service.GetOrderDetailsAsync(10, 2);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetOrdersAsync_NonOwnedUser_ReturnsEmpty()
+    {
+        _customerRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Customer>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Customer?)null);
+
+        var result = await _service.GetOrdersAsync(999);
+
+        result.Should().BeEmpty();
     }
 }

@@ -189,33 +189,62 @@ public sealed class OrderService : IOrderService
 
     #endregion
 
-    #region GetOrders (برای مشتری خاص)
+    #region GetOrders
 
-    public async Task<IEnumerable<OrderDto>> GetOrdersAsync(int customerId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<OrderDto>> GetOrdersAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Retrieving orders for customer {CustomerId}", customerId);
+        _logger.LogInformation("Retrieving orders for user {UserId}", userId);
+
+        var customer = await _unitOfWork.Repository<Customer>()
+            .FirstOrDefaultAsync(
+                new Spec<Customer>().Where(c => c.UserId == userId),
+                cancellationToken);
+
+        if (customer == null)
+            return Enumerable.Empty<OrderDto>();
 
         var spec = new Spec<Order>()
-            .Where(o => o.CustomerId == customerId)
+            .Where(o => o.Customer.UserId == userId)
             .OrderByDescending(o => o.OrderDate);
-        var orders = await _unitOfWork.Repository<Order>().ListAsync(spec, cancellationToken);
+
+        var orders = await _unitOfWork.Repository<Order>()
+            .ListAsync(spec, cancellationToken);
+
         return _mapper.Map<IEnumerable<OrderDto>>(orders);
     }
 
     #endregion
 
-    #region GetOrderDetails (با آیتم‌ها)
+    #region GetOrderDetails
 
-    public async Task<OrderDetailsDto?> GetOrderDetailsAsync(int orderId, CancellationToken cancellationToken = default)
+    public async Task<OrderDetailsDto?> GetOrderDetailsAsync(
+        int userId,
+        int orderId,
+        CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Retrieving order details for order {OrderId}", orderId);
+        _logger.LogDebug(
+            "Retrieving order details for user {UserId}, order {OrderId}",
+            userId,
+            orderId);
+
+        var customer = await _unitOfWork.Repository<Customer>()
+            .FirstOrDefaultAsync(
+                new Spec<Customer>().Where(c => c.UserId == userId),
+                cancellationToken);
+
+        if (customer == null)
+            return null;
 
         var spec = new Spec<Order>()
-            .Where(o => o.OrderId == orderId)
+            .Where(o => o.OrderId == orderId && o.Customer.UserId == userId)
             .Include(o => o.OrderItems)
             .Include(o => o.Invoice);
 
-        var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(spec, cancellationToken);
+        var order = await _unitOfWork.Repository<Order>()
+            .FirstOrDefaultAsync(spec, cancellationToken);
+
         if (order == null)
             return null;
 
