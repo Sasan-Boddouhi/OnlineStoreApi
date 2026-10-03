@@ -20,11 +20,11 @@ namespace BusinessLogic.Services.Interfaces
         // تأیید سفارش (تغییر وضعیت به Processing)
         Task<OrderDto> ConfirmOrderAsync(int orderId, CancellationToken cancellationToken = default);
 
-        // دریافت تمام سفارش‌های یک مشتری
-        Task<IEnumerable<OrderDto>> GetOrdersAsync(int customerId, CancellationToken cancellationToken = default);
+        // دریافت تمام سفارش‌های کاربر جاری
+        Task<IEnumerable<OrderDto>> GetOrdersAsync(int userId, CancellationToken cancellationToken = default);
 
-        // دریافت جزئیات یک سفارش (به همراه آیتم‌ها و فاکتور)
-        Task<OrderDetailsDto?> GetOrderDetailsAsync(int orderId, CancellationToken cancellationToken = default);
+        // دریافت جزئیات یک سفارش متعلق به کاربر جاری
+        Task<OrderDetailsDto?> GetOrderDetailsAsync(int userId, int orderId, CancellationToken cancellationToken = default);
 
         // لغو سفارش (اگر امکان‌پذیر باشد)
         Task<OrderDto> CancelOrderAsync(int orderId, CancellationToken cancellationToken = default);
