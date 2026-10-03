@@ -1,5 +1,7 @@
 ﻿using Application.Entities;
 using Application.Exceptions;
+using Application.Features.Users.CreateUser;
+using MediatR;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
 using DataLayer.Context;
@@ -13,12 +15,13 @@ namespace OnlineStore.Tests.Integration.Services;
 public class UserServiceIntegrationTests : BaseIntegrationTest
 {
     private IUserService UserService => GetService<IUserService>();
+    private ISender Sender => GetService<ISender>();
     private AppDbContext DbContext => GetService<AppDbContext>();
 
     public UserServiceIntegrationTests(IntegrationTestFactory<Program> factory) : base(factory) { }
 
     [Fact]
-    public async Task CreateAsync_ValidUser_CreatesAndReturnsDto()
+    public async Task CreateUserCommand_ValidUser_CreatesAndReturnsDto()
     {
         var dto = new CreateUserDto
         {
@@ -29,7 +32,27 @@ public class UserServiceIntegrationTests : BaseIntegrationTest
             DateOfBirth = "1370/01/01"
         };
 
-        var result = await UserService.CreateAsync(dto);
+        var userId = await Sender.Send(
+            new CreateUserCommand(
+                dto.FirstName,
+                dto.LastName,
+                dto.PhoneNumber,
+                dto.Password,
+                dto.Email,
+                dto.DateOfBirth,
+                dto.Addresses?
+                    .Select(a => new CreateUserAddressCommand(
+                        a.CityId,
+                        a.Plaque,
+                        a.Unit,
+                        a.PostalCode,
+                        a.RecipientFirstName,
+                        a.RecipientLastName,
+                        a.ExtraDescription,
+                        a.IsDefault))
+                    .ToList()));
+
+        var result = await UserService.GetByIdAsync(userId, includeRoles: true);
 
         result.Should().NotBeNull();
         result.UserId.Should().BeGreaterThan(0);
@@ -41,7 +64,7 @@ public class UserServiceIntegrationTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task CreateAsync_DuplicatePhone_ThrowsBusinessException()
+    public async Task CreateUserCommand_DuplicatePhone_ThrowsBusinessException()
     {
         var dto = new CreateUserDto
         {
@@ -52,7 +75,25 @@ public class UserServiceIntegrationTests : BaseIntegrationTest
             DateOfBirth = "1370/01/01"
         };
 
-        Func<Task> act = () => UserService.CreateAsync(dto);
+        Func<Task> act = () => Sender.Send(
+            new CreateUserCommand(
+                dto.FirstName,
+                dto.LastName,
+                dto.PhoneNumber,
+                dto.Password,
+                dto.Email,
+                dto.DateOfBirth,
+                dto.Addresses?
+                    .Select(a => new CreateUserAddressCommand(
+                        a.CityId,
+                        a.Plaque,
+                        a.Unit,
+                        a.PostalCode,
+                        a.RecipientFirstName,
+                        a.RecipientLastName,
+                        a.ExtraDescription,
+                        a.IsDefault))
+                    .ToList()));
         await act.Should().ThrowAsync<BusinessException>().WithMessage("*قبلاً ثبت شده*");
     }
 

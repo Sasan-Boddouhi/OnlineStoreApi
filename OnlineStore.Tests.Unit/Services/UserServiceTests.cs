@@ -165,48 +165,6 @@ public class UserServiceTests
         var result = await _service.GetCurrentUserAsync();
         result.Should().BeNull();
     }
-
-    // ---- CreateAsync ----
-    [Fact]
-    public async Task CreateAsync_ValidDto_CreatesUser()
-    {
-        var dto = new CreateUserDto
-        {
-            PhoneNumber = "09120000000",
-            Password = "Test@123",
-            FirstName = "Ali",
-            LastName = "Rezaei",
-            DateOfBirth = "1370/01/01"
-        };
-        var user = CreateValidUser(5, dto.PhoneNumber, dto.FirstName, dto.LastName);
-        var userDto = new UserDto { UserId = 5, PhoneNumber = dto.PhoneNumber };
-
-        _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        _mapperMock.Setup(m => m.Map<User>(dto)).Returns(user);
-        _hasherMock.Setup(h => h.Hash(dto.Password)).Returns("hashed");
-        _userRepoMock.Setup(r => r.AddAsync(user, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        _uowMock.SetupSequence(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1).ReturnsAsync(1);
-
-        // شبیه‌سازی GetByIdAsync که بعد از ایجاد فراخوانی می‌شود
-        _userRepoMock.Setup(r => r.FirstOrDefaultAsync(
-                It.IsAny<Spec<User>>(),
-                It.IsAny<Expression<Func<User, UserDto>>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(userDto);
-
-        var result = await _service.CreateAsync(dto);
-        result.Should().NotBeNull();
-        result.PhoneNumber.Should().Be(dto.PhoneNumber);
-    }
-
-    [Fact]
-    public async Task CreateAsync_DuplicatePhone_ThrowsBusinessException()
-    {
-        var dto = new CreateUserDto { PhoneNumber = "09120000000", Password = "Test@123", FirstName = "Ali", LastName = "Rezaei" };
-        _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        await Assert.ThrowsAsync<BusinessException>(() => _service.CreateAsync(dto));
-    }
-
     // ---- UpdateAsync ----
     [Fact]
     public async Task UpdateAsync_UserExists_UpdatesAndReturnsDto()

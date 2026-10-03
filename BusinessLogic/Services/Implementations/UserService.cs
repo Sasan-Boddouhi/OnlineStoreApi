@@ -185,65 +185,6 @@ public sealed class UserService : IUserService
 
     #endregion
 
-    #region CreateAsync (با تراکنش)
-
-    public async Task<UserDto> CreateAsync(CreateUserDto dto, CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Creating new user with phone: {PhoneNumber}", dto.PhoneNumber);
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-        try
-        {
-            var exists = await _unitOfWork.Repository<User>()
-                .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, cancellationToken);
-            if (exists)
-                throw new BusinessException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
-
-            var user = _mapper.Map<User>(dto);
-            user.PasswordHash = _passwordHasher.Hash(dto.Password);
-            user.SecurityStamp = Guid.NewGuid().ToString();
-            user.IsActive = true;
-
-            if (!string.IsNullOrWhiteSpace(dto.DateOfBirth))
-            {
-                user.DateOfBirth = PersianDateHelper.ToGregorian(dto.DateOfBirth);
-            }
-
-            await _unitOfWork.Repository<User>().AddAsync(user, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            if (dto.Addresses?.Any() == true)
-            {
-                var addresses = dto.Addresses
-                    .Where(a => !string.IsNullOrWhiteSpace(a.Plaque))
-                    .Select(a =>
-                    {
-                        var address = _mapper.Map<Address>(a);
-                        address.UserId = user.UserId;
-                        return address;
-                    }).ToList();
-                await _unitOfWork.Repository<Address>().AddRangeAsync(addresses, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-            _logger.LogInformation("User created successfully with ID: {UserId}", user.UserId);
-            await _cacheService.RemoveAsync(ALL_USERS_FULL_CACHE_KEY, cancellationToken);
-
-            return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken)
-                   ?? throw new BusinessException("خطا در ایجاد کاربر", "USER_CREATION_FAILED");
-        }
-        catch (Exception ex) when (ex is not BusinessException)
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to create user with phone: {PhoneNumber}", dto.PhoneNumber);
-            throw;
-        }
-    }
-
-    #endregion
-
     #region UpdateAsync
 
     public async Task<UserDto?> UpdateAsync(UpdateUserDto dto, CancellationToken cancellationToken = default)
