@@ -1,6 +1,7 @@
 ﻿using Asp.Versioning;
 using Application.Common.Specifications;
 using Application.Entities;
+using Application.Features.Users.CreateUser;
 using Application.Interfaces;
 using Application.Interfaces.Security;
 using Application.Interfaces.Services;
@@ -16,6 +17,7 @@ using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -160,6 +162,11 @@ builder.Services.AddDataLayerServices(databaseOptions);
 builder.Services.AddApplicationHealthChecks(databaseOptions, redisOptions);
 
 builder.Services.AddBusinessLogicServices();
+builder.Services.AddAutoMapper(typeof(CreateUserMappingProfile).Assembly);
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<CreateUserCommandHandler>();
+});
 builder.Services.AddFluentValidationServices();
 
 builder.Services.AddHttpContextAccessor();

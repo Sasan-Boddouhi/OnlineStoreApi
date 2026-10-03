@@ -18,7 +18,6 @@ public interface IUserService
     Task<UserDto?> GetCurrentUserAsync(CancellationToken cancellationToken = default);
 
     // متدهای نوشتاری
-    Task<UserDto> CreateAsync(CreateUserDto dto, CancellationToken cancellationToken = default);
     Task<UserDto?> UpdateAsync(UpdateUserDto dto, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
     Task<bool> SetActiveStatusAsync(int id, bool isActive, CancellationToken cancellationToken = default);
