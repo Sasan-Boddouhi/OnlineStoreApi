@@ -179,13 +179,10 @@ builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<Application.Options.JwtOptions>()
-    ?? new Application.Options.JwtOptions
-    {
-        Key = "THIS_IS_A_VERY_SECRET_TEST_KEY_1234567890",
-        Issuer = "OnlineStoreApi",
-        Audience = "OnlineStoreClient",
-        ExpireMinutes = 60
-    };
+    ?? throw new InvalidOperationException("Jwt configuration section is required.");
+
+if (string.IsNullOrWhiteSpace(jwtOptions.Key))
+    throw new InvalidOperationException("Jwt:Key is required.");
 
 builder.Services.AddOptions<Application.Options.JwtOptions>()
     .Bind(builder.Configuration.GetSection("Jwt"))
@@ -258,6 +255,9 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin"));
+
     options.AddPolicy("CanManageCatalog", policy =>
         policy.RequireRole("Admin", "Manager"));
 });
@@ -413,8 +413,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions
                 status = e.Value.Status.ToString(),
                 duration = e.Value.Duration,
                 description = e.Value.Description,
-                tags = e.Value.Tags,
-                exception = e.Value.Exception?.Message
+                tags = e.Value.Tags
             })
         };
 
