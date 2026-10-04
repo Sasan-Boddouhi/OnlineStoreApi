@@ -214,6 +214,10 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
     public async Task UpdateEmployee_ValidData_ReturnsNoContent()
     {
         var empId = await CreateEmployeeForAdminAsync();
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        
         var getResponse = await Client.GetAsync($"/api/v1/employees/{empId}");
         var current = await getResponse.Content.ReadFromJsonAsync<EmployeeDto>();
 
