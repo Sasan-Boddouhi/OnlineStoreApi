@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Online_Store_Application.Middleware;
 using OnlineStore.Tests.Integration.Fixtures;
+using OnlineStore.Tests.Integration.Infrastructure;
 
 namespace OnlineStore.Tests.Integration.Middleware;
 
