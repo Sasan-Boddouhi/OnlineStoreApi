@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BusinessLogic.DTOs.Auth;
 using BusinessLogic.DTOs.User;
 using FluentAssertions;
 using OnlineStore.Tests.Integration.Fixtures;
@@ -11,6 +12,26 @@ namespace OnlineStore.Tests.Integration.Controllers;
 public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
 {
     public UsersControllerIntegrationTests(IntegrationTestFactory<Program> factory) : base(factory) { }
+
+    private async Task<string> GetCustomerTokenAsync()
+    {
+        var phone = $"0912{Random.Shared.Next(0, 10_000_000):D7}";
+        var registerData = new
+        {
+            PhoneNumber = phone,
+            Password = "Customer@123",
+            FirstName = "Customer",
+            LastName = "Test",
+            DeviceId = "m5-customer-device",
+            DateOfBirth = "1370/01/01"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<AuthResultDto>();
+        return result!.AccessToken;
+    }
 
     // ============================================================
     // GET /api/v1/users/me
@@ -36,9 +57,29 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task GetMyProfile_CustomerToken_ReturnsOk()
+    {
+        var token = await GetCustomerTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/users/me");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     // ============================================================
     // GET /api/v1/users
     // ============================================================
+    [Fact]
+    public async Task GetUsers_CustomerToken_ReturnsForbidden()
+    {
+        var token = await GetCustomerTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/users");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     [Fact]
     public async Task GetUsers_ReturnsOk_WithPagination()
     {

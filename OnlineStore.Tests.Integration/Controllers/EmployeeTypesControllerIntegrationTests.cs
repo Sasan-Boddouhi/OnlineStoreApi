@@ -14,6 +14,36 @@ public class EmployeeTypesControllerIntegrationTests : ControllerIntegrationTest
 {
     public EmployeeTypesControllerIntegrationTests(IntegrationTestFactory<Program> factory) : base(factory) { }
 
+    private async Task<string> GetCustomerTokenAsync()
+    {
+        var phone = $"0912{Random.Shared.Next(0, 10_000_000):D7}";
+        var registerData = new
+        {
+            PhoneNumber = phone,
+            Password = "Customer@123",
+            FirstName = "Customer",
+            LastName = "Test",
+            DeviceId = "m5-customer-device",
+            DateOfBirth = "1370/01/01"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<BusinessLogic.DTOs.Auth.AuthResultDto>();
+        return result!.AccessToken;
+    }
+
+    [Fact]
+    public async Task Get_CustomerToken_ReturnsForbidden()
+    {
+        var token = await GetCustomerTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/employeetypes");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     // ========== GET /api/v1/employeetypes ==========
     [Fact]
     public async Task Get_ReturnsOk_WithPagination()

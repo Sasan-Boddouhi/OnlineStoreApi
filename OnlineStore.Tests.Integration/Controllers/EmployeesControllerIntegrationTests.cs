@@ -2,6 +2,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Application.Entities;
+using BusinessLogic.DTOs.Auth;
 using BusinessLogic.DTOs.Employee;
 using BusinessLogic.Services.Interfaces;
 using DataLayer.Context;
@@ -15,6 +16,26 @@ namespace OnlineStore.Tests.Integration.Controllers;
 public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
 {
     public EmployeesControllerIntegrationTests(IntegrationTestFactory<Program> factory) : base(factory) { }
+
+    private async Task<string> GetCustomerTokenAsync()
+    {
+        var phone = $"0912{Random.Shared.Next(0, 10_000_000):D7}";
+        var registerData = new
+        {
+            PhoneNumber = phone,
+            Password = "Customer@123",
+            FirstName = "Customer",
+            LastName = "Test",
+            DeviceId = "m5-customer-device",
+            DateOfBirth = "1370/01/01"
+        };
+
+        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<AuthResultDto>();
+        return result!.AccessToken;
+    }
 
     private IEmployeeService EmployeeService => GetService<IEmployeeService>();
     private AppDbContext DbContext => GetService<AppDbContext>();
@@ -74,7 +95,27 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task GetMyProfile_CustomerToken_IsAuthenticated_ReturnsNotFound()
+    {
+        var token = await GetCustomerTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/employees/me");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ========== GET /api/v1/employees ==========
+    [Fact]
+    public async Task GetEmployees_CustomerToken_ReturnsForbidden()
+    {
+        var token = await GetCustomerTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/employees");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     [Fact]
     public async Task GetEmployees_ReturnsOk_WithPagination()
     {
@@ -173,6 +214,10 @@ public class EmployeesControllerIntegrationTests : ControllerIntegrationTestBase
     public async Task UpdateEmployee_ValidData_ReturnsNoContent()
     {
         var empId = await CreateEmployeeForAdminAsync();
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+        
         var getResponse = await Client.GetAsync($"/api/v1/employees/{empId}");
         var current = await getResponse.Content.ReadFromJsonAsync<EmployeeDto>();
 

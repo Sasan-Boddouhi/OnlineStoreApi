@@ -3,6 +3,7 @@ using Application.Entities;
 using BusinessLogic.DTOs.EmployeeType;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.EmployeeTypes;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Online_Store_Application.Controllers;
@@ -17,7 +18,6 @@ public class EmployeeTypesController : ControllerBase
     private readonly IEmployeeTypeService _employeeTypeService;
     private readonly ILogger<EmployeeTypesController> _logger;
 
-    // QueryParseContext ثابت برای EmployeeType
     private static readonly QueryParseContext<EmployeeType> QueryContext = new()
     {
         AllowedFields = new HashSet<string>(EmployeeTypeQueryConfig.AllowedFields),
@@ -33,7 +33,7 @@ public class EmployeeTypesController : ControllerBase
         _logger = logger;
     }
 
-    // GET: api/employeetypes?filter=...&sort=...&pageNumber=1&pageSize=10
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet]
     public async Task<IActionResult> Get(
         [FromQuery] string? filter,
@@ -41,78 +41,54 @@ public class EmployeeTypesController : ControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
-        try
+        var parseResult = StringQueryParser.TryParse<EmployeeType>(
+            filter, sort, QueryContext, pageNumber, pageSize);
+
+        if (!parseResult.Success)
         {
-            var parseResult = StringQueryParser.TryParse<EmployeeType>(
-                filter, sort, QueryContext, pageNumber, pageSize);
-
-            if (!parseResult.Success)
+            return BadRequest(new
             {
-                return BadRequest(new
-                {
-                    Title = "Invalid query syntax",
-                    Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
-                });
-            }
-
-            var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
-            var validation = QueryPolicy.Validate(normalized, QueryContext);
-
-            if (!validation.Success)
-            {
-                return BadRequest(new
-                {
-                    Title = "Invalid query values",
-                    Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
-                });
-            }
-
-            var result = await _employeeTypeService.GetByQueryAsync(validation.Value!);
-            return Ok(result);
+                Title = "Invalid query syntax",
+                Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
+            });
         }
-        catch (Exception ex)
+
+        var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
+        var validation = QueryPolicy.Validate(normalized, QueryContext);
+
+        if (!validation.Success)
         {
-            _logger.LogError(ex, "GET /employeetypes failed");
-            return StatusCode(500, "An error occurred while processing the request.");
+            return BadRequest(new
+            {
+                Title = "Invalid query values",
+                Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
+            });
         }
+
+        var result = await _employeeTypeService.GetByQueryAsync(validation.Value!);
+        return Ok(result);
     }
 
-    // GET: api/employeetypes/{id}
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        try
-        {
-            var result = await _employeeTypeService.GetByIdAsync(id);
-            return result == null ? NotFound() : Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GET /employeetypes/{Id} failed", id);
-            return StatusCode(500, "An error occurred while processing the request.");
-        }
+        var result = await _employeeTypeService.GetByIdAsync(id);
+        return result == null ? NotFound() : Ok(result);
     }
 
-    // POST: api/employeetypes
+    [Authorize(Policy = "AdminOnly")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateEmployeeTypeDto dto)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        try
-        {
-            var created = await _employeeTypeService.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = created.EmployeeTypeId }, created);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "POST /employeetypes failed");
-            return BadRequest(ex.Message);
-        }
+        var created = await _employeeTypeService.CreateAsync(dto);
+        return CreatedAtAction(nameof(GetById), new { id = created.EmployeeTypeId }, created);
     }
 
-    // PUT: api/employeetypes/{id}
+    [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateEmployeeTypeDto dto)
     {
@@ -121,35 +97,19 @@ public class EmployeeTypesController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        try
-        {
-            var updated = await _employeeTypeService.UpdateAsync(dto);
-            if (updated == null)
-                return NotFound();
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PUT /employeetypes/{Id} failed", id);
-            return BadRequest(ex.Message);
-        }
+        var updated = await _employeeTypeService.UpdateAsync(dto);
+        if (updated == null)
+            return NotFound();
+        return NoContent();
     }
 
-    // DELETE: api/employeetypes/{id}
+    [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        try
-        {
-            var deleted = await _employeeTypeService.DeleteAsync(id);
-            if (!deleted)
-                return NotFound();
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "DELETE /employeetypes/{Id} failed", id);
-            return BadRequest(ex.Message);
-        }
+        var deleted = await _employeeTypeService.DeleteAsync(id);
+        if (!deleted)
+            return NotFound();
+        return NoContent();
     }
 }

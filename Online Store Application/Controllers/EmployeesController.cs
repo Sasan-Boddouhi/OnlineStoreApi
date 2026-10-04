@@ -19,7 +19,6 @@ public class EmployeesController : ControllerBase
     private readonly IEmployeeService _employeeService;
     private readonly ILogger<EmployeesController> _logger;
 
-    // یک نمونه ثابت از QueryParseContext برای Employee
     private static readonly QueryParseContext<Employee> QueryContext = new()
     {
         AllowedFields = new HashSet<string>(EmployeeQueryConfig.AllowedFields),
@@ -33,6 +32,7 @@ public class EmployeesController : ControllerBase
         _logger = logger;
     }
 
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet]
     public async Task<IActionResult> GetEmployees(
         [FromQuery] string? filter,
@@ -40,112 +40,72 @@ public class EmployeesController : ControllerBase
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20)
     {
-        try
+        var parseResult = StringQueryParser.TryParse<Employee>(
+            filter, sort, QueryContext, pageNumber, pageSize);
+
+        if (!parseResult.Success)
         {
-            var parseResult = StringQueryParser.TryParse<Employee>(
-                filter, sort, QueryContext, pageNumber, pageSize);
-
-            if (!parseResult.Success)
+            return BadRequest(new
             {
-                return BadRequest(new
-                {
-                    Title = "Invalid query syntax",
-                    Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
-                });
-            }
-
-            // 🔁 Normalize یک QueryContract جدید برمی‌گرداند
-            var normalizedContract = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
-
-            // ✅ Validate همان QueryContract را می‌گیرد
-            var validation = QueryPolicy.Validate(normalizedContract, QueryContext);
-
-            if (!validation.Success)
-            {
-                return BadRequest(new
-                {
-                    Title = "Invalid query values",
-                    Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
-                });
-            }
-
-            // ارسال QueryContract معتبر به سرویس
-            var result = await _employeeService.GetByQueryAsync(validation.Value!);
-            return Ok(result);
+                Title = "Invalid query syntax",
+                Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
+            });
         }
-        catch (Exception ex)
+
+        var normalizedContract = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
+        var validation = QueryPolicy.Validate(normalizedContract, QueryContext);
+
+        if (!validation.Success)
         {
-            _logger.LogError(ex, "GET /employees failed");
-            return StatusCode(500, "An error occurred while processing the request.");
+            return BadRequest(new
+            {
+                Title = "Invalid query values",
+                Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
+            });
         }
+
+        var result = await _employeeService.GetByQueryAsync(validation.Value!);
+        return Ok(result);
     }
 
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetByIdAsync(int id)
     {
-        try
-        {
-            var employee = await _employeeService.GetByIdAsync(id);
-            if (employee == null) return NotFound();
-            return Ok(employee);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GET /employees/{Id} failed", id);
-            return StatusCode(500, "An error occurred while processing the request.");
-        }
+        var employee = await _employeeService.GetByIdAsync(id);
+        if (employee == null) return NotFound();
+        return Ok(employee);
     }
 
+    [Authorize(Policy = "AdminOnly")]
     [HttpPost]
     public async Task<IActionResult> CreateAsync([FromBody] CreateEmployeeDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        try
-        {
-            var created = await _employeeService.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.EmployeeId }, created);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "POST /employees failed");
-            return BadRequest(ex.Message);
-        }
+        var created = await _employeeService.CreateAsync(dto);
+        return CreatedAtAction(nameof(GetByIdAsync), new { id = created.EmployeeId }, created);
     }
 
+    [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateAsync(int id, [FromBody] UpdateEmployeeDto dto)
     {
         if (id != dto.EmployeeId) return BadRequest("ID mismatch");
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        try
-        {
-            var updated = await _employeeService.UpdateAsync(dto);
-            if (updated == null) return NotFound();
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PUT /employees/{Id} failed", id);
-            return StatusCode(500, "An error occurred while processing the request.");
-        }
+        var updated = await _employeeService.UpdateAsync(dto);
+        if (updated == null) return NotFound();
+        return NoContent();
     }
 
+    [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteAsync(int id)
     {
-        try
-        {
-            var deleted = await _employeeService.DeleteAsync(id);
-            if (!deleted) return NotFound();
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "DELETE /employees/{Id} failed", id);
-            return StatusCode(500, "An error occurred while processing the request.");
-        }
+        var deleted = await _employeeService.DeleteAsync(id);
+        if (!deleted) return NotFound();
+        return NoContent();
     }
 
     [Authorize]
