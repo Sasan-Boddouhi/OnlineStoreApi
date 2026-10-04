@@ -8,7 +8,6 @@ using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using Application.Common.Specifications;
 using System.Linq.Expressions;
-using Application.DTOs.Order;
 
 namespace BusinessLogic.Services.Implementations;
 

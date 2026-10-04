@@ -11,7 +11,6 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Application.Common.Specifications;
-using Application.DTOs.Order;
 
 namespace OnlineStore.Tests.Unit.Services;
 

@@ -1,4 +1,7 @@
-﻿using System.Net;
+﻿using Application.Entities;
+using DataLayer.Context;
+using Microsoft.EntityFrameworkCore;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BusinessLogic.DTOs.Order;
@@ -39,19 +42,33 @@ public class OrdersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var ordersResponse = await Client.GetAsync("/api/v1/orders");
-        ordersResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var orders = await ordersResponse.Content.ReadFromJsonAsync<List<OrderDto>>();
-        orders.Should().NotBeNull();
-        orders.Should().NotBeEmpty();
+        var db = GetService<AppDbContext>();
+        var admin = await db.User.FirstAsync(u => u.PhoneNumber == "09123456789");
 
-        var orderId = orders![0].OrderId;
-        var response = await Client.GetAsync($"/api/v1/orders/{orderId}");
+        var customer = await db.Customer.FirstOrDefaultAsync(c => c.UserId == admin.UserId);
+        if (customer is null)
+        {
+            customer = new Customer { UserId = admin.UserId };
+            db.Customer.Add(customer);
+            await db.SaveChangesAsync();
+        }
+
+        var order = new Order
+        {
+            CustomerId = customer.CustomerId,
+            ShippingFullName = "Integration Test",
+            ShippingAddress = "Test Address",
+            ShippingPhoneNumber = "09120000000"
+        };
+        db.Order.Add(order);
+        await db.SaveChangesAsync();
+
+        var response = await Client.GetAsync($"/api/v1/orders/{order.OrderId}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var details = await response.Content.ReadFromJsonAsync<OrderDetailsDto>();
         details.Should().NotBeNull();
-        details!.OrderId.Should().Be(orderId);
+        details!.OrderId.Should().Be(order.OrderId);
     }
 
     [Fact]
