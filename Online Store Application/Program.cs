@@ -178,14 +178,8 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
 
-var jwtOptions = builder.Configuration.GetSection("Jwt").Get<Application.Options.JwtOptions>()
-    ?? throw new InvalidOperationException("Jwt configuration section is required.");
-
-if (string.IsNullOrWhiteSpace(jwtOptions.Key))
-    throw new InvalidOperationException("Jwt:Key is required.");
-
 builder.Services.AddOptions<Application.Options.JwtOptions>()
-    .Bind(builder.Configuration.GetSection("Jwt"))
+    .Bind(builder.Configuration.GetSection(Application.Options.JwtOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
@@ -196,6 +190,9 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    var jwtOptions = builder.Configuration.GetSection(Application.Options.JwtOptions.SectionName)
+        .Get<Application.Options.JwtOptions>() ?? new Application.Options.JwtOptions();
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
