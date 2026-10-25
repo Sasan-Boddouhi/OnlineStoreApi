@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Application.BackgroundJobs;
 using FluentAssertions;
 using Infrastructure.BackgroundJobs;
@@ -19,7 +20,7 @@ public sealed class BackgroundJobTracePropagationTests : IClassFixture<Integrati
     public async Task HttpEnqueue_PropagatesTraceToBackgroundJob()
     {
         // Arrange
-        var exportedActivities = new List<Activity>();
+        var exportedActivities = new ConcurrentBag<Activity>();
 
         using var listener = new ActivityListener
         {
