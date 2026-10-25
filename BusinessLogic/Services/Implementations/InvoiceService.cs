@@ -1,4 +1,5 @@
-﻿using Application.Entities;
+using Application.Common.Specifications;
+using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
 using AutoMapper;
@@ -12,12 +13,14 @@ namespace BusinessLogic.Services.Implementations
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly ICurrentUserService _currentUser;
         private readonly ILogger<InvoiceService> _logger;
 
-        public InvoiceService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<InvoiceService> logger)
+        public InvoiceService(IUnitOfWork unitOfWork, IMapper mapper, ICurrentUserService currentUser, ILogger<InvoiceService> logger)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _currentUser = currentUser;
             _logger = logger;
         }
 
@@ -47,6 +50,55 @@ namespace BusinessLogic.Services.Implementations
 
             _logger.LogInformation("Invoice created for order {OrderId}", orderId);
             return _mapper.Map<InvoiceDto>(invoice);
+        }
+
+        public async Task<InvoiceDto?> GetByIdAsync(int invoiceId, CancellationToken cancellationToken = default)
+        {
+            var invoice = await _unitOfWork.Repository<Invoice>()
+                .FirstOrDefaultAsync(new Spec<Invoice>().Where(i => i.InvoiceId == invoiceId).Include(i => i.Order), cancellationToken);
+            if (invoice == null) return null;
+            await EnsureCanAccessAsync(invoice, cancellationToken);
+            return _mapper.Map<InvoiceDto>(invoice);
+        }
+
+        public async Task<InvoiceDto?> GetByOrderAsync(int orderId, CancellationToken cancellationToken = default)
+        {
+            var invoice = await _unitOfWork.Repository<Invoice>()
+                .FirstOrDefaultAsync(new Spec<Invoice>().Where(i => i.OrderId == orderId).Include(i => i.Order), cancellationToken);
+            if (invoice == null) return null;
+            await EnsureCanAccessAsync(invoice, cancellationToken);
+            return _mapper.Map<InvoiceDto>(invoice);
+        }
+
+        public async Task<IEnumerable<InvoiceDto>> GetMyInvoicesAsync(CancellationToken cancellationToken = default)
+        {
+            var userId = _currentUser.TryGetCurrentUserId();
+            if (userId is null) return Enumerable.Empty<InvoiceDto>();
+
+            var customer = (await _unitOfWork.Repository<Customer>()
+                .ListAsync(new Spec<Customer>().Where(c => c.UserId == userId.Value), cancellationToken))
+                .FirstOrDefault();
+            if (customer is null) return Enumerable.Empty<InvoiceDto>();
+
+            var invoices = await _unitOfWork.Repository<Invoice>()
+                .ListAsync(new Spec<Invoice>().Where(i => i.Order.CustomerId == customer.CustomerId).Include(i => i.Order), cancellationToken);
+
+            return _mapper.Map<IEnumerable<InvoiceDto>>(invoices);
+        }
+
+        private async Task EnsureCanAccessAsync(Invoice invoice, CancellationToken cancellationToken)
+        {
+            var role = _currentUser.GetCurrentUserRole();
+            if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var userId = _currentUser.TryGetCurrentUserId();
+            if (userId is null)
+                throw new ForbiddenException("دسترسی به فاکتور مجاز نیست.", "INVOICE_FORBIDDEN");
+            var customer = await _unitOfWork.Repository<Customer>().GetByIdAsync(invoice.Order.CustomerId, cancellationToken);
+            if (customer is null || customer.UserId != userId.Value)
+                throw new ForbiddenException("دسترسی به فاکتور مجاز نیست.", "INVOICE_FORBIDDEN");
         }
     }
 }
