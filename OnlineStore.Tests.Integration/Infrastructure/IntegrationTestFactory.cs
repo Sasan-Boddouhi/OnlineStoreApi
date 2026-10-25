@@ -1,0 +1,108 @@
+using Application.Interfaces;
+using Application.Interfaces.Services;
+using DataLayer.Context;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Data.Common;
+using System.Threading.RateLimiting;
+
+namespace OnlineStore.Tests.Integration.Infrastructure;
+
+public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
+    where TProgram : class
+{
+    private readonly DbConnection _connection = CreateInMemoryConnection();
+
+    /// <summary>Phase 9: ساعت مشترک تست. از بیرون قابل جلو بردن است.</summary>
+    public TestTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
+
+    private static SqliteConnection CreateInMemoryConnection()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        return connection;
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+
+        builder.ConfigureAppConfiguration((context, config) =>
+        {
+            config.AddJsonFile("appsettings.Testing.json", optional: true);
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Key"] = "THIS_IS_A_VERY_SECRET_TEST_KEY_1234567890",
+                ["Jwt:Issuer"] = "OnlineStoreApi",
+                ["Jwt:Audience"] = "OnlineStoreClient",
+                ["Jwt:ExpireMinutes"] = "60",
+                ["Redis:Configuration"] = "localhost:6379",
+                ["Redis:InstanceName"] = "OnlineStore_Test:",
+                ["Swagger:Enabled"] = "true",
+                ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:"
+            });
+        });
+
+        builder.ConfigureServices(services =>
+        {
+            var dbContextDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            if (dbContextDescriptor != null) services.Remove(dbContextDescriptor);
+
+            var appDbDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(AppDbContext));
+            if (appDbDescriptor != null) services.Remove(appDbDescriptor);
+
+            // Interceptor
+            services.AddScoped<ISaveChangesInterceptor, SqliteRowVersionFixInterceptor>();
+            services.AddScoped<ICurrentUserService, FakeCurrentUserService>();
+
+            // ثبت دستی DbContextOptions و AppDbContext -> TestAppDbContext
+            var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+            optionsBuilder.UseSqlite(_connection);
+            optionsBuilder.EnableSensitiveDataLogging();
+            optionsBuilder.EnableDetailedErrors();
+            services.AddScoped(_ => optionsBuilder.Options);
+
+            services.AddScoped<AppDbContext, TestAppDbContext>();
+
+            // حذف پیاده‌سازی واقعی ICacheService (Redis)
+            services.RemoveAll<ICacheService>();
+
+            // جایگزینی با Fake برای تست
+            services.AddSingleton<ICacheService, FakeCacheService>();
+
+            // Phase 9 (R44): ساعت قابل کنترل تا job رهاشده‌ها بدون انتظار واقعی تست شود.
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(Clock);
+
+            services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
+        });
+    }
+
+    public async Task InitializeDatabaseAsync()
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+
+        await TestDataSeed.SeedAsync(db);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        _connection?.Dispose();
+    }
+}

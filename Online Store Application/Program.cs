@@ -1,0 +1,524 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Asp.Versioning;
+using Application.Common.Specifications;
+using Application.Entities;
+using Application.Features.Users.CreateUser;
+using Application.Interfaces;
+using Application.Interfaces.Security;
+using Application.Interfaces.Services;
+using Application.Middleware;
+using Application.Options;
+using BusinessLogic.Extensions;
+using BusinessLogic.Services.Implementations;
+using BusinessLogic.Services.Interfaces;
+using DataLayer.Context;
+using DataLayer.Extensions;
+using DataLayer.Security;
+using HealthChecks.UI.Client;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Mvc;
+using MediatR;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
+using Online_Store_Application.Authorization;
+using Online_Store_Application.Extensions;
+using Online_Store_Application.Middleware;
+using Online_Store_Application.Services;
+using Online_Store_Application.Swagger;
+using Serilog;
+using Serilog.Enrichers.Span;
+using System.Security.Claims;
+using System.Text;
+using System.Threading.RateLimiting;
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+Log.Logger = new LoggerConfiguration()
+    .Enrich.WithSpan()
+    .ReadFrom.Configuration(builder.Configuration)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
+builder.Services.AddControllers(options =>
+{
+    options.ReturnHttpNotAcceptable = true;
+
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+})
+.AddNewtonsoftJson(options =>
+{
+    options.SerializerSettings.ReferenceLoopHandling =
+    Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+})
+.AddXmlDataContractSerializerFormatters();
+
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.SuppressModelStateInvalidFilter = false;
+
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState
+            .Where(x => x.Value?.Errors.Count > 0)
+            .ToDictionary(
+                x => x.Key,
+                x => x.Value!.Errors.Select(e => e.ErrorMessage).ToArray());
+
+        var problem = new ValidationProblemDetails(errors)
+        {
+            Status = StatusCodes.Status422UnprocessableEntity,
+            Title = "Validation failed",
+            Detail = "One or more validation errors occurred.",
+            Instance = context.HttpContext.Request.Path
+        };
+        problem.Extensions["code"] = "VALIDATION_ERROR";
+        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+        return new UnprocessableEntityObjectResult(problem);
+    };
+});
+
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = false;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+})
+.AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "توکن را وارد کنید"
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
+
+var redisOptions = builder.Configuration.GetSection(RedisOptions.SectionName).Get<RedisOptions>()
+    ?? new RedisOptions
+    {
+        Configuration = "localhost:6379",
+        InstanceName = "OnlineStore_Test:"
+    };
+
+builder.Services.AddRedis(redisOptions);
+
+// Register OtelOptions with validation
+builder.Services.AddOpenTelemetryOptions(builder.Configuration);
+
+// Start OpenTelemetry SDK (traces + metrics, no logs yet)
+builder.Services.AddOpenTelemetryServices(
+    builder.Configuration,
+    builder.Environment);
+
+builder.Services.AddOptions<Application.Options.DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection(Application.Options.DatabaseOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+var databaseOptions = builder.Configuration.GetSection("ConnectionStrings").Get<DatabaseOptions>()
+    ?? new DatabaseOptions
+    {
+        DefaultConnection = "Data Source=:memory:"
+    };
+
+builder.Services.AddOptions<DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection("ConnectionStrings"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddDataLayerServices(databaseOptions);
+
+builder.Services.AddApplicationHealthChecks(databaseOptions, redisOptions);
+
+builder.Services.AddBusinessLogicServices();
+builder.Services.AddAutoMapper(typeof(CreateUserMappingProfile).Assembly);
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<CreateUserCommandHandler>();
+});
+builder.Services.AddFluentValidationServices();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddHostedService<SuperAdminBootstrapper>();
+
+// تصمیم ناظر: پرچم اجرای موجودی — پیش‌فرض سخت‌گیرانه (true).
+builder.Services.Configure<InventorySettings>(
+    builder.Configuration.GetSection(InventorySettings.SectionName));
+builder.Services.Configure<CommissionSettings>(
+    builder.Configuration.GetSection(CommissionSettings.SectionName));
+
+builder.Services.Configure<StorageSettings>(
+    builder.Configuration.GetSection(StorageSettings.SectionName));
+
+// LocalStorageService از قرارداد نام‌گذاری XService/IXService پیروی نمی‌کند
+// (IStorageService ≠ ILocalStorageService)، پس ثبت دستی لازم است؛
+// وگرنه IProductImageService در زمان اجرا قابل ساخت نیست.
+builder.Services.AddScoped<IStorageService, LocalStorageService>();
+// ---------------- Phase 8: Payment ----------------
+builder.Services.Configure<PaymentGatewaySettings>(
+    builder.Configuration.GetSection(PaymentGatewaySettings.SectionName));
+
+builder.Services.AddHttpClient();
+
+// انتخاب درگاه در زمان اجرا از روی تنظیمات؛ هیچ درگاه واقعی به‌صورت پیش‌فرض فعال نیست.
+builder.Services.AddScoped<IPaymentGateway>(sp =>
+{
+    var settings = sp.GetRequiredService<IOptions<PaymentGatewaySettings>>().Value;
+
+    if (string.Equals(settings.Provider, "Zarinpal", StringComparison.OrdinalIgnoreCase))
+        return ActivatorUtilities.CreateInstance<ZarinpalPaymentGateway>(sp);
+
+    return ActivatorUtilities.CreateInstance<FakePaymentGateway>(sp);
+});
+
+// بدون ثبت صریح، اعتبارسنجی امضا وجود نداشت و همهٔ webhookها رد می‌شدند.
+builder.Services.AddScoped<IPaymentSignatureValidator, PaymentSignatureValidator>();
+
+// ---------------- Phase 9: Hardening ----------------
+builder.Services.Configure<AbandonedPaymentSettings>(
+    builder.Configuration.GetSection(AbandonedPaymentSettings.SectionName));
+
+// TimeProvider تزریق می‌شود تا پاک‌سازی رهاشده‌ها در تست بدون انتظار واقعی قابل سنجش باشد.
+builder.Services.TryAddSingleton(TimeProvider.System);
+
+builder.Services.AddHostedService<AbandonedPaymentCleanupService>();
+builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
+builder.Services.AddScoped<ICacheService, RedisCacheService>();
+
+builder.Services.AddOptions<Application.Options.JwtOptions>()
+    .Bind(builder.Configuration.GetSection(Application.Options.JwtOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    var jwtOptions = builder.Configuration.GetSection(Application.Options.JwtOptions.SectionName)
+        .Get<Application.Options.JwtOptions>() ?? new Application.Options.JwtOptions();
+
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+
+        ValidIssuer = jwtOptions.Issuer,
+        ValidAudience = jwtOptions.Audience,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtOptions.Key)),
+
+        RoleClaimType = ClaimTypes.Role,
+        NameClaimType = ClaimTypes.NameIdentifier
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var unitOfWork = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
+
+            var userId = context.Principal!.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var sessionId = context.Principal!.FindFirst("SessionId")?.Value;
+
+            if (!int.TryParse(userId, out var uid) ||
+                !Guid.TryParse(sessionId, out var sid))
+            {
+                context.Fail("Invalid token claims");
+                return;
+            }
+
+            var isActive = await unitOfWork.Repository<UserSession>()
+                .AnyAsync(x =>
+                    x.UserId == uid &&
+                    x.Id == sid &&
+                    x.Status == UserSession.SessionStatus.Active);
+
+            if (!isActive)
+            {
+                context.Fail("Session revoked");
+                return;
+            }
+
+            var stamp = context.Principal!.FindFirst("SecurityStamp")?.Value;
+            var dbUser = await unitOfWork.Repository<User>()
+                .FirstOrDefaultAsync(new Spec<User>().Where(u => u.UserId == uid));
+
+            if (dbUser == null || stamp == null || dbUser.SecurityStamp != stamp)
+            {
+                context.Fail("Security stamp invalid");
+                return;
+            }
+        }
+    };
+});
+
+// Phase 1 (D8): نام Policyها ثابت مانده است؛ فقط بدنهٔ آن‌ها از RequireRole
+// به مجوز مبتنی بر RolePermission تغییر کرده است.
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.AddRequirements(new PermissionRequirement(Permissions.AdminFull)));
+
+    options.AddPolicy("CanManageCatalog", policy =>
+        policy.AddRequirements(new PermissionRequirement(Permissions.CatalogProductsWrite)));
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ReactFrontend",
+        policy =>
+        {
+            policy.WithOrigins(
+                    "https://localhost:5173",
+                    "http://localhost:5173",
+                    "http://localhost:5178"
+                )
+                // AllowAnyHeader شامل هدر سفارشی سبد مهمان (X-Cart-Session) هم می‌شود،
+                // پس preflight برای آن پاسخ می‌گیرد. اگر روزی این سیاست محدود شد،
+                // این هدر باید صریحاً در WithHeaders باقی بماند.
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    if (builder.Environment.IsEnvironment("Testing"))
+    {
+        options.AddFixedWindowLimiter(
+            "LoginLimiter",
+            config =>
+        {
+            config.PermitLimit = 10000;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+        });
+
+        options.AddFixedWindowLimiter(
+            "RefreshLimiter",
+            config =>
+        {
+            config.PermitLimit = 10000;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+        });
+    }
+    else
+    {
+        options.AddFixedWindowLimiter(
+            "LoginLimiter",
+            config =>
+        {
+            config.PermitLimit = 5;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
+
+        options.AddFixedWindowLimiter(
+            "RefreshLimiter",
+            config =>
+        {
+            config.PermitLimit = 20;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
+    }
+});
+
+// Register OutputCache only outside Testing
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddOutputCache(options =>
+    {
+        options.AddBasePolicy(builder => builder.Cache());
+    });
+
+    builder.Services.AddStackExchangeRedisOutputCache(options =>
+    {
+        options.Configuration = redisOptions.Configuration;
+        options.InstanceName = redisOptions.InstanceName;
+    });
+}
+
+var app = builder.Build();
+
+// Staging: مایگریشن قبل از سرو کردن اولین درخواست.
+// اگر شکست بخورد، استثنا بالا می‌رود و کانتینر healthy نمی‌شود —
+// بهتر از سرو کردن با اسکیمای قدیمی.
+await app.Services.ApplyMigrationsAsync(
+    app.Configuration,
+    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AutoMigrate"));
+
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (!app.Environment.IsEnvironment("Testing") && context.Database.IsRelational())
+    {
+        var retryCount = 0;
+        const int maxRetries = 10;
+        while (retryCount < maxRetries)
+        {
+            try
+            {
+                await context.Database.MigrateAsync();
+                break;
+            }
+            catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException ||
+                                       ex is System.TimeoutException ||
+                                       ex.InnerException is System.TimeoutException)
+            {
+                retryCount++;
+                if (retryCount >= maxRetries)
+                    throw;
+                Console.WriteLine($"Database not ready, retrying in 5 seconds... (attempt {retryCount})");
+                await Task.Delay(5000);
+            }
+        }
+    }
+}
+
+// pipeline
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        var provider = app.Services.GetRequiredService<Asp.Versioning.ApiExplorer.IApiVersionDescriptionProvider>();
+
+        foreach (var description in provider.ApiVersionDescriptions)
+        {
+            options.SwaggerEndpoint(
+                $"/swagger/{description.GroupName}/swagger.json",
+                description.GroupName.ToUpperInvariant());
+        }
+    });
+}
+
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => !check.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+
+        var result = new
+        {
+            status = report.Status.ToString(),
+            totalDuration = report.TotalDuration,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration,
+                description = e.Value.Description,
+                tags = e.Value.Tags
+            })
+        };
+
+        await context.Response.WriteAsJsonAsync(result);
+    }
+});
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseOutputCache();
+}
+
+app.UseCors("ReactFrontend");
+
+app.UseRateLimiter();
+
+app.UseMiddleware<QueryMetricsMiddleware>();
+
+app.UseAuthentication();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+// T2 code-trigger verification
+app.MapGet("/version", () => new
+{
+    version = "v2",
+    commit = Environment.GetEnvironmentVariable("GIT_COMMIT") ?? "unknown",
+    deployedAt = DateTime.UtcNow
+}).CacheOutput(policy => policy.NoCache());
+
+
+Log.Information("Online Store API started successfully");
+Console.WriteLine("Application is running...");
+
+app.Run();
+
+
+public partial class Program { }

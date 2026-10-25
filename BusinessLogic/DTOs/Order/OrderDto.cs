@@ -1,0 +1,15 @@
+﻿using System;
+
+namespace BusinessLogic.DTOs.Order
+{
+    public class OrderDto
+    {
+        public int OrderId { get; set; }
+        public DateTime OrderDate { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string ShippingFullName { get; set; } = null!;
+        public string ShippingAddress { get; set; } = null!;
+        public string ShippingPhoneNumber { get; set; } = null!;
+    }
+}

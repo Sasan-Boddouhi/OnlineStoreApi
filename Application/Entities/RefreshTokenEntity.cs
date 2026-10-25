@@ -1,0 +1,56 @@
+﻿using System;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Application.Entities
+{
+    [Table("RefreshToken")]
+    public class RefreshTokenEntity
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int Id { get; set; }
+
+        [Required]
+        public string TokenHash { get; set; } = string.Empty;
+
+        [Required]
+        public string TokenIdentifier { get; set; } = string.Empty;
+
+        [Required]
+        public Guid SessionId { get; set; } = Guid.NewGuid();
+
+        public UserSession Session { get; set; } = null!;
+
+        [Required]
+        public DateTime FamilyCreatedAt { get; set; }
+
+        [Required]
+        public int UserId { get; set; }
+
+        [ForeignKey(nameof(UserId))]
+        public virtual User User { get; set; } = default!;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [Required]
+        public DateTime ExpiryDate { get; set; }
+
+        [Required]
+        public bool IsRevoked { get; set; } = false;
+
+        public DateTime? RevokedAtUtc { get; set; }
+
+        // New: point to replacement refresh token (rotation). int matches PK type.
+        public int? ReplacedByTokenId { get; set; }
+
+        [ForeignKey(nameof(ReplacedByTokenId))]
+        public virtual RefreshTokenEntity? ReplacedByToken { get; set; }
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+
+        [Required]
+        public DateTime AbsoluteExpiry { get; set; }
+    }
+}

@@ -1,0 +1,736 @@
+# Authentication & Authorization
+
+This document describes the current authentication, session, token, and authorization behavior implemented by `OnlineStoreApi`.
+
+> **Source of truth:** The implementation is authoritative. If authentication behavior changes in code, this document must be reviewed and updated.
+
+## 1. Overview
+
+The API authentication model is based on:
+
+- JWT access tokens
+- Refresh tokens
+- Server-side user sessions
+- SecurityStamp validation
+- BCrypt password hashing
+- Refresh token rotation
+- Refresh token reuse detection
+- Maximum active-session enforcement
+- Login lockout
+- Endpoint rate limiting
+
+High-level flow:
+
+```text
+Client
+  |
+  | Register / Login
+  v
+AuthController
+  |
+  v
+IAuthService
+  |
+  v
+AuthService
+  |
+  +--> User
+  +--> UserSession
+  +--> RefreshTokenEntity
+  +--> IPasswordHasher
+  +--> IJwtTokenService
+  |
+  v
+Database
+```
+
+A valid JWT alone is not sufficient for an authenticated request. JWT validation is followed by server-side session validation and SecurityStamp validation.
+
+## 2. Authentication Endpoints
+
+Base route:
+
+```text
+/api/auth
+```
+
+| Method | Endpoint | Authentication | Purpose |
+|---|---|---|---|
+| POST | `/api/auth/register` | Public | Register a user and create an initial session |
+| POST | `/api/auth/login` | Public | Authenticate a user and issue access/refresh tokens |
+| GET | `/api/auth/me` | Required | Return the current user's profile from claims |
+| POST | `/api/auth/refresh` | Public | Rotate the refresh token and issue new tokens |
+| POST | `/api/auth/logout` | Required | Revoke the current session and its refresh tokens |
+
+## 3. Registration
+
+Registration is handled by `AuthService.RegisterAsync`.
+
+The operation runs inside a transaction:
+
+```text
+RegisterDto
+    |
+    v
+Begin Transaction
+    |
+    v
+Check duplicate PhoneNumber
+    |
+    +---- exists ----> BusinessException
+    |
+    v
+Create User
+    |
+    +--> PasswordHash
+    +--> UserType = Customer
+    +--> IsActive = true
+    +--> SecurityStamp = new GUID
+    |
+    v
+Save User
+    |
+    v
+Create UserSession
+    |
+    v
+Create Access Token + Refresh Token
+    |
+    v
+Commit Transaction
+    |
+    v
+AuthResultDto
+```
+
+Registration therefore creates the user, session, and initial authentication result as one transactional workflow.
+
+## 4. Password Storage
+
+The raw password is not stored in the database.
+
+The application uses `IPasswordHasher` for password hashing and verification. The registered implementation is `BcryptPasswordHasher`.
+
+Conceptually:
+
+```text
+Raw Password
+    |
+    v
+IPasswordHasher
+    |
+    v
+BCrypt Hash
+    |
+    v
+User.PasswordHash
+```
+
+During login, the supplied password is verified against the stored hash.
+
+## 5. Login
+
+Login is handled by:
+
+```http
+POST /api/auth/login
+```
+
+The service loads an active user by `PhoneNumber` and includes the employee/employee-type relationship when available.
+
+A successful login resets failed-login state, enforces the active-session limit, creates a new session, and issues an access token plus refresh token.
+
+## 6. Login Lockout
+
+The current login lockout policy is implemented in `AuthService`:
+
+```text
+Maximum failed attempts = 5
+Lock duration = 15 minutes
+```
+
+On an invalid password:
+
+```text
+FailedLoginAttempts++
+```
+
+When the threshold is reached, `LockoutEnd` is set to 15 minutes in the future.
+
+On a successful login:
+
+```text
+FailedLoginAttempts = 0
+LockoutEnd = null
+```
+
+## 7. Login Rate Limiting
+
+The login endpoint uses the `LoginLimiter` rate-limiting policy.
+
+For normal environments:
+
+```text
+PermitLimit = 5
+Window = 1 minute
+QueueLimit = 0
+```
+
+The Testing environment uses a much higher limit so automated tests are not blocked by the production-oriented policy.
+
+## 8. User Sessions
+
+A successful registration or login creates a `UserSession`.
+
+A session records information including:
+
+```text
+Session Id
+User Id
+Device Id
+Device Name
+IP Address
+User Agent
+CreatedAtUtc
+LastActivityUtc
+AbsoluteExpiryUtc
+Status
+```
+
+New sessions are created with:
+
+```text
+Status = Active
+```
+
+The session is the server-side state that connects authentication tokens to a revocable login instance.
+
+## 9. Session Lifetime
+
+The current `AuthService` session limits are:
+
+```text
+Absolute lifetime = 30 days
+Idle timeout      = 30 minutes
+```
+
+Refresh operations check both idle and absolute expiration.
+
+When a session is expired through this flow, its status is changed to `Expired` and refresh is rejected.
+
+## 10. Maximum Active Sessions
+
+The current default maximum is:
+
+```text
+5 active sessions per user
+```
+
+When a user logs in, active sessions are ordered by `CreatedAtUtc` and the oldest sessions are revoked when necessary to make room for the new session.
+
+Revoking an old session also revokes its related refresh tokens.
+
+## 11. Access Tokens
+
+Access tokens are JWTs generated by `JwtTokenService`.
+
+The signing algorithm is:
+
+```text
+HMAC-SHA256
+```
+
+JWT configuration is read from:
+
+```text
+Jwt:Key
+Jwt:Issuer
+Jwt:Audience
+Jwt:ExpireMinutes
+```
+
+The generated token contains claims including:
+
+```text
+NameIdentifier
+SessionId
+Role
+FullName
+PhoneNumber
+SecurityStamp
+```
+
+## 12. SessionId Claim
+
+Every access token contains a `SessionId` claim.
+
+This claim identifies the server-side `UserSession` associated with the token:
+
+```text
+JWT
+ |
+ +--> UserId
+ |
+ +--> SessionId
+ |
+ +--> SecurityStamp
+ |
+ v
+Database
+```
+
+This allows a session to be revoked server-side while the JWT itself remains unchanged.
+
+## 13. Role Claim
+
+The role is taken from the user's employee type when available:
+
+```text
+User.Employee.EmployeeType.TypeName
+```
+
+If no role can be obtained from the employee relationship, the service falls back to the user's `UserType`:
+
+```text
+Employee -> Employee
+Customer -> Customer
+```
+
+The resulting role is stored in `ClaimTypes.Role`.
+
+## 14. SecurityStamp
+
+Users have a `SecurityStamp` value.
+
+A new value is generated when the user is created and the value is also placed into the access token.
+
+During JWT validation, the token's SecurityStamp is compared with the current database value:
+
+```text
+JWT.SecurityStamp == Database.SecurityStamp
+```
+
+If they differ, authentication is rejected.
+
+This provides a server-side invalidation mechanism for access tokens when the user's security state changes.
+
+## 15. JWT Validation
+
+JWT Bearer authentication is configured with the following validations enabled:
+
+```text
+ValidateIssuer = true
+ValidateAudience = true
+ValidateLifetime = true
+ValidateIssuerSigningKey = true
+```
+
+The application also configures:
+
+```text
+RoleClaimType = ClaimTypes.Role
+NameClaimType = ClaimTypes.NameIdentifier
+```
+
+## 16. Database-backed Authentication Validation
+
+After the JWT has passed the normal JWT validation stage, `OnTokenValidated` performs additional database checks.
+
+### 16.1 UserId and SessionId
+
+The application reads:
+
+```text
+ClaimTypes.NameIdentifier
+SessionId
+```
+
+Both values must be valid identifiers.
+
+### 16.2 Active Session
+
+The database must contain an active session matching both the user and session identifiers:
+
+```text
+UserId == token.UserId
+AND
+SessionId == token.SessionId
+AND
+Status == Active
+```
+
+If the session is not active, authentication fails.
+
+### 16.3 SecurityStamp
+
+The current user is loaded from the database and its SecurityStamp is compared with the claim in the token.
+
+A mismatch causes authentication to fail.
+
+## 17. Refresh Tokens
+
+Refresh tokens are generated using `RandomNumberGenerator` with 32 random bytes, then Base64-encoded.
+
+The plaintext refresh token is not stored directly in the database.
+
+The corresponding entity stores values including:
+
+```text
+TokenHash
+TokenIdentifier
+UserId
+SessionId
+CreatedAt
+ExpiryDate
+AbsoluteExpiry
+FamilyCreatedAt
+IsRevoked
+ReplacedByTokenId
+```
+
+`TokenIdentifier` is derived from the token using SHA-256 and is used to locate the token record. The token value is separately verified against the stored hash.
+
+## 18. Refresh Token Lifetime
+
+A newly created refresh token currently has:
+
+```text
+ExpiryDate = UtcNow + 7 days
+```
+
+The token also carries the session/token-family absolute expiration information used by the refresh flow.
+
+## 19. Refresh Token Rate Limiting
+
+The refresh endpoint:
+
+```http
+POST /api/auth/refresh
+```
+
+uses the `RefreshLimiter` policy.
+
+For normal environments:
+
+```text
+PermitLimit = 20
+Window = 1 minute
+QueueLimit = 0
+```
+
+The Testing environment uses a higher limit.
+
+## 20. Refresh Token Rotation
+
+Refresh token rotation is performed inside a transaction.
+
+The normal flow is:
+
+```text
+Old Refresh Token
+       |
+       v
+Validate
+       |
+       v
+Generate New Refresh Token
+       |
+       v
+Create New RefreshTokenEntity
+       |
+       v
+Revoke Old Token
+       |
+       v
+Old.ReplacedByTokenId = New.Id
+       |
+       v
+Return New Access + Refresh Token
+```
+
+The old token is revoked and points to its replacement through `ReplacedByTokenId`.
+
+## 21. Refresh Token Reuse Detection
+
+A revoked refresh token is handled differently depending on whether it has a replacement.
+
+### Normal rotation
+
+If:
+
+```text
+ReplacedByTokenId != null
+```
+
+then the token was revoked as part of normal rotation. It is treated as a stale token and the refresh request is rejected.
+
+### Suspicious reuse
+
+If:
+
+```text
+IsRevoked = true
+AND
+ReplacedByTokenId == null
+```
+
+the service treats the presentation as possible refresh-token reuse.
+
+The associated session is revoked and its related refresh tokens are revoked as well.
+
+## 22. Refresh Token Signature Mismatch
+
+After locating a refresh-token entity through its identifier, the supplied token value is verified against the stored token hash.
+
+If verification fails, the service treats the event as suspicious and revokes the associated session and refresh tokens.
+
+## 23. Refresh Token Concurrency
+
+Refresh rotation is transactional.
+
+If a `DbUpdateConcurrencyException` occurs during rotation, the transaction is rolled back and the refresh operation returns failure rather than leaving the token family in a partially updated state.
+
+## 24. Logout
+
+The endpoint:
+
+```http
+POST /api/auth/logout
+```
+
+requires authentication.
+
+The `SessionId` claim identifies the current session.
+
+The session is then revoked together with its related refresh tokens.
+
+Conceptually:
+
+```text
+Authenticated Request
+       |
+       v
+SessionId Claim
+       |
+       v
+UserSession
+       |
+       +--> Status = Revoked
+       |
+       +--> Revoke related Refresh Tokens
+```
+
+## 25. Logout All
+
+`AuthService` also provides `LogoutAllAsync(userId)`.
+
+It finds all active sessions for the user and revokes each session and its related refresh tokens inside a transaction.
+
+## 26. Authorization
+
+Authentication and authorization are separate stages.
+
+```text
+Authentication
+    |
+    +--> JWT valid?
+    +--> Session active?
+    +--> SecurityStamp valid?
+    |
+    v
+Authenticated User
+    |
+    v
+Authorization
+    |
+    +--> Required role/policy satisfied?
+```
+
+The current `CanManageCatalog` policy requires one of:
+
+```text
+Admin
+Manager
+```
+
+## 27. Current User Endpoint
+
+The endpoint:
+
+```http
+GET /api/auth/me
+```
+
+requires `[Authorize]`.
+
+The response is constructed from claims including:
+
+```text
+NameIdentifier
+FullName
+Role
+PhoneNumber
+```
+
+and returned as `UserProfileDto`.
+
+## 28. Complete Authentication Flow
+
+```text
+                         +---------------------+
+                         |       Client        |
+                         +----------+----------+
+                                    |
+                       Register / Login
+                                    |
+                                    v
+                         +---------------------+
+                         |   AuthController    |
+                         +----------+----------+
+                                    |
+                                    v
+                         +---------------------+
+                         |    AuthService      |
+                         +----------+----------+
+                                    |
+                 +------------------+------------------+
+                 |                  |                  |
+                 v                  v                  v
+              User             UserSession       RefreshToken
+                 |                  |                  |
+                 +------------------+------------------+
+                                    |
+                                    v
+                              JWT Generation
+                                    |
+                                    v
+                         Access + Refresh Token
+                                    |
+                                    v
+                                  Client
+```
+
+## 29. Protected Request Flow
+
+For a protected API request:
+
+```text
+HTTP Request
+    |
+    v
+Authorization: Bearer <JWT>
+    |
+    v
+JWT Signature / Issuer / Audience / Lifetime
+    |
+    v
+OnTokenValidated
+    |
+    +--> Parse UserId
+    +--> Parse SessionId
+    +--> Check Active UserSession
+    +--> Check SecurityStamp
+    |
+    v
+Authenticated
+    |
+    v
+Authorization Policy
+    |
+    v
+Controller
+```
+
+## 30. Failure Scenarios
+
+| Scenario | Current behavior |
+|---|---|
+| User not found during login | Login fails |
+| Wrong password | Failed-attempt counter increases |
+| Five failed attempts | 15-minute lockout is applied |
+| Expired refresh token | Token is revoked and refresh is rejected |
+| Revoked token from normal rotation | Treated as a stale token |
+| Suspicious revoked-token reuse | Session and related refresh tokens are revoked |
+| Refresh-token value mismatch | Associated session is revoked |
+| Inactive session | Authentication/refresh is rejected |
+| Idle-expired session | Session is marked `Expired` |
+| Absolute-expired session | Session is marked `Expired` |
+| Invalid JWT claims | Authentication is rejected |
+| SecurityStamp mismatch | Authentication is rejected |
+| Active-session limit exceeded | Oldest active sessions are revoked |
+
+## 31. Security Model Summary
+
+The current authentication model can be summarized as three complementary validation layers:
+
+```text
+                     Access Token
+                          |
+          +---------------+---------------+
+          |               |               |
+       Signature        SessionId     SecurityStamp
+          |               |               |
+          v               v               v
+       JWT Valid       Session DB       User DB
+                          |
+                          v
+                       Active?
+                          |
+                          v
+                    Authorization
+```
+
+The result is a combination of cryptographic token validation and server-side authentication state.
+
+## 32. Source Files
+
+The main implementation files are:
+
+```text
+Online Store Application/
+├── Controllers/
+│   └── AuthController.cs
+├── Services/
+│   └── JwtTokenService.cs
+└── Program.cs
+
+BusinessLogic/
+├── Services/
+│   ├── Interfaces/
+│   │   └── IAuthService.cs
+│   └── Implementations/
+│       └── AuthService.cs
+└── DTOs/
+    └── Auth/
+
+Application/
+├── Entities/
+│   ├── User.cs
+│   ├── UserSession.cs
+│   └── RefreshTokenEntity.cs
+├── Interfaces/
+│   └── Security/
+│       ├── IJwtTokenService.cs
+│       └── IPasswordHasher.cs
+└── Options/
+    └── JwtOptions.cs
+
+DataLayer/
+└── Security/
+    └── BcryptPasswordHasher.cs
+```
+
+## 33. Source of Truth
+
+The authentication behavior documented here is based on the current implementation in:
+
+- `AuthController.cs`
+- `AuthService.cs`
+- `JwtTokenService.cs`
+- `Program.cs`
+- `User.cs`
+- `UserSession.cs`
+- `RefreshTokenEntity.cs`
+- `IPasswordHasher` / `BcryptPasswordHasher`
+
+Any future authentication change should update this document as part of the same change.

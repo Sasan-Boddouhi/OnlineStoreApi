@@ -1,0 +1,134 @@
+﻿name: .NET Build, Test & Docker Image
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+
+  # ─────────────────────────────────────────────
+  # Job 1: Build, Test & Collect Coverage
+  # ─────────────────────────────────────────────
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore "Online Store Application.sln"
+
+      - name: Build
+        run: dotnet build "Online Store Application.sln" --configuration Release --no-restore
+
+      - name: Run tests with coverage
+        run: >
+          dotnet test "Online Store Application.sln"
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --settings coverlet.runsettings
+
+      - name: Upload coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: '**/TestResults/**/*.cobertura.xml'
+          retention-days: 1
+
+
+  # ─────────────────────────────────────────────
+  # Job 2: Generate HTML Coverage Report
+  # ─────────────────────────────────────────────
+  coverage-report:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download coverage XML
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-xml
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate HTML report
+        run: >
+          reportgenerator
+          -reports:"**/*.cobertura.xml"
+          -targetdir:"coveragereport"
+          -reporttypes:Html
+          -verbosity:Warning
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coveragereport
+
+
+  # ─────────────────────────────────────────────
+  # Job 3: Docker Image Build & Push to GHCR
+  # ─────────────────────────────────────────────
+  docker-build-push:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+
+          push: ${{ github.event_name != 'pull_request' }}
+
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

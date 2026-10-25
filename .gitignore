@@ -1,0 +1,83 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+**/[Bb]in/
+**/[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+Out/
+
+# .NET specific
+*.pdb
+*.exe
+*.dll
+*.cache
+*.log
+*.tmp
+*.rsp
+*.nupkg
+
+# User-specific / Local settings
+*.usersecrets.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/launchSettings.local.json
+**/appsettings.Production.json
+# Phase 9: appsettings.Staging.json فقط placeholder دارد و مقدار واقعی از env می‌آید.
+
+# Logs
+Logs/
+*.log
+Online Store Application/Logs/
+
+# Testing & Coverage
+coveragereport/
+TestResults/
+coverage.cobertura.xml
+coverage.opencover.xml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+
+# Temporary / Environment
+*.tmp
+*.env
+.env.local
+.env.*.local
+
+# NuGet
+packages/
+*.nupkg
+# Phase 9 (R12): گزارش‌های پوشش هرگز نباید در مخزن باشند.
+# این پوشه پیش از این commit شده بود و ۲۰۰ فایل / ۷.۸ مگابایت HTML را
+# در تاریخ مخزن جا گذاشته بود.
+coveragereport/
+**/coveragereport/
+coverage*.xml
+coverage*.json
+
+# Phase 9: خروجی‌های محلی تست مایگریشن و اسکریپت‌های موقت
+**/MigrateTest*.log
+# Staging local secrets — start-staging generates this. Never commit it.
+.env
+.env.staging
