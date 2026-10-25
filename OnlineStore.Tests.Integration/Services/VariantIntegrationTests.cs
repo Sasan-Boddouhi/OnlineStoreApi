@@ -729,6 +729,6 @@ public class VariantIntegrationTests : BaseIntegrationTest
         // Act & Assert
         var act = async () => await ProductService.DeleteVariantAsync(variant.VariantId);
         await act.Should().ThrowAsync<BusinessException>()
-            .WithMessage("*سفارشات*");
+            .WithMessage("*سفارش*");
     }
 }

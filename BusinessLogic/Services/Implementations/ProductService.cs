@@ -555,7 +555,7 @@ public sealed class ProductService : IProductService
                     _logger.LogWarning("Cannot delete variant {VariantId} - has order items", variantId);
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                     throw new BusinessException(
-                        "این واریانت سفارشات مرتبط دارد و قابل حذف نیست.",
+                        "این واریант دارای سفارش ثبت‌شده است و قابل حذف نیست.",
                         "VARIANT_HAS_ORDERS");
                 }
             }
