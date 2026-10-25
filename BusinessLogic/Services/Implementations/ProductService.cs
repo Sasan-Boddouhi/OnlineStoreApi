@@ -471,26 +471,44 @@ public sealed class ProductService : IProductService
             // Update attributes if provided
             if (dto.Attributes.Count > 0)
             {
-                // Remove existing attribute values
+                // Get existing attribute values for this variant
                 var existingValues = await _unitOfWork.Repository<ProductAttributeValue>()
                     .ListAsync(new Spec<ProductAttributeValue>().Where(v => v.VariantId == variantId), cancellationToken);
                 
+                // Create a lookup of existing values by AttributeId
+                var existingByAttributeId = existingValues.ToDictionary(v => v.AttributeId);
+                var incomingAttributeIds = dto.Attributes.Select(a => a.AttributeId).ToHashSet();
+
+                // Remove attribute values that are no longer in the update
                 foreach (var existing in existingValues)
                 {
-                    _unitOfWork.Repository<ProductAttributeValue>().Delete(existing);
+                    if (!incomingAttributeIds.Contains(existing.AttributeId))
+                    {
+                        _unitOfWork.Repository<ProductAttributeValue>().Delete(existing);
+                    }
                 }
 
-                // Add new attribute values
+                // Update existing or add new attribute values
                 foreach (var input in dto.Attributes)
                 {
-                    await _unitOfWork.Repository<ProductAttributeValue>().AddAsync(
-                        new ProductAttributeValue
-                        {
-                            VariantId = variantId,
-                            AttributeId = input.AttributeId,
-                            Value = input.Value
-                        },
-                        cancellationToken);
+                    if (existingByAttributeId.TryGetValue(input.AttributeId, out var existing))
+                    {
+                        // Update existing
+                        existing.Value = input.Value;
+                        _unitOfWork.Repository<ProductAttributeValue>().Update(existing);
+                    }
+                    else
+                    {
+                        // Add new
+                        await _unitOfWork.Repository<ProductAttributeValue>().AddAsync(
+                            new ProductAttributeValue
+                            {
+                                VariantId = variantId,
+                                AttributeId = input.AttributeId,
+                                Value = input.Value
+                            },
+                            cancellationToken);
+                    }
                 }
                 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -511,7 +529,8 @@ public sealed class ProductService : IProductService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error updating variant: {VariantId}", variantId);
-            throw new BusinessException("خطا در ویرایش واریانت", "VARIANT_UPDATE_ERROR");
+            var msg = ex.InnerException?.Message ?? ex.Message;
+            throw new BusinessException($"خطا در ویرایش واریانت: {msg}", "VARIANT_UPDATE_ERROR");
         }
     }
 
