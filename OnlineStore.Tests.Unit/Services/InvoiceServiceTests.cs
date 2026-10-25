@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
@@ -15,6 +15,7 @@ public class InvoiceServiceTests
 {
     private readonly Mock<IUnitOfWork> _uowMock;
     private readonly Mock<IMapper> _mapperMock;
+    private readonly Mock<ICurrentUserService> _currentUserMock;
     private readonly Mock<ILogger<InvoiceService>> _loggerMock;
     private readonly InvoiceService _service;
 
@@ -25,6 +26,7 @@ public class InvoiceServiceTests
     {
         _uowMock = new Mock<IUnitOfWork>();
         _mapperMock = new Mock<IMapper>();
+        _currentUserMock = new Mock<ICurrentUserService>();
         _loggerMock = new Mock<ILogger<InvoiceService>>();
 
         _orderRepoMock = new Mock<IGenericRepository<Order>>();
@@ -33,7 +35,7 @@ public class InvoiceServiceTests
         _uowMock.Setup(u => u.Repository<Order>()).Returns(_orderRepoMock.Object);
         _uowMock.Setup(u => u.Repository<Invoice>()).Returns(_invoiceRepoMock.Object);
 
-        _service = new InvoiceService(_uowMock.Object, _mapperMock.Object, _loggerMock.Object);
+        _service = new InvoiceService(_uowMock.Object, _mapperMock.Object, _currentUserMock.Object, _loggerMock.Object);
     }
 
     private static Order CreateOrder(int id, OrderStatus status, decimal totalAmount, Invoice? invoice = null)
