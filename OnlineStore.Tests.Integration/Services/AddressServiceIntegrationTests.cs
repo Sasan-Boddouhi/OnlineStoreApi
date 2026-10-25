@@ -179,7 +179,7 @@ public class AddressServiceIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await AddressService.UpdateAsync(user2.UserId, created.AddressId, updateDto);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("*مجاز*");
     }
 
@@ -240,7 +240,7 @@ public class AddressServiceIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await AddressService.DeleteAsync(user2.UserId, created.AddressId);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("*مجاز*");
     }
 
