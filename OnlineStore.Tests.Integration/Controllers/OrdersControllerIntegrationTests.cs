@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using DataLayer.Context;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
@@ -89,6 +89,52 @@ public class OrdersControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await Client.GetAsync("/api/v1/orders/99999");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task CancelOrder_OwnedPendingOrder_ReturnsOk()
+    {
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var db = GetService<AppDbContext>();
+        var admin = await db.User.FirstAsync(u => u.PhoneNumber == "09123456789");
+
+        var customer = await db.Customer.FirstOrDefaultAsync(c => c.UserId == admin.UserId);
+        if (customer is null)
+        {
+            customer = new Customer { UserId = admin.UserId };
+            db.Customer.Add(customer);
+            await db.SaveChangesAsync();
+        }
+
+        var order = new Order
+        {
+            CustomerId = customer.CustomerId,
+            ShippingFullName = "Integration Test Cancel",
+            ShippingAddress = "Test Address",
+            ShippingPhoneNumber = "09120000000"
+        };
+        db.Order.Add(order);
+        await db.SaveChangesAsync();
+
+        var response = await Client.PostAsync($"/api/v1/orders/{order.OrderId}/cancel", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<OrderDto>();
+        result.Should().NotBeNull();
+        result!.Status.Should().Be(OrderStatus.Cancelled.ToString());
+    }
+
+    [Fact]
+    public async Task CancelOrder_NonOwnedOrder_ReturnsNotFound()
+    {
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.PostAsync("/api/v1/orders/99999/cancel", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }

@@ -98,13 +98,25 @@ public sealed class WarehouseService : IWarehouseService
         return dtos;
     }
 
-    public async Task<WarehouseDto?> UpdateAsync(int warehouseId, UpdateWarehouseDto dto, CancellationToken cancellationToken = default)
+    public async Task<WarehouseDto?> UpdateAsync(int userId, int warehouseId, UpdateWarehouseDto dto, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Updating warehouse {WarehouseId}", warehouseId);
 
         var entity = await _unitOfWork.Repository<Warehouse>().GetByIdAsync(warehouseId, cancellationToken);
         if (entity == null)
             return null;
+
+        var role = _currentUserService.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAdmin)
+        {
+            var seller = (await _unitOfWork.Repository<Seller>()
+                .ListAsync(new Spec<Seller>().Where(s => s.UserId == userId), cancellationToken))
+                .FirstOrDefault();
+            if (seller == null || entity.SellerId != seller.SellerId)
+                throw new ForbiddenException("WAREHOUSE_FORBIDDEN");
+        }
 
         var address = await _unitOfWork.Repository<Address>().GetByIdAsync(dto.AddressId, cancellationToken);
         if (address == null)

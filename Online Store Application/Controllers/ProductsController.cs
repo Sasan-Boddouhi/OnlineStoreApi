@@ -177,4 +177,33 @@ public class ProductsController : ControllerBase
         dto.ProductId = id;
         return Ok(await _productService.CreateAttributeAsync(dto));
     }
+
+    [HttpPut("{id:int}/variants/{variantId:int}")]
+    [Authorize(Policy = "CanManageCatalog")]
+    public async Task<ActionResult<ProductVariantDto>> UpdateVariant(
+        int id,
+        int variantId,
+        [FromBody] UpdateProductVariantDto dto,
+        CancellationToken cancellationToken)
+    {
+        var updated = await _productService.UpdateVariantAsync(variantId, dto, cancellationToken);
+        if (updated is null)
+            return NotFound();
+
+        return Ok(updated);
+    }
+
+    [HttpDelete("{id:int}/variants/{variantId:int}")]
+    [Authorize(Policy = "CanManageCatalog")]
+    public async Task<IActionResult> DeleteVariant(
+        int id,
+        int variantId,
+        CancellationToken cancellationToken)
+    {
+        var success = await _productService.DeleteVariantAsync(variantId, cancellationToken);
+        if (!success)
+            return NotFound();
+
+        return NoContent();
+    }
 }

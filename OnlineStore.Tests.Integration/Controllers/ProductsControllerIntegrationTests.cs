@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BusinessLogic.DTOs.Product;
@@ -278,5 +278,63 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
     {
         var response = await Client.DeleteAsync("/api/v1/products/1");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // ============================================================
+    // PUT & DELETE /api/v1/products/{id}/variants/{variantId}
+    // ============================================================
+    [Fact]
+    public async Task UpdateVariant_Valid_ReturnsOk()
+    {
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        // 1. Create a variant
+        var createVariantDto = new CreateProductVariantDto
+        {
+            ProductId = 1,
+            Name = "Variant Before Update",
+            Sku = $"SKU-UPD-{Guid.NewGuid():N}"
+        };
+        var createRes = await Client.PostAsJsonAsync("/api/v1/products/1/variants", createVariantDto);
+        createRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await createRes.Content.ReadFromJsonAsync<ProductVariantDto>();
+
+        // 2. Update the variant
+        var updateDto = new UpdateProductVariantDto
+        {
+            Name = "Variant After Update",
+            Sku = $"SKU-NEW-{Guid.NewGuid():N}",
+            IsActive = true
+        };
+        var updateRes = await Client.PutAsJsonAsync($"/api/v1/products/1/variants/{created!.VariantId}", updateDto);
+        updateRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await updateRes.Content.ReadFromJsonAsync<ProductVariantDto>();
+        updated.Should().NotBeNull();
+        updated!.Name.Should().Be("Variant After Update");
+    }
+
+    [Fact]
+    public async Task DeleteVariant_Valid_ReturnsNoContent()
+    {
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        // 1. Create a variant
+        var createVariantDto = new CreateProductVariantDto
+        {
+            ProductId = 1,
+            Name = "Variant To Delete",
+            Sku = $"SKU-DEL-{Guid.NewGuid():N}"
+        };
+        var createRes = await Client.PostAsJsonAsync("/api/v1/products/1/variants", createVariantDto);
+        createRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await createRes.Content.ReadFromJsonAsync<ProductVariantDto>();
+
+        // 2. Delete the variant
+        var deleteRes = await Client.DeleteAsync($"/api/v1/products/1/variants/{created!.VariantId}");
+        deleteRes.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 }

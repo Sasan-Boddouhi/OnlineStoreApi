@@ -235,7 +235,7 @@ public sealed class SellerService : ISellerService
         return rows.Select(l => _mapper.Map<SellerProductDto>(l)).ToList();
     }
 
-    public async Task<SellerProductDto> UpdateListingAsync(int listingId, UpdateSellerProductDto dto, CancellationToken cancellationToken = default)
+    public async Task<SellerProductDto> UpdateListingAsync(int sellerId, int listingId, UpdateSellerProductDto dto, CancellationToken cancellationToken = default)
     {
         if (dto.Price <= 0)
             throw new BusinessException("قیمت باید بزرگ‌تر از صفر باشد.", "INVALID_PRICE");
@@ -243,6 +243,9 @@ public sealed class SellerService : ISellerService
         var entity = await _unitOfWork.Repository<SellerProduct>().GetByIdAsync(listingId, cancellationToken);
         if (entity == null)
             throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
+
+        if (entity.SellerId != sellerId)
+            throw new ForbiddenException("شما مجاز به ویرایش این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
 
         _mapper.Map(dto, entity);
 

@@ -537,6 +537,39 @@ public class VariantIntegrationTests : BaseIntegrationTest
             .WithMessage("*مجاز*");
     }
 
+    [Fact]
+    public async Task UpdateListingAsync_OtherSeller_ThrowsForbidden()
+    {
+        // Arrange
+        var (sellerUser1, _) = await CreateCustomerAsync();
+        var (sellerUser2, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller1 = await CreateSellerAsync(sellerUser1.UserId);
+        var seller2 = await CreateSellerAsync(sellerUser2.UserId);
+
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller1.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act & Assert
+        var act = async () => await SellerService.UpdateListingAsync(
+            seller2.SellerId,
+            listing.ListingId,
+            new UpdateSellerProductDto { Price = 120 });
+
+        await act.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage("*مجاز*");
+    }
+
     // ==================== M7.1: Variant Update & Delete ====================
 
     [Fact]

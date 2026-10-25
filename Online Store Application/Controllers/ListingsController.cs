@@ -1,3 +1,5 @@
+using Application.Exceptions;
+using Application.Interfaces;
 using Asp.Versioning;
 using BusinessLogic.DTOs.Listing;
 using BusinessLogic.Services.Interfaces;
@@ -17,11 +19,26 @@ public class ListingsController : ControllerBase
 {
     private readonly ISellerService _sellerService;
     private readonly IInventoryService _inventoryService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public ListingsController(ISellerService sellerService, IInventoryService inventoryService)
+    public ListingsController(
+        ISellerService sellerService,
+        IInventoryService inventoryService,
+        ICurrentUserService currentUserService)
     {
         _sellerService = sellerService;
         _inventoryService = inventoryService;
+        _currentUserService = currentUserService;
+    }
+
+    private async Task<int> GetCurrentSellerIdAsync(CancellationToken cancellationToken)
+    {
+        var userId = _currentUserService.GetCurrentUserId();
+        var seller = await _sellerService.GetByUserIdAsync(userId, cancellationToken);
+        if (seller is null)
+            throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
+
+        return seller.SellerId;
     }
 
     [HttpGet]
@@ -47,12 +64,44 @@ public class ListingsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Policy = "CanManageCatalog")]
+    [Authorize]
     public async Task<ActionResult<SellerProductDto>> Update(
         int id,
         [FromBody] UpdateSellerProductDto dto,
         CancellationToken cancellationToken)
-        => Ok(await _sellerService.UpdateListingAsync(id, dto, cancellationToken));
+    {
+        var sellerId = await GetCurrentSellerIdAsync(cancellationToken);
+        return Ok(await _sellerService.UpdateListingAsync(sellerId, id, dto, cancellationToken));
+    }
+
+    [HttpDelete("{id:int}")]
+    [Authorize]
+    public async Task<IActionResult> Delete(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var sellerId = await GetCurrentSellerIdAsync(cancellationToken);
+        var success = await _sellerService.DeleteListingAsync(sellerId, id, cancellationToken);
+        if (!success)
+            return NotFound();
+
+        return NoContent();
+    }
+
+    [HttpPatch("{id:int}/price")]
+    [Authorize]
+    public async Task<ActionResult<SellerProductDto>> UpdatePrice(
+        int id,
+        [FromBody] UpdateListingPriceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var sellerId = await GetCurrentSellerIdAsync(cancellationToken);
+        var updated = await _sellerService.UpdateListingPriceAsync(sellerId, id, request.Price, cancellationToken);
+        if (updated is null)
+            return NotFound();
+
+        return Ok(updated);
+    }
 
     /// <summary>
     /// Phase 10 (R49) — ثبت موجودی روی یک پیشنهاد فروش.

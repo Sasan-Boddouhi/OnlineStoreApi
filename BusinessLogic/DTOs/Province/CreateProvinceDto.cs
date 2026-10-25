@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +8,6 @@ namespace BusinessLogic.DTOs.Province
 {
     public class CreateProvinceDto
     {
-        public string? ProvinceName { get; internal set; }
+        public string? ProvinceName { get; set; }
     }
 }

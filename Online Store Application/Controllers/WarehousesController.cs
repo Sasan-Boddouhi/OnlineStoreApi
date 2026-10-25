@@ -54,7 +54,8 @@ public class WarehousesController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
         if (id != dto.WarehouseId) return BadRequest("ID mismatch");
 
-        var warehouse = await _warehouseService.UpdateAsync(id, dto);
+        var userId = _currentUserService.GetCurrentUserId();
+        var warehouse = await _warehouseService.UpdateAsync(userId, id, dto);
         if (warehouse == null) return NotFound();
         return NoContent();
     }

@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Application.Interfaces;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.Services.Interfaces;
@@ -58,4 +58,8 @@ public class OrdersController : ControllerBase
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<OrderDto>> Deliver(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.MarkDeliveredAsync(id, cancellationToken));
+
+    [HttpPost("{id:int}/cancel")]
+    public async Task<ActionResult<OrderDto>> Cancel(int id, CancellationToken cancellationToken)
+        => Ok(await _orderService.CancelOrderAsync(id, cancellationToken));
 }
