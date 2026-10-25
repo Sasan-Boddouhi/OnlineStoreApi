@@ -104,16 +104,10 @@ public sealed class AddressService : IAddressService
 
             return _mapper.Map<AddressDto>(address);
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
-        }
-        catch (Exception ex)
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to update address {AddressId} for user {UserId}", addressId, userId);
-            throw new BusinessException("خطا در ویرایش آدرس", "ADDRESS_UPDATE_ERROR");
         }
     }
 
@@ -140,16 +134,10 @@ public sealed class AddressService : IAddressService
 
             return true;
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
-        }
-        catch (Exception ex)
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to delete address {AddressId} for user {UserId}", addressId, userId);
-            throw new BusinessException("خطا در حذف آدرس", "ADDRESS_DELETE_ERROR");
         }
     }
 
