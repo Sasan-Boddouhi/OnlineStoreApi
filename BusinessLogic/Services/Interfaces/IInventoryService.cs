@@ -31,4 +31,14 @@ public interface IInventoryService
         int? warehouseId,
         decimal quantity,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// M7.2 — ایجاد رکورد موجودی برای یک Listing در یک انبار مشخص.
+    /// این متد برای تخصیص اولیه موجودی استفاده می‌شود.
+    /// </summary>
+    Task<InventoryStockDto> CreateInventoryAsync(
+        int listingId,
+        int warehouseId,
+        decimal initialQuantity,
+        CancellationToken cancellationToken = default);
 }

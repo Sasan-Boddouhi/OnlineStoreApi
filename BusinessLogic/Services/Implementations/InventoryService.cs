@@ -181,6 +181,56 @@ public sealed class InventoryService : IInventoryService
         };
     }
 
+    /// <summary>
+    /// M7.2 — ایجاد رکورد موجودی برای یک Listing در یک انبار مشخص.
+    /// این متد برای تخصیص اولیه موجودی استفاده می‌شود.
+    /// </summary>
+    public async Task<InventoryStockDto> CreateInventoryAsync(
+        int listingId,
+        int warehouseId,
+        decimal initialQuantity,
+        CancellationToken cancellationToken = default)
+    {
+        if (initialQuantity < 0)
+            throw new BusinessException("مقدار اولیه نمی‌تواند منفی باشد.", "INVALID_QUANTITY");
+
+        var listing = await _unitOfWork.Repository<SellerProduct>()
+            .GetByIdAsync(listingId, cancellationToken)
+            ?? throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
+
+        await EnsureCanManageListingAsync(listing, cancellationToken);
+
+        var warehouse = await _unitOfWork.Repository<Warehouse>()
+            .GetByIdAsync(warehouseId, cancellationToken)
+            ?? throw new NotFoundException("انبار یافت نشد.", "WAREHOUSE_NOT_FOUND");
+
+        var row = await _unitOfWork.Repository<Inventory>()
+            .FirstOrDefaultAsync(
+                new Spec<Inventory>()
+                    .Where(i => i.ListingId == listingId && i.WarehouseId == warehouseId)
+                    .AsTracking(),
+                cancellationToken);
+
+        if (row is not null)
+            throw new BusinessException("موجودی برای این Listing در این انبار از قبل وجود دارد.", "INVENTORY_ALREADY_EXISTS");
+
+        var newRow = new Inventory(listingId, warehouseId, initialQuantity);
+        await _unitOfWork.Repository<Inventory>().AddAsync(newRow, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Inventory created for listing {ListingId} in warehouse {WarehouseId} with initial quantity {Quantity}.",
+            listingId, warehouseId, initialQuantity);
+
+        return new InventoryStockDto
+        {
+            ListingId = listingId,
+            WarehouseId = warehouseId,
+            AddedQuantity = initialQuantity,
+            AvailableQuantity = await GetAvailableAsync(listingId, cancellationToken)
+        };
+    }
+
     /// <summary>فروشندهٔ مالک، یا یک نقش مدیریتی.</summary>
     private async Task EnsureCanManageListingAsync(SellerProduct listing, CancellationToken cancellationToken)
     {
