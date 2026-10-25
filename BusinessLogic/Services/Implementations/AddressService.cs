@@ -87,7 +87,7 @@ public sealed class AddressService : IAddressService
 
             // Check ownership
             if (address.UserId != userId)
-                throw new BusinessException("شما مجاز به ویرایش این آدرس نیستید.", "ADDRESS_FORBIDDEN");
+                throw new ForbiddenException("ADDRESS_FORBIDDEN");
 
             if (dto.IsDefault)
             {
@@ -130,7 +130,7 @@ public sealed class AddressService : IAddressService
 
             // Check ownership
             if (address.UserId != userId)
-                throw new BusinessException("شما مجاز به حذف این آدرس نیستید.", "ADDRESS_FORBIDDEN");
+                throw new ForbiddenException("ADDRESS_FORBIDDEN");
 
             _unitOfWork.Repository<Address>().Delete(address);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

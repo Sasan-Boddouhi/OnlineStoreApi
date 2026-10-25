@@ -8,7 +8,6 @@ using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
-
 public sealed class WarehouseService : IWarehouseService
 {
     private readonly IUnitOfWork _unitOfWork;
@@ -28,24 +27,36 @@ public sealed class WarehouseService : IWarehouseService
         _currentUserService = currentUserService;
     }
 
-    public async Task<WarehouseDto> CreateAsync(CreateWarehouseDto dto, CancellationToken cancellationToken = default)
+    public async Task<WarehouseDto> CreateAsync(CreateWarehouseDto dto, int currentUserId, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Creating warehouse: {WarehouseName}", dto.Name);
 
-        // Validate address exists
         var address = await _unitOfWork.Repository<Address>().GetByIdAsync(dto.AddressId, cancellationToken);
         if (address == null)
             throw new NotFoundException("آدرس یافت نشد.", "ADDRESS_NOT_FOUND");
 
-        // If SellerId is provided, validate seller exists
-        if (dto.SellerId.HasValue)
-        {
-            var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
-            if (seller == null)
-                throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
-        }
-
         var entity = _mapper.Map<Warehouse>(dto);
+        entity.SellerId = null;
+
+        var role = _currentUserService.GetCurrentUserRole();
+        if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        {
+            if (dto.SellerId.HasValue)
+            {
+                var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
+                if (seller == null)
+                    throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
+                entity.SellerId = dto.SellerId.Value;
+            }
+        }
+        else
+        {
+            var seller = (await _unitOfWork.Repository<Seller>()
+                .ListAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken))
+                .FirstOrDefault();
+            if (seller != null)
+                entity.SellerId = seller.SellerId;
+        }
 
         await _unitOfWork.Repository<Warehouse>().AddAsync(entity, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -62,7 +73,6 @@ public sealed class WarehouseService : IWarehouseService
             return null;
 
         var dto = _mapper.Map<WarehouseDto>(entity);
-        // Populate navigation properties
         dto.AddressName = entity.Address != null ? entity.Address.Plaque + " " + entity.Address.Unit : "";
         dto.SellerName = entity.Seller != null ? entity.Seller.StoreName : "";
         
@@ -96,12 +106,10 @@ public sealed class WarehouseService : IWarehouseService
         if (entity == null)
             return null;
 
-        // Validate address exists
         var address = await _unitOfWork.Repository<Address>().GetByIdAsync(dto.AddressId, cancellationToken);
         if (address == null)
             throw new NotFoundException("آدرس یافت نشد.", "ADDRESS_NOT_FOUND");
 
-        // If SellerId is provided, validate seller exists
         if (dto.SellerId.HasValue)
         {
             var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
@@ -118,7 +126,7 @@ public sealed class WarehouseService : IWarehouseService
         return await GetByIdAsync(warehouseId, cancellationToken);
     }
 
-    public async Task<bool> DeleteAsync(int warehouseId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(int warehouseId, int currentUserId, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Deleting warehouse {WarehouseId}", warehouseId);
 
@@ -126,7 +134,18 @@ public sealed class WarehouseService : IWarehouseService
         if (entity == null)
             return false;
 
-        // Check if warehouse has inventories
+        var role = _currentUserService.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAdmin)
+        {
+            var seller = (await _unitOfWork.Repository<Seller>()
+                .ListAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken))
+                .FirstOrDefault();
+            if (seller == null || entity.SellerId != seller.SellerId)
+                throw new ForbiddenException("WAREHOUSE_FORBIDDEN");
+        }
+
         var hasInventories = await _unitOfWork.Repository<Inventory>()
             .AnyAsync(i => i.WarehouseId == warehouseId, cancellationToken);
 

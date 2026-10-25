@@ -57,6 +57,7 @@ namespace BusinessLogic.Services.Implementations
             var invoice = await _unitOfWork.Repository<Invoice>()
                 .FirstOrDefaultAsync(new Spec<Invoice>().Where(i => i.InvoiceId == invoiceId).Include(i => i.Order), cancellationToken);
             if (invoice == null) return null;
+            if (invoice.Order == null) return null;
             await EnsureCanAccessAsync(invoice, cancellationToken);
             return _mapper.Map<InvoiceDto>(invoice);
         }
@@ -66,6 +67,7 @@ namespace BusinessLogic.Services.Implementations
             var invoice = await _unitOfWork.Repository<Invoice>()
                 .FirstOrDefaultAsync(new Spec<Invoice>().Where(i => i.OrderId == orderId).Include(i => i.Order), cancellationToken);
             if (invoice == null) return null;
+            if (invoice.Order == null) return null;
             await EnsureCanAccessAsync(invoice, cancellationToken);
             return _mapper.Map<InvoiceDto>(invoice);
         }

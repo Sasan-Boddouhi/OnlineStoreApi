@@ -1,5 +1,6 @@
 using BusinessLogic.DTOs.Warehouse;
 using BusinessLogic.Services.Interfaces;
+using Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,10 +15,12 @@ using Asp.Versioning;
 public class WarehousesController : ControllerBase
 {
     private readonly IWarehouseService _warehouseService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public WarehousesController(IWarehouseService warehouseService)
+    public WarehousesController(IWarehouseService warehouseService, ICurrentUserService currentUserService)
     {
         _warehouseService = warehouseService;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet]
@@ -40,7 +43,8 @@ public class WarehousesController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
         
-        var warehouse = await _warehouseService.CreateAsync(dto);
+        var userId = _currentUserService.GetCurrentUserId();
+        var warehouse = await _warehouseService.CreateAsync(dto, userId);
         return CreatedAtAction(nameof(GetById), new { id = warehouse.WarehouseId }, warehouse);
     }
 
@@ -58,7 +62,8 @@ public class WarehousesController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var deleted = await _warehouseService.DeleteAsync(id);
+        var userId = _currentUserService.GetCurrentUserId();
+        var deleted = await _warehouseService.DeleteAsync(id, userId);
         if (!deleted) return NotFound();
         return NoContent();
     }
