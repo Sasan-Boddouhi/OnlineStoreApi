@@ -55,5 +55,12 @@ public class ProductProfile : Profile
             })
             .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
             .ForMember(dest => dest.ReviewCount, opt => opt.Ignore());
+
+        // M7.1: Variant Update mapping
+        CreateMap<UpdateProductVariantDto, ProductVariant>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.VariantId, opt => opt.Ignore())
+            .ForMember(dest => dest.ProductId, opt => opt.Ignore())
+            .ForMember(dest => dest.AttributeValues, opt => opt.Ignore());
     }
 }
