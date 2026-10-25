@@ -627,6 +627,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
         {
             VariantId = variant.VariantId,
             Name = "256GB Updated",
+            Sku = $"UPDATED-SKU-{Guid.NewGuid():N}", // Unique SKU to avoid conflicts
             Attributes = new List<VariantAttributeInputDto>
             {
                 new() { AttributeId = color.AttributeId, Value = "White" }
