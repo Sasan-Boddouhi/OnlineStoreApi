@@ -726,6 +726,12 @@ public class VariantIntegrationTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
+        // Deactivate the listing so the service moves past the listing check and hits the order check
+        var listingEntity = await DbContext.SellerProduct.FindAsync(listing.ListingId);
+        listingEntity.Status = SellerProductStatus.Inactive;
+        DbContext.SellerProduct.Update(listingEntity);
+        await DbContext.SaveChangesAsync();
+
         // Act & Assert
         var act = async () => await ProductService.DeleteVariantAsync(variant.VariantId);
         await act.Should().ThrowAsync<BusinessException>()
