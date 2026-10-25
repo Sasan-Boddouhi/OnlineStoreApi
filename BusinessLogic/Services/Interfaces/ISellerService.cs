@@ -21,5 +21,9 @@ namespace BusinessLogic.Services.Interfaces
         Task<SellerProductDto> GetListingAsync(int listingId, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<SellerProductDto>> GetListingsAsync(int? sellerId = null, CancellationToken cancellationToken = default);
         Task<SellerProductDto> UpdateListingAsync(int listingId, UpdateSellerProductDto dto, CancellationToken cancellationToken = default);
+
+        // M7.1: Listing CRUD completion
+        Task<bool> DeleteListingAsync(int sellerId, int listingId, CancellationToken cancellationToken = default);
+        Task<SellerProductDto?> UpdateListingPriceAsync(int sellerId, int listingId, decimal newPrice, CancellationToken cancellationToken = default);
     }
 }

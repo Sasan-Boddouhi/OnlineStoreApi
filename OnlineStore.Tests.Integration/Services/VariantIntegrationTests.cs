@@ -347,4 +347,388 @@ public class VariantIntegrationTests : BaseIntegrationTest
 
         return (user, customer);
     }
+
+    // ==================== M7.1: Listing Delete & Price Update ====================
+
+    [Fact]
+    public async Task DeleteListingAsync_NoActiveOrders_DeletesListing()
+    {
+        // Arrange
+        var (sellerUser, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller = await CreateSellerAsync(sellerUser.UserId);
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act
+        var deleted = await SellerService.DeleteListingAsync(seller.SellerId, listing.ListingId);
+
+        // Assert
+        deleted.Should().BeTrue();
+        var fromDb = await DbContext.SellerProduct.FindAsync(listing.ListingId);
+        fromDb.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteListingAsync_HasActiveOrders_MarksInactive()
+    {
+        // Arrange
+        var (sellerUser, _) = await CreateCustomerAsync();
+        var (buyerUser, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller = await CreateSellerAsync(sellerUser.UserId);
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Create an order with this listing
+        await EnsureStockAsync(seller.SellerId, listing.ListingId, buyerUser.UserId);
+        SetCurrentUser(buyerUser.UserId);
+        await CartService.AddItemAsync(
+            buyerUser.UserId, null, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
+        await CartService.CheckoutAsync(buyerUser.UserId, null, new CheckoutDto
+        {
+            ShippingFullName = "Buyer",
+            ShippingAddress = "Tehran",
+            ShippingPhoneNumber = "09120000000"
+        });
+
+        // Act
+        var deleted = await SellerService.DeleteListingAsync(seller.SellerId, listing.ListingId);
+
+        // Assert
+        deleted.Should().BeTrue();
+        var fromDb = await DbContext.SellerProduct.FindAsync(listing.ListingId);
+        fromDb.Should().NotBeNull();
+        fromDb.Status.Should().Be(SellerProductStatus.Inactive);
+    }
+
+    [Fact]
+    public async Task DeleteListingAsync_OtherSeller_ThrowsForbidden()
+    {
+        // Arrange
+        var (sellerUser1, _) = await CreateCustomerAsync();
+        var (sellerUser2, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller1 = await CreateSellerAsync(sellerUser1.UserId);
+        var seller2 = await CreateSellerAsync(sellerUser2.UserId);
+
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller1.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act & Assert
+        var act = async () => await SellerService.DeleteListingAsync(seller2.SellerId, listing.ListingId);
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*مجاز*");
+    }
+
+    [Fact]
+    public async Task UpdateListingPriceAsync_ValidPrice_UpdatesPrice()
+    {
+        // Arrange
+        var (sellerUser, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller = await CreateSellerAsync(sellerUser.UserId);
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act
+        var updated = await SellerService.UpdateListingPriceAsync(seller.SellerId, listing.ListingId, 120);
+
+        // Assert
+        updated.Should().NotBeNull();
+        updated.Price.Should().Be(120);
+
+        var fromDb = await DbContext.SellerProduct.FindAsync(listing.ListingId);
+        fromDb.Price.Should().Be(120);
+    }
+
+    [Fact]
+    public async Task UpdateListingPriceAsync_InvalidPrice_ThrowsBusinessException()
+    {
+        // Arrange
+        var (sellerUser, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller = await CreateSellerAsync(sellerUser.UserId);
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act & Assert
+        var act = async () => await SellerService.UpdateListingPriceAsync(seller.SellerId, listing.ListingId, 0);
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*قیمت*");
+    }
+
+    [Fact]
+    public async Task UpdateListingPriceAsync_OtherSeller_ThrowsForbidden()
+    {
+        // Arrange
+        var (sellerUser1, _) = await CreateCustomerAsync();
+        var (sellerUser2, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "256GB Black", Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller1 = await CreateSellerAsync(sellerUser1.UserId);
+        var seller2 = await CreateSellerAsync(sellerUser2.UserId);
+
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller1.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act & Assert
+        var act = async () => await SellerService.UpdateListingPriceAsync(seller2.SellerId, listing.ListingId, 120);
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*مجاز*");
+    }
+
+    // ==================== M7.1: Variant Update & Delete ====================
+
+    [Fact]
+    public async Task UpdateVariantAsync_ValidUpdate_UpdatesVariant()
+    {
+        // Arrange
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId,
+            Name = "Original",
+            Sku = $"SKU-{Guid.NewGuid():N}",
+            IsActive = true
+        });
+
+        var updateDto = new UpdateProductVariantDto
+        {
+            VariantId = variant.VariantId,
+            Name = "Updated Name",
+            Sku = $"SKU-{Guid.NewGuid():N}",
+            Barcode = "1234567890123",
+            IsActive = false
+        };
+
+        // Act
+        var updated = await ProductService.UpdateVariantAsync(variant.VariantId, updateDto);
+
+        // Assert
+        updated.Should().NotBeNull();
+        updated.Name.Should().Be("Updated Name");
+        updated.IsActive.Should().BeFalse();
+        updated.Barcode.Should().Be("1234567890123");
+    }
+
+    [Fact]
+    public async Task UpdateVariantAsync_DuplicateSku_ThrowsBusinessException()
+    {
+        // Arrange
+        var product = await CreateProductAsync();
+        var sku1 = $"SKU-{Guid.NewGuid():N}";
+        var sku2 = $"SKU-{Guid.NewGuid():N}";
+
+        var v1 = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "V1", Sku = sku1
+        });
+
+        await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId, Name = "V2", Sku = sku2
+        });
+
+        var updateDto = new UpdateProductVariantDto
+        {
+            VariantId = v1.VariantId,
+            Name = "V1 Updated",
+            Sku = sku2 // Duplicate SKU
+        };
+
+        // Act & Assert
+        var act = async () => await ProductService.UpdateVariantAsync(v1.VariantId, updateDto);
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*SKU*");
+    }
+
+    [Fact]
+    public async Task UpdateVariantAsync_WithAttributes_UpdatesAttributes()
+    {
+        // Arrange
+        var product = await CreateProductAsync();
+        var color = await ProductService.CreateAttributeAsync(new CreateProductAttributeDto
+        {
+            ProductId = product.ProductId, Name = "Color", Type = AttributeType.Color
+        });
+
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId,
+            Name = "256GB",
+            Sku = $"SKU-{Guid.NewGuid():N}",
+            Attributes = new List<VariantAttributeInputDto>
+            {
+                new() { AttributeId = color.AttributeId, Value = "Black" }
+            }
+        });
+
+        var updateDto = new UpdateProductVariantDto
+        {
+            VariantId = variant.VariantId,
+            Name = "256GB Updated",
+            Attributes = new List<VariantAttributeInputDto>
+            {
+                new() { AttributeId = color.AttributeId, Value = "White" }
+            }
+        };
+
+        // Act
+        var updated = await ProductService.UpdateVariantAsync(variant.VariantId, updateDto);
+
+        // Assert
+        updated.Should().NotBeNull();
+        updated.Attributes.Should().HaveCount(1);
+        updated.Attributes[0].Value.Should().Be("White");
+    }
+
+    [Fact]
+    public async Task DeleteVariantAsync_NoDependencies_DeletesVariant()
+    {
+        // Arrange
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId,
+            Name = "ToDelete",
+            Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        // Act
+        var deleted = await ProductService.DeleteVariantAsync(variant.VariantId);
+
+        // Assert
+        deleted.Should().BeTrue();
+        var fromDb = await DbContext.ProductVariant.FindAsync(variant.VariantId);
+        fromDb.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DeleteVariantAsync_HasActiveListing_ThrowsBusinessException()
+    {
+        // Arrange
+        var (sellerUser, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId,
+            Name = "HasListing",
+            Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller = await CreateSellerAsync(sellerUser.UserId);
+        await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Act & Assert
+        var act = async () => await ProductService.DeleteVariantAsync(variant.VariantId);
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*فعال*");
+    }
+
+    [Fact]
+    public async Task DeleteVariantAsync_HasOrders_ThrowsBusinessException()
+    {
+        // Arrange
+        var (sellerUser, _) = await CreateCustomerAsync();
+        var (buyerUser, _) = await CreateCustomerAsync();
+        var product = await CreateProductAsync();
+        var variant = await ProductService.CreateVariantAsync(new CreateProductVariantDto
+        {
+            ProductId = product.ProductId,
+            Name = "HasOrders",
+            Sku = $"SKU-{Guid.NewGuid():N}"
+        });
+
+        var seller = await CreateSellerAsync(sellerUser.UserId);
+        var listing = await SellerService.CreateListingAsync(new CreateSellerProductDto
+        {
+            SellerId = seller.SellerId,
+            VariantId = variant.VariantId,
+            Price = 90,
+            Status = SellerProductStatus.Active
+        });
+
+        // Create order with this listing
+        await EnsureStockAsync(seller.SellerId, listing.ListingId, buyerUser.UserId);
+        SetCurrentUser(buyerUser.UserId);
+        await CartService.AddItemAsync(
+            buyerUser.UserId, null, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
+        await CartService.CheckoutAsync(buyerUser.UserId, null, new CheckoutDto
+        {
+            ShippingFullName = "Buyer",
+            ShippingAddress = "Tehran",
+            ShippingPhoneNumber = "09120000000"
+        });
+
+        // Act & Assert
+        var act = async () => await ProductService.DeleteVariantAsync(variant.VariantId);
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*سفارشات*");
+    }
 }

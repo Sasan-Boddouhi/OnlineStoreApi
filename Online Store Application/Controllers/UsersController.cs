@@ -2,6 +2,7 @@ using Application.Common.Queries;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Features.Users.CreateUser;
+using BusinessLogic.DTOs.Address;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Users;
@@ -31,12 +32,16 @@ public class UsersController : ControllerBase
         CaseInsensitive = true
     };
 
+    private readonly IAddressService _addressService;
+
     public UsersController(
         IUserService userService,
+        IAddressService addressService,
         ISender sender,
         ILogger<UsersController> logger)
     {
         _userService = userService;
+        _addressService = addressService;
         _sender = sender;
         _logger = logger;
     }
@@ -177,6 +182,66 @@ public class UsersController : ControllerBase
 
         await _userService.AssignRolesAsync(id, dto.RoleIds);
         return Ok();
+    }
+
+    // ==================== Address Endpoints ====================
+
+    // GET: api/users/me/addresses
+    [Authorize]
+    [HttpGet("me/addresses")]
+    public async Task<IActionResult> GetMyAddresses()
+    {
+        var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var addresses = await _addressService.GetAllAsync(userId);
+        return Ok(addresses);
+    }
+
+    // POST: api/users/me/addresses
+    [Authorize]
+    [HttpPost("me/addresses")]
+    public async Task<IActionResult> CreateMyAddress([FromBody] CreateAddressDto dto)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var address = await _addressService.CreateAsync(userId, dto);
+        return CreatedAtAction(nameof(GetMyAddresses), new { }, address);
+    }
+
+    // PUT: api/users/me/addresses/{addressId}
+    [Authorize]
+    [HttpPut("me/addresses/{addressId:int}")]
+    public async Task<IActionResult> UpdateMyAddress(int addressId, [FromBody] UpdateAddressDto dto)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var address = await _addressService.UpdateAsync(userId, addressId, dto);
+        if (address == null) return NotFound();
+        return Ok(address);
+    }
+
+    // DELETE: api/users/me/addresses/{addressId}
+    [Authorize]
+    [HttpDelete("me/addresses/{addressId:int}")]
+    public async Task<IActionResult> DeleteMyAddress(int addressId)
+    {
+        var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var deleted = await _addressService.DeleteAsync(userId, addressId);
+        if (!deleted) return NotFound();
+        return NoContent();
     }
 
     // GET: api/users/me

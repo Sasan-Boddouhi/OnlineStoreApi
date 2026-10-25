@@ -422,6 +422,175 @@ public sealed class ProductService : IProductService
         };
     }
 
+    public async Task<ProductVariantDto?> UpdateVariantAsync(int variantId, UpdateProductVariantDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating variant {VariantId}", variantId);
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var variant = await _unitOfWork.Repository<ProductVariant>().GetByIdAsync(variantId, cancellationToken);
+            if (variant == null)
+                return null;
+
+            // Validate SKU uniqueness if changed
+            var sku = string.IsNullOrWhiteSpace(dto.Sku) ? null : dto.Sku.Trim();
+            if (sku is not null && sku != variant.Sku)
+            {
+                var duplicateSku = await _unitOfWork.Repository<ProductVariant>()
+                    .AnyAsync(v => v.Sku == sku && v.VariantId != variantId, cancellationToken);
+                if (duplicateSku)
+                    throw new BusinessException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
+            }
+
+            // Validate attributes belong to the same product
+            var attributeIds = dto.Attributes.Select(a => a.AttributeId).Distinct().ToList();
+            if (attributeIds.Count > 0)
+            {
+                var owned = await _unitOfWork.Repository<ProductAttribute>()
+                    .ListAsync(new Spec<ProductAttribute>()
+                        .Where(a => a.ProductId == variant.ProductId && attributeIds.Contains(a.AttributeId)),
+                        cancellationToken);
+
+                var missing = attributeIds.Except(owned.Select(a => a.AttributeId)).ToList();
+                if (missing.Count > 0)
+                    throw new BusinessException(
+                        $"ویژگی‌های {string.Join(", ", missing)} به این محصول تعلق ندارند.",
+                        "ATTRIBUTE_NOT_IN_PRODUCT");
+            }
+
+            // Update variant properties
+            variant.Name = dto.Name;
+            variant.Sku = sku;
+            variant.Barcode = dto.Barcode;
+            variant.IsActive = dto.IsActive;
+
+            _unitOfWork.Repository<ProductVariant>().Update(variant);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Update attributes if provided
+            if (dto.Attributes.Count > 0)
+            {
+                // Remove existing attribute values
+                var existingValues = await _unitOfWork.Repository<ProductAttributeValue>()
+                    .ListAsync(new Spec<ProductAttributeValue>().Where(v => v.VariantId == variantId), cancellationToken);
+                
+                foreach (var existing in existingValues)
+                {
+                    _unitOfWork.Repository<ProductAttributeValue>().Delete(existing);
+                }
+
+                // Add new attribute values
+                foreach (var input in dto.Attributes)
+                {
+                    await _unitOfWork.Repository<ProductAttributeValue>().AddAsync(
+                        new ProductAttributeValue
+                        {
+                            VariantId = variantId,
+                            AttributeId = input.AttributeId,
+                            Value = input.Value
+                        },
+                        cancellationToken);
+                }
+                
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Variant {VariantId} updated successfully", variantId);
+
+            return await BuildVariantDtoAsync(variant, cancellationToken);
+        }
+        catch (BusinessException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Error updating variant: {VariantId}", variantId);
+            throw new BusinessException("خطا در ویرایش واریانت", "VARIANT_UPDATE_ERROR");
+        }
+    }
+
+    public async Task<bool> DeleteVariantAsync(int variantId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting variant {VariantId}", variantId);
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var variant = await _unitOfWork.Repository<ProductVariant>().GetByIdAsync(variantId, cancellationToken);
+            if (variant == null)
+                return false;
+
+            // Check for active listings (SellerProduct) referencing this variant
+            var hasActiveListings = await _unitOfWork.Repository<SellerProduct>()
+                .AnyAsync(l => l.VariantId == variantId && l.Status == SellerProductStatus.Active, cancellationToken);
+
+            if (hasActiveListings)
+            {
+                _logger.LogWarning("Cannot delete variant {VariantId} - has active listings", variantId);
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw new BusinessException(
+                    "این واریانت پیشنهاد فروش فعال دارد و قابل حذف نیست. ابتدا پیشنهادهای فروش را غیرفعال کنید.",
+                    "VARIANT_HAS_ACTIVE_LISTINGS");
+            }
+
+            // Check for OrderItems referencing this variant via listings
+            var listingIds = await _unitOfWork.Repository<SellerProduct>()
+                .ListAsync(new Spec<SellerProduct>().Where(l => l.VariantId == variantId), cancellationToken);
+            
+            var listingIdsList = listingIds.Select(l => l.ListingId).ToList();
+            
+            if (listingIdsList.Count > 0)
+            {
+                var hasOrderItems = await _unitOfWork.Repository<OrderItem>()
+                    .AnyAsync(oi => listingIdsList.Contains(oi.ListingId), cancellationToken);
+
+                if (hasOrderItems)
+                {
+                    _logger.LogWarning("Cannot delete variant {VariantId} - has order items", variantId);
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    throw new BusinessException(
+                        "این واریانت سفارشات مرتبط دارد و قابل حذف نیست.",
+                        "VARIANT_HAS_ORDERS");
+                }
+            }
+
+            // Delete attribute values first
+            var attrValues = await _unitOfWork.Repository<ProductAttributeValue>()
+                .ListAsync(new Spec<ProductAttributeValue>().Where(v => v.VariantId == variantId), cancellationToken);
+            
+            foreach (var av in attrValues)
+            {
+                _unitOfWork.Repository<ProductAttributeValue>().Delete(av);
+            }
+
+            // Delete the variant
+            _unitOfWork.Repository<ProductVariant>().Delete(variant);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Variant {VariantId} deleted successfully", variantId);
+
+            return true;
+        }
+        catch (BusinessException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Error deleting variant: {VariantId}", variantId);
+            throw new BusinessException("خطا در حذف واریانت", "VARIANT_DELETE_ERROR");
+        }
+    }
+
     /// <summary>
     /// مقادیر ویژگی‌ها در کوئری جدا خوانده می‌شوند تا به ThenInclude نیاز نباشد
     /// (Spec فقط Include تک‌سطحی دارد).

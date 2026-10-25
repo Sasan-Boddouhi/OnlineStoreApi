@@ -254,5 +254,96 @@ public sealed class SellerService : ISellerService
         return _mapper.Map<SellerProductDto>(entity);
     }
 
+    public async Task<bool> DeleteListingAsync(int sellerId, int listingId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting listing {ListingId} for seller {SellerId}", listingId, sellerId);
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var listing = await _unitOfWork.Repository<SellerProduct>().GetByIdAsync(listingId, cancellationToken);
+            if (listing == null)
+                return false;
+
+            // Check ownership
+            if (listing.SellerId != sellerId)
+                throw new BusinessException("شما مجاز به حذف این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
+
+            // Check for active orders (OrderItem referencing this listing)
+            var hasActiveOrders = await _unitOfWork.Repository<OrderItem>()
+                .AnyAsync(oi => oi.ListingId == listingId, cancellationToken);
+
+            if (hasActiveOrders)
+            {
+                // Mark as Inactive instead of deleting
+                listing.Status = SellerProductStatus.Inactive;
+                _unitOfWork.Repository<SellerProduct>().Update(listing);
+                _logger.LogInformation("Listing {ListingId} has active orders; marked as Inactive", listingId);
+            }
+            else
+            {
+                // Safe to delete
+                _unitOfWork.Repository<SellerProduct>().Delete(listing);
+                _logger.LogInformation("Listing {ListingId} deleted", listingId);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            return true;
+        }
+        catch (BusinessException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to delete listing {ListingId} for seller {SellerId}", listingId, sellerId);
+            throw new BusinessException("خطا در حذف پیشنهاد فروش", "LISTING_DELETE_ERROR");
+        }
+    }
+
+    public async Task<SellerProductDto?> UpdateListingPriceAsync(int sellerId, int listingId, decimal newPrice, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating price for listing {ListingId} for seller {SellerId}", listingId, sellerId);
+
+        if (newPrice <= 0)
+            throw new BusinessException("قیمت باید بزرگ‌تر از صفر باشد.", "INVALID_PRICE");
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var listing = await _unitOfWork.Repository<SellerProduct>().GetByIdAsync(listingId, cancellationToken);
+            if (listing == null)
+                return null;
+
+            // Check ownership
+            if (listing.SellerId != sellerId)
+                throw new BusinessException("شما مجاز به تغییر قیمت این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
+
+            listing.Price = newPrice;
+            _unitOfWork.Repository<SellerProduct>().Update(listing);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation("Listing {ListingId} price updated to {Price}", listingId, newPrice);
+
+            return _mapper.Map<SellerProductDto>(listing);
+        }
+        catch (BusinessException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to update price for listing {ListingId} for seller {SellerId}", listingId, sellerId);
+            throw new BusinessException("خطا در تغییر قیمت پیشنهاد فروش", "LISTING_PRICE_UPDATE_ERROR");
+        }
+    }
+
     #endregion
 }
