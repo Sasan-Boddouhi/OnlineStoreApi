@@ -471,9 +471,9 @@ public sealed class ProductService : IProductService
             // Update attributes if provided
             if (dto.Attributes.Count > 0)
             {
-                // Get existing attribute values for this variant
+                // Get existing attribute values for this variant WITH TRACKING so we can update them
                 var existingValues = await _unitOfWork.Repository<ProductAttributeValue>()
-                    .ListAsync(new Spec<ProductAttributeValue>().Where(v => v.VariantId == variantId), cancellationToken);
+                    .ListAsync(new Spec<ProductAttributeValue>().Where(v => v.VariantId == variantId).AsTracking(), cancellationToken);
                 
                 // Create a lookup of existing values by AttributeId
                 var existingByAttributeId = existingValues.ToDictionary(v => v.AttributeId);
@@ -493,9 +493,9 @@ public sealed class ProductService : IProductService
                 {
                     if (existingByAttributeId.TryGetValue(input.AttributeId, out var existing))
                     {
-                        // Update existing
+                        // Update existing (already tracked because of AsTracking())
                         existing.Value = input.Value;
-                        _unitOfWork.Repository<ProductAttributeValue>().Update(existing);
+                        // No need to call Update() - EF Core tracks changes automatically for tracked entities
                     }
                     else
                     {
