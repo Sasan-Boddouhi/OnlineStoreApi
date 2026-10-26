@@ -34,7 +34,7 @@ public class UserProfile : Profile
                 opt => opt.MapFrom(s => s.UserRoles.Select(ur => ur.Role.Code).ToList()))
 
             .ForMember(d => d.SecurityStamp,
-                opt => opt.MapFrom(s => s.SecurityStamp));
+                opt => opt.Ignore());
 
         // =========================
         // Create DTO -> Entity

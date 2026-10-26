@@ -1,4 +1,6 @@
-﻿namespace BusinessLogic.DTOs.Listing
+using System.ComponentModel.DataAnnotations;
+
+namespace BusinessLogic.DTOs.Listing
 {
     /// <summary>
     /// Phase 10 (R49) — پاسخ افزودن موجودی.
@@ -17,6 +19,7 @@
     public class AddStockDto
     {
         /// <summary>مقدار افزوده؛ باید بزرگ‌تر از صفر باشد.</summary>
+        [Range(0.001, double.MaxValue, ErrorMessage = "Quantity must be greater than zero.")]
         public decimal Quantity { get; set; }
 
         /// <summary>

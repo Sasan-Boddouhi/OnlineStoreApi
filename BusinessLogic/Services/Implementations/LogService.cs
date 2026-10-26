@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using Application.Interfaces;
 using AutoMapper;
 using BusinessLogic.DTOs.Log;
@@ -68,7 +68,7 @@ public sealed class LogService : ILogService
 
             return new PagedResult<LogEntryDto>
             {
-                Items = _mapper.Map<IEnumerable<LogEntryDto>>(items),
+                Items = _mapper.Map<IReadOnlyList<LogEntryDto>>(items),
                 TotalCount = totalCount,
                 PageNumber = filter.PageNumber,
                 PageSize = filter.PageSize

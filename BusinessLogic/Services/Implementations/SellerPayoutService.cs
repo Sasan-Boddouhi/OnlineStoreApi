@@ -1,6 +1,7 @@
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using AutoMapper;
 using BusinessLogic.DTOs.Payout;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -11,12 +12,14 @@ namespace BusinessLogic.Services.Implementations
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ICurrentUserService _currentUser;
+        private readonly IMapper _mapper;
         private readonly ILogger<SellerPayoutService> _logger;
 
-        public SellerPayoutService(IUnitOfWork unitOfWork, ICurrentUserService currentUser, ILogger<SellerPayoutService> logger)
+        public SellerPayoutService(IUnitOfWork unitOfWork, ICurrentUserService currentUser, IMapper mapper, ILogger<SellerPayoutService> logger)
         {
             _unitOfWork = unitOfWork;
             _currentUser = currentUser;
+            _mapper = mapper;
             _logger = logger;
         }
 
@@ -33,14 +36,14 @@ namespace BusinessLogic.Services.Implementations
             var payouts = await _unitOfWork.Repository<SellerPayout>()
                 .ListAsync(new Application.Common.Specifications.Spec<SellerPayout>().Where(p => p.SellerId == seller.SellerId), cancellationToken);
 
-            return payouts.Select(Map).ToList();
+            return _mapper.Map<IEnumerable<SellerPayoutDto>>(payouts);
         }
 
         public async Task<IEnumerable<SellerPayoutDto>> GetAllPayoutsAsync(CancellationToken cancellationToken = default)
         {
             var payouts = await _unitOfWork.Repository<SellerPayout>()
                 .ListAsync(new Application.Common.Specifications.Spec<SellerPayout>(), cancellationToken);
-            return payouts.Select(Map).ToList();
+            return _mapper.Map<IEnumerable<SellerPayoutDto>>(payouts);
         }
 
         public async Task<SellerPayoutDto> MarkAsPaidAsync(int payoutId, string? reference, CancellationToken cancellationToken = default)
@@ -63,7 +66,7 @@ namespace BusinessLogic.Services.Implementations
 
             _logger.LogInformation("Payout {PayoutId} marked as paid with reference {Reference}", payoutId, reference);
 
-            return Map(payout);
+            return _mapper.Map<SellerPayoutDto>(payout);
         }
 
         public async Task<SellerPayoutDto> CancelPayoutAsync(int payoutId, CancellationToken cancellationToken = default)
@@ -86,20 +89,7 @@ namespace BusinessLogic.Services.Implementations
 
             _logger.LogInformation("Payout {PayoutId} cancelled", payoutId);
 
-            return Map(payout);
+            return _mapper.Map<SellerPayoutDto>(payout);
         }
-
-        private static SellerPayoutDto Map(SellerPayout p) => new SellerPayoutDto
-        {
-            SellerPayoutId = p.SellerPayoutId,
-            SellerId = p.SellerId,
-            OrderSellerGroupId = p.OrderSellerGroupId,
-            Amount = p.Amount,
-            Status = p.Status.ToString(),
-            PeriodStart = p.PeriodStart,
-            PeriodEnd = p.PeriodEnd,
-            Reference = p.Reference,
-            PaidAt = p.PaidAt
-        };
     }
 }

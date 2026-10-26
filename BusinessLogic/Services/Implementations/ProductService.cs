@@ -654,29 +654,23 @@ public sealed class ProductService : IProductService
                 .ListAsync(new Spec<ProductAttribute>().Where(a => attributeIds.Contains(a.AttributeId)),
                     cancellationToken)).ToList();
 
-        return new ProductVariantDto
-        {
-            VariantId = variant.VariantId,
-            ProductId = variant.ProductId,
-            Name = variant.Name,
-            Sku = variant.Sku,
-            Barcode = variant.Barcode,
-            IsActive = variant.IsActive,
-            Attributes = values
-                .OrderBy(v => v.AttributeId)
-                .Select(v =>
+        var dto = _mapper.Map<ProductVariantDto>(variant);
+        dto.Attributes = values
+            .OrderBy(v => v.AttributeId)
+            .Select(v =>
+            {
+                var attribute = attributes.FirstOrDefault(a => a.AttributeId == v.AttributeId);
+                return new VariantAttributeDto
                 {
-                    var attribute = attributes.FirstOrDefault(a => a.AttributeId == v.AttributeId);
-                    return new VariantAttributeDto
-                    {
-                        AttributeId = v.AttributeId,
-                        Name = attribute?.Name ?? string.Empty,
-                        Type = attribute?.Type.ToString() ?? "Text",
-                        Value = v.Value
-                    };
-                })
-                .ToList()
-        };
+                    AttributeId = v.AttributeId,
+                    Name = attribute?.Name ?? string.Empty,
+                    Type = attribute?.Type.ToString() ?? "Text",
+                    Value = v.Value
+                };
+            })
+            .ToList();
+
+        return dto;
     }
 
     #endregion

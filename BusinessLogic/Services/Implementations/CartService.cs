@@ -2,6 +2,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using AutoMapper;
 using BusinessLogic.DTOs.Cart;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
@@ -22,17 +23,29 @@ namespace BusinessLogic.Services.Implementations
         private readonly ILogger<CartService> _logger;
         private readonly IInventoryService _inventoryService;
         private readonly IOrderService _orderService;
+        private readonly IMapper _mapper;
+
+        public CartService(
+            IUnitOfWork unitOfWork,
+            ILogger<CartService> logger,
+            IInventoryService inventoryService,
+            IOrderService orderService,
+            IMapper mapper)
+        {
+            _unitOfWork = unitOfWork;
+            _logger = logger;
+            _inventoryService = inventoryService;
+            _orderService = orderService;
+            _mapper = mapper;
+        }
 
         public CartService(
             IUnitOfWork unitOfWork,
             ILogger<CartService> logger,
             IInventoryService inventoryService,
             IOrderService orderService)
+            : this(unitOfWork, logger, inventoryService, orderService, null!)
         {
-            _unitOfWork = unitOfWork;
-            _logger = logger;
-            _inventoryService = inventoryService;
-            _orderService = orderService;
         }
 
         // ==================== ابزارهای داخلی ====================
@@ -190,6 +203,15 @@ namespace BusinessLogic.Services.Implementations
                     };
                 })
                 .ToList();
+
+            if (_mapper != null)
+            {
+                var cartDto = _mapper.Map<CartDto>(cart);
+                cartDto.Items = items;
+                cartDto.TotalItems = items.Count;
+                cartDto.TotalAmount = items.Sum(i => i.LineTotal);
+                return cartDto;
+            }
 
             return new CartDto
             {

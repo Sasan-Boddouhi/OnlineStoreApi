@@ -4,6 +4,7 @@ using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
 using Application.Options;
+using AutoMapper;
 using BusinessLogic.DTOs.Listing;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -22,17 +23,29 @@ public sealed class InventoryService : IInventoryService
     private readonly ILogger<InventoryService> _logger;
     private readonly InventorySettings _settings;
     private readonly ICurrentUserService _currentUser;
+    private readonly IMapper _mapper;
+
+    public InventoryService(
+        IUnitOfWork unitOfWork,
+        IOptions<InventorySettings> settings,
+        ICurrentUserService currentUser,
+        IMapper mapper,
+        ILogger<InventoryService> logger)
+    {
+        _unitOfWork = unitOfWork;
+        _settings = settings.Value;
+        _currentUser = currentUser;
+        _mapper = mapper;
+        _logger = logger;
+    }
 
     public InventoryService(
         IUnitOfWork unitOfWork,
         IOptions<InventorySettings> settings,
         ICurrentUserService currentUser,
         ILogger<InventoryService> logger)
+        : this(unitOfWork, settings, currentUser, null!, logger)
     {
-        _unitOfWork = unitOfWork;
-        _settings = settings.Value;
-        _currentUser = currentUser;
-        _logger = logger;
     }
 
     public async Task<decimal> GetAvailableAsync(int listingId, CancellationToken cancellationToken = default)
@@ -173,6 +186,14 @@ public sealed class InventoryService : IInventoryService
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (_mapper != null)
+        {
+            var dto = _mapper.Map<InventoryStockDto>(row);
+            dto.AddedQuantity = quantity;
+            dto.AvailableQuantity = await GetAvailableAsync(listingId, cancellationToken);
+            return dto;
+        }
+
         return new InventoryStockDto
         {
             ListingId = listingId,
@@ -222,6 +243,14 @@ public sealed class InventoryService : IInventoryService
         _logger.LogInformation(
             "Inventory created for listing {ListingId} in warehouse {WarehouseId} with initial quantity {Quantity}.",
             listingId, warehouseId, initialQuantity);
+
+        if (_mapper != null)
+        {
+            var dto = _mapper.Map<InventoryStockDto>(newRow);
+            dto.AddedQuantity = initialQuantity;
+            dto.AvailableQuantity = await GetAvailableAsync(listingId, cancellationToken);
+            return dto;
+        }
 
         return new InventoryStockDto
         {

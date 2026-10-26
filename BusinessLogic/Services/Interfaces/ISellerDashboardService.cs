@@ -16,13 +16,13 @@ public interface ISellerDashboardService
         DateTime? to,
         CancellationToken cancellationToken = default);
 
-    Task<PagedResultDto<TopProductDto>> GetTopProductsAsync(
+    Task<PagedResult<TopProductDto>> GetTopProductsAsync(
         int sellerId,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken = default);
 
-    Task<PagedResultDto<SellerRecentOrderDto>> GetRecentOrdersAsync(
+    Task<PagedResult<SellerRecentOrderDto>> GetRecentOrdersAsync(
         int sellerId,
         int pageNumber,
         int pageSize,

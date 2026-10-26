@@ -37,7 +37,7 @@ public class SellerDashboardController : ControllerBase
     // Phase 9 (R32): صفحه‌بندی به‌جای «limit».
     // limit یک برش بی‌فراداده بود: کلاینت نمی‌دانست چند صفحه وجود دارد.
     [HttpGet("top-products")]
-    public async Task<ActionResult<PagedResultDto<TopProductDto>>> GetTopProducts(
+    public async Task<ActionResult<PagedResult<TopProductDto>>> GetTopProducts(
         int sellerId,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,
@@ -45,7 +45,7 @@ public class SellerDashboardController : ControllerBase
         => Ok(await _dashboardService.GetTopProductsAsync(sellerId, pageNumber, pageSize, cancellationToken));
 
     [HttpGet("recent-orders")]
-    public async Task<ActionResult<PagedResultDto<SellerRecentOrderDto>>> GetRecentOrders(
+    public async Task<ActionResult<PagedResult<SellerRecentOrderDto>>> GetRecentOrders(
         int sellerId,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,7 +8,7 @@ namespace BusinessLogic.DTOs.Shared
 {
     public class PagedResult<T>
     {
-        public IEnumerable<T> Items { get; set; } = new List<T>();
+        public IReadOnlyList<T> Items { get; set; } = Array.Empty<T>();
 
         public int PageNumber { get; set; }
 
@@ -17,7 +17,7 @@ namespace BusinessLogic.DTOs.Shared
         public int TotalCount { get; set; }
 
         public int TotalPages =>
-            (int)Math.Ceiling((double)TotalCount / PageSize);
+            PageSize <= 0 ? 0 : (int)Math.Ceiling((double)TotalCount / PageSize);
 
         public bool HasPrevious =>
             PageNumber > 1;

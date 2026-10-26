@@ -101,7 +101,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
         return summary;
     }
 
-    public async Task<PagedResultDto<TopProductDto>> GetTopProductsAsync(
+    public async Task<PagedResult<TopProductDto>> GetTopProductsAsync(
         int sellerId,
         int pageNumber,
         int pageSize,
@@ -136,7 +136,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
         var pageRows = ranked.Skip((page - 1) * size).Take(size).ToList();
 
         if (pageRows.Count == 0)
-            return new PagedResultDto<TopProductDto>(Array.Empty<TopProductDto>(), page, size, totalCount);
+            return new PagedResult<TopProductDto> { Items = Array.Empty<TopProductDto>(), PageNumber = page, PageSize = size, TotalCount = totalCount };
 
         var variantIds = pageRows.Select(r => r.VariantId).Where(id => id > 0).ToList();
 
@@ -167,10 +167,10 @@ public sealed class SellerDashboardService : ISellerDashboardService
             })
             .ToList();
 
-        return new PagedResultDto<TopProductDto>(rows, page, size, totalCount);
+        return new PagedResult<TopProductDto> { Items = rows, PageNumber = page, PageSize = size, TotalCount = totalCount };
     }
 
-    public async Task<PagedResultDto<SellerRecentOrderDto>> GetRecentOrdersAsync(
+    public async Task<PagedResult<SellerRecentOrderDto>> GetRecentOrdersAsync(
         int sellerId,
         int pageNumber,
         int pageSize,
@@ -196,7 +196,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
         var recent = ordered.Skip((page - 1) * size).Take(size).ToList();
 
         if (recent.Count == 0)
-            return new PagedResultDto<SellerRecentOrderDto>(Array.Empty<SellerRecentOrderDto>(), page, size, totalCount);
+            return new PagedResult<SellerRecentOrderDto> { Items = Array.Empty<SellerRecentOrderDto>(), PageNumber = page, PageSize = size, TotalCount = totalCount };
 
         // نام محصول و واریانت در یک کوئری جدا خوانده می‌شود (Spec فقط Include تک‌سطحی دارد).
         var variantIds = recent
@@ -234,7 +234,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
             })
             .ToList();
 
-        return new PagedResultDto<SellerRecentOrderDto>(rows, page, size, totalCount);
+        return new PagedResult<SellerRecentOrderDto> { Items = rows, PageNumber = page, PageSize = size, TotalCount = totalCount };
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using AutoMapper;
 using BusinessLogic.DTOs.Review;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -20,15 +21,18 @@ namespace BusinessLogic.Services.Implementations
 
         private readonly IUnitOfWork _unitOfWork;
         private readonly IReviewRatingCacheService _ratingCache;
+        private readonly IMapper _mapper;
         private readonly ILogger<ReviewService> _logger;
 
         public ReviewService(
             IUnitOfWork unitOfWork,
             IReviewRatingCacheService ratingCache,
+            IMapper mapper,
             ILogger<ReviewService> logger)
         {
             _unitOfWork = unitOfWork;
             _ratingCache = ratingCache;
+            _mapper = mapper;
             _logger = logger;
         }
 
@@ -90,17 +94,8 @@ namespace BusinessLogic.Services.Implementations
                 "Product review {ReviewId} created for product {ProductId} by customer {CustomerId}",
                 review.ProductReviewId, productId, customer.CustomerId);
 
-            return new ProductReviewDto
-            {
-                ProductReviewId = review.ProductReviewId,
-                ProductId = review.ProductId,
-                CustomerId = review.CustomerId,
-                CustomerName = BuildName(customer.User),
-                Rating = review.Rating,
-                Comment = review.Comment,
-                IsApproved = review.IsApproved,
-                CreatedOn = review.CreatedOn
-            };
+            review.Customer = customer;
+            return _mapper.Map<ProductReviewDto>(review);
         }
 
         public async Task<IEnumerable<ProductReviewDto>> GetProductReviewsAsync(
@@ -116,16 +111,11 @@ namespace BusinessLogic.Services.Implementations
 
             var names = await LoadCustomerNamesAsync(reviews.Select(r => r.CustomerId), cancellationToken);
 
-            return reviews.Select(r => new ProductReviewDto
+            return reviews.Select(r =>
             {
-                ProductReviewId = r.ProductReviewId,
-                ProductId = r.ProductId,
-                CustomerId = r.CustomerId,
-                CustomerName = names.GetValueOrDefault(r.CustomerId, string.Empty),
-                Rating = r.Rating,
-                Comment = r.Comment,
-                IsApproved = r.IsApproved,
-                CreatedOn = r.CreatedOn
+                var dto = _mapper.Map<ProductReviewDto>(r);
+                dto.CustomerName = names.GetValueOrDefault(r.CustomerId, string.Empty);
+                return dto;
             });
         }
 
@@ -184,17 +174,8 @@ namespace BusinessLogic.Services.Implementations
                 "Seller review {ReviewId} created for seller {SellerId} by customer {CustomerId}",
                 review.SellerReviewId, sellerId, customer.CustomerId);
 
-            return new SellerReviewDto
-            {
-                SellerReviewId = review.SellerReviewId,
-                SellerId = review.SellerId,
-                CustomerId = review.CustomerId,
-                CustomerName = BuildName(customer.User),
-                Rating = review.Rating,
-                Comment = review.Comment,
-                IsApproved = review.IsApproved,
-                CreatedOn = review.CreatedOn
-            };
+            review.Customer = customer;
+            return _mapper.Map<SellerReviewDto>(review);
         }
 
         public async Task<IEnumerable<SellerReviewDto>> GetSellerReviewsAsync(
@@ -210,16 +191,11 @@ namespace BusinessLogic.Services.Implementations
 
             var names = await LoadCustomerNamesAsync(reviews.Select(r => r.CustomerId), cancellationToken);
 
-            return reviews.Select(r => new SellerReviewDto
+            return reviews.Select(r =>
             {
-                SellerReviewId = r.SellerReviewId,
-                SellerId = r.SellerId,
-                CustomerId = r.CustomerId,
-                CustomerName = names.GetValueOrDefault(r.CustomerId, string.Empty),
-                Rating = r.Rating,
-                Comment = r.Comment,
-                IsApproved = r.IsApproved,
-                CreatedOn = r.CreatedOn
+                var dto = _mapper.Map<SellerReviewDto>(r);
+                dto.CustomerName = names.GetValueOrDefault(r.CustomerId, string.Empty);
+                return dto;
             });
         }
 
