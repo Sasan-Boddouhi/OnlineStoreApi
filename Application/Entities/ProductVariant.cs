@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Application.Entities
@@ -36,6 +36,9 @@ namespace Application.Entities
 
         /// <summary>پیشنهادهای فروش این واریانت.</summary>
         public virtual ICollection<SellerProduct> Listings { get; set; } = new HashSet<SellerProduct>();
+
+        /// <summary>آیتم‌های سفارشی که این واریانت را خریداری کرده‌اند.</summary>
+        public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
 
         /// <summary>مقادیر ویژگی‌ها (رنگ، سایز، ...).</summary>
         public virtual ICollection<ProductAttributeValue> AttributeValues { get; set; } = new HashSet<ProductAttributeValue>();

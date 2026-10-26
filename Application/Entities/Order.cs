@@ -37,6 +37,10 @@ namespace Application.Entities
         /// <summary>Phase 3: یک گروه به‌ازای هر فروشندهٔ حاضر در سفارش.</summary>
         public virtual ICollection<OrderSellerGroup> SellerGroups { get; set; } = new HashSet<OrderSellerGroup>();
         public virtual Invoice? Invoice { get; set; }
+        public virtual ICollection<Payment> Payments { get; set; } = new HashSet<Payment>();
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
         public void AddItem(OrderItem item)
         {

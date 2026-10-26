@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Application.Entities
@@ -21,8 +21,6 @@ namespace Application.Entities
         // -------- Tracking --------
         public DateTime? LastLoginDate { get; set; }
         public DateTime? LastPurchaseDate { get; set; }
-        public bool IsBlocked { get; set; } = false;
-        public int FailedLoginAttempts { get; set; } = 0;
 
         // Required 1:1 relationship with User
         [Required]
@@ -31,6 +29,8 @@ namespace Application.Entities
         [ForeignKey("UserId")]
         public virtual User User { get; set; } = null!;
         public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();
+        public virtual ICollection<ProductReview> ProductReviews { get; set; } = new HashSet<ProductReview>();
+        public virtual ICollection<SellerReview> SellerReviews { get; set; } = new HashSet<SellerReview>();
     }
 
     public enum LoyaltyLevel

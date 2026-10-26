@@ -56,6 +56,8 @@ namespace Application.Entities
         public int ReviewCount { get; set; }
 
         public virtual ICollection<Warehouse> Warehouses { get; set; } = new HashSet<Warehouse>();
+        public virtual ICollection<OrderSellerGroup> OrderSellerGroups { get; set; } = new HashSet<OrderSellerGroup>();
+        public virtual ICollection<SellerPayout> Payouts { get; set; } = new HashSet<SellerPayout>();
     }
 
     public enum SellerStatus

@@ -55,6 +55,8 @@ namespace Application.Entities
 
         public virtual ICollection<OrderItem> Items { get; set; } = new HashSet<OrderItem>();
 
+        public virtual SellerPayout? Payout { get; set; }
+
         private OrderSellerGroup() { } // For EF
 
         public OrderSellerGroup(int sellerId, decimal commissionRate)

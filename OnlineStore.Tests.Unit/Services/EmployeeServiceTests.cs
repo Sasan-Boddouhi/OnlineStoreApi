@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 using System.Reflection;
 using Application.Common.Queries;
 using Application.Entities;
@@ -259,5 +259,27 @@ public class EmployeeServiceTests
         var result = await _service.GetByQueryAsync(query);
         result.Items.Should().HaveCount(2);
         result.TotalCount.Should().Be(5);
+    }
+
+    // ------------- TerminateEmployeeAsync ---------------
+    [Fact]
+    public async Task TerminateEmployeeAsync_ExistingEmployee_SetsTerminationDate()
+    {
+        var emp = CreateValidEmployee(1);
+        _employeeRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(emp);
+
+        var dto = new EmployeeDto { EmployeeId = 1, TerminationDate = DateTime.UtcNow };
+        _employeeRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                It.IsAny<Spec<Employee>>(),
+                It.IsAny<Expression<Func<Employee, EmployeeDto>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(dto);
+
+        var result = await _service.TerminateEmployeeAsync(1);
+
+        emp.TerminationDate.Should().NotBeNull();
+        _employeeRepoMock.Verify(r => r.Update(emp), Times.Once);
+        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

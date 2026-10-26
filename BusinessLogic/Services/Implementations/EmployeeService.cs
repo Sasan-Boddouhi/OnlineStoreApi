@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -89,6 +89,24 @@ public sealed class EmployeeService : IEmployeeService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Employee updated successfully: {EmployeeId}", dto.EmployeeId);
+        return await GetByIdAsync(entity.EmployeeId, cancellationToken);
+    }
+
+    public async Task<EmployeeDto?> TerminateEmployeeAsync(int id, DateTime? terminationDate = null, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Terminating employee ID: {EmployeeId}", id);
+        var entity = await _unitOfWork.Repository<Employee>().GetByIdAsync(id, cancellationToken);
+        if (entity == null)
+        {
+            _logger.LogWarning("Employee not found: {EmployeeId}", id);
+            return null;
+        }
+
+        entity.TerminationDate = terminationDate ?? DateTime.UtcNow;
+        _unitOfWork.Repository<Employee>().Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Employee ID: {EmployeeId} terminated on {TerminationDate}", id, entity.TerminationDate);
         return await GetByIdAsync(entity.EmployeeId, cancellationToken);
     }
 

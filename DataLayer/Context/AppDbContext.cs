@@ -95,7 +95,19 @@ namespace DataLayer.Context
                 .IsUnique()
                 .HasFilter("[SellerId] IS NULL");
             modelBuilder.Entity<Order>().HasIndex(o => o.OrderDate);
+            modelBuilder.Entity<Order>().HasIndex(o => o.CustomerId);
+            modelBuilder.Entity<Order>().HasIndex(o => o.Status);
+            modelBuilder.Entity<OrderItem>().HasIndex(oi => oi.OrderId);
+            modelBuilder.Entity<OrderItem>().HasIndex(oi => oi.ProductId);
             modelBuilder.Entity<Invoice>().HasIndex(i => i.InvoiceNumber).IsUnique();
+            modelBuilder.Entity<Invoice>().HasIndex(i => i.OrderId);
+            modelBuilder.Entity<Invoice>().HasIndex(i => i.Status);
+            modelBuilder.Entity<Address>().HasIndex(a => a.UserId);
+            modelBuilder.Entity<Address>().HasIndex(a => a.CityId);
+            modelBuilder.Entity<City>().HasIndex(c => c.ProvinceId);
+            modelBuilder.Entity<Product>().HasIndex(p => p.SubcategoryId);
+            modelBuilder.Entity<Product>().HasIndex(p => p.IsActive);
+            modelBuilder.Entity<ProductVariant>().HasIndex(v => v.ProductId);
             // Phase 9: فیلتر صریح اعلام می‌شود تا مدل با اسکیما یکی باشد.
             // توجه: این ایندکس از InitialCreate فیلتر داشته و هیچ‌گاه یکتایِ بدون فیلتر نبوده؛
             // پیش از این فقط در مدل C# اعلام نشده بود و همین واگرایی، ادعای اشتباه
@@ -121,7 +133,7 @@ namespace DataLayer.Context
 
             modelBuilder.Entity<Payment>()
                 .HasOne(p => p.Order)
-                .WithMany()
+                .WithMany(o => o.Payments)
                 .HasForeignKey(p => p.OrderId)
                 .OnDelete(DeleteBehavior.Restrict);
 
@@ -131,6 +143,7 @@ namespace DataLayer.Context
             modelBuilder.Entity<UserRole>().HasIndex(ur => ur.UserId);
             modelBuilder.Entity<RolePermission>().HasIndex(rp => rp.RoleId);
             modelBuilder.Entity<AuditLog>().HasIndex(a => a.OccurredOnUtc);
+            modelBuilder.Entity<AuditLog>().HasIndex(a => new { a.UserId, a.Action });
 
             // Marketplace (Phase 2)
             modelBuilder.Entity<Seller>().HasIndex(s => s.UserId).IsUnique();
@@ -154,6 +167,7 @@ namespace DataLayer.Context
                 .IsUnique();
             modelBuilder.Entity<OrderItem>().HasIndex(i => i.OrderSellerGroupId);
             modelBuilder.Entity<SellerPayout>().HasIndex(p => p.SellerId);
+            modelBuilder.Entity<SellerPayout>().HasIndex(p => p.Status);
 
             // پرداخت تکراری برای یک گروه ممکن نباشد (idempotency تحویل).
             modelBuilder.Entity<SellerPayout>()
@@ -194,13 +208,15 @@ namespace DataLayer.Context
             modelBuilder.Entity<ProductCategory>()
                 .HasMany(c => c.Subcategories)
                 .WithOne(sc => sc.Category)
-                .HasForeignKey(sc => sc.CategoryId);
+                .HasForeignKey(sc => sc.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // ProductSubcategory : Product (1:N)
             modelBuilder.Entity<ProductSubcategory>()
                 .HasMany(sc => sc.Products)
                 .WithOne(p => p.Subcategory)
-                .HasForeignKey(p => p.SubcategoryId);
+                .HasForeignKey(p => p.SubcategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Inventory>(entity =>
             {
@@ -235,7 +251,7 @@ namespace DataLayer.Context
                 entity.HasKey(ur => new { ur.UserId, ur.RoleId });
 
                 entity.HasOne(ur => ur.User)
-                    .WithMany()
+                    .WithMany(u => u.UserRoles)
                     .HasForeignKey(ur => ur.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
 
@@ -251,7 +267,7 @@ namespace DataLayer.Context
             // User : Seller (1:1) — Restrict: حذف کاربر نباید فروشگاه را بی‌صدا پاک کند.
             modelBuilder.Entity<Seller>()
                 .HasOne(s => s.User)
-                .WithOne()
+                .WithOne(u => u.Seller)
                 .HasForeignKey<Seller>(s => s.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
@@ -335,23 +351,29 @@ namespace DataLayer.Context
             // OrderItem : SellerProduct (N:1) — در فاز ۲ nullable بود و در فاز ۳ اجباری شد.
             modelBuilder.Entity<OrderItem>()
                 .HasOne(oi => oi.Listing)
-                .WithMany()
+                .WithMany(l => l.OrderItems)
                 .HasForeignKey(oi => oi.ListingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OrderItem>()
+                .HasOne(oi => oi.Variant)
+                .WithMany(v => v.OrderItems)
+                .HasForeignKey(oi => oi.VariantId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // ------------------- Financials & Splitting (Phase 3) -------------------
 
-            // Order : OrderSellerGroup (1:N) — حذف سفارش، گروه‌هایش را می‌برد.
+            // Order : OrderSellerGroup (1:N)
             modelBuilder.Entity<Order>()
                 .HasMany(o => o.SellerGroups)
                 .WithOne(g => g.Order)
                 .HasForeignKey(g => g.OrderId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Seller : OrderSellerGroup (1:N) — Restrict: حذف فروشنده نباید تاریخ مالی را پاک کند.
             modelBuilder.Entity<OrderSellerGroup>()
                 .HasOne(g => g.Seller)
-                .WithMany()
+                .WithMany(s => s.OrderSellerGroups)
                 .HasForeignKey(g => g.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
@@ -365,14 +387,14 @@ namespace DataLayer.Context
             // SellerPayout : Seller (N:1)
             modelBuilder.Entity<SellerPayout>()
                 .HasOne(p => p.Seller)
-                .WithMany()
+                .WithMany(s => s.Payouts)
                 .HasForeignKey(p => p.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // SellerPayout : OrderSellerGroup (1:1) — یک گروه، یک پرداخت.
             modelBuilder.Entity<SellerPayout>()
                 .HasOne(p => p.OrderSellerGroup)
-                .WithOne()
+                .WithOne(g => g.Payout)
                 .HasForeignKey<SellerPayout>(p => p.OrderSellerGroupId)
                 .OnDelete(DeleteBehavior.Restrict);
 
@@ -380,7 +402,8 @@ namespace DataLayer.Context
             modelBuilder.Entity<Customer>()
                 .HasMany(c => c.Orders)
                 .WithOne(o => o.Customer)
-                .HasForeignKey(o => o.CustomerId);
+                .HasForeignKey(o => o.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Order : OrderItem (1:N)
             modelBuilder.Entity<Order>()
@@ -393,25 +416,28 @@ namespace DataLayer.Context
                 .HasOne(o => o.Invoice)
                 .WithOne(i => i.Order)
                 .HasForeignKey<Invoice>(i => i.OrderId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Invoice : Payment (1:N)
             modelBuilder.Entity<Invoice>()
                 .HasMany(i => i.Payments)
                 .WithOne(p => p.Invoice)
-                .HasForeignKey(p => p.InvoiceId);
+                .HasForeignKey(p => p.InvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Province : City (1:N)
             modelBuilder.Entity<Province>()
                 .HasMany(p => p.Cities)
                 .WithOne(c => c.Province)
-                .HasForeignKey(c => c.ProvinceId);
+                .HasForeignKey(c => c.ProvinceId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // City : Address (1:N)
             modelBuilder.Entity<City>()
                 .HasMany(c => c.Addresses)
                 .WithOne(a => a.City)
-                .HasForeignKey(a => a.CityId);
+                .HasForeignKey(a => a.CityId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Warehouse : Address (N:1) 
             modelBuilder.Entity<Warehouse>()
@@ -529,8 +555,8 @@ namespace DataLayer.Context
                     .HasFilter("[SessionId] IS NOT NULL");
 
                 entity.HasOne(c => c.User)
-                    .WithMany()
-                    .HasForeignKey(c => c.UserId)
+                    .WithOne(u => u.Cart)
+                    .HasForeignKey<Cart>(c => c.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasMany(c => c.Items)
@@ -545,7 +571,7 @@ namespace DataLayer.Context
                 entity.HasIndex(i => new { i.CartId, i.ListingId }).IsUnique();
 
                 entity.HasOne(i => i.Listing)
-                    .WithMany()
+                    .WithMany(l => l.CartItems)
                     .HasForeignKey(i => i.ListingId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
@@ -577,14 +603,14 @@ namespace DataLayer.Context
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(r => r.Customer)
-                    .WithMany()
+                    .WithMany(c => c.ProductReviews)
                     .HasForeignKey(r => r.CustomerId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 // آیتم سفارشی که خرید را اثبات می‌کند؛ حذفش نظر را از بین نمی‌برد.
                 entity.HasOne(r => r.OrderItem)
-                    .WithMany()
-                    .HasForeignKey(r => r.OrderItemId)
+                    .WithOne(oi => oi.Review)
+                    .HasForeignKey<ProductReview>(r => r.OrderItemId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 // یک نظر برای هر (محصول، مشتری).
@@ -603,13 +629,28 @@ namespace DataLayer.Context
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(r => r.Customer)
-                    .WithMany()
+                    .WithMany(c => c.SellerReviews)
                     .HasForeignKey(r => r.CustomerId)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasIndex(r => new { r.SellerId, r.CustomerId }).IsUnique();
 
                 entity.HasIndex(r => new { r.SellerId, r.IsApproved });
+            });
+
+            // Concurrency tokens
+            modelBuilder.Entity<Order>(entity =>
+            {
+                entity.Property(o => o.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<SellerProduct>(entity =>
+            {
+                entity.Property(sp => sp.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
             });
         }
     }

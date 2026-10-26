@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Application.Entities
@@ -39,6 +39,11 @@ namespace Application.Entities
         public SellerProductStatus Status { get; set; } = SellerProductStatus.Draft;
 
         public virtual ICollection<Inventory> Inventories { get; set; } = new HashSet<Inventory>();
+        public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
+        public virtual ICollection<CartItem> CartItems { get; set; } = new HashSet<CartItem>();
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     }
 
     public enum SellerProductStatus

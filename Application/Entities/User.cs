@@ -34,6 +34,7 @@ namespace Application.Entities
         public string FullName => $"{FirstName} {LastName}";
 
         // Navigation properties برای اطلاعات کاربر
+        [MaxLength(256)]
         public string? Email { get; set; }
         public virtual ICollection<Address> Addresses { get; set; } = new HashSet<Address>();
         public ICollection<UserSession> Sessions { get; set; } = new List<UserSession>();
@@ -42,13 +43,16 @@ namespace Application.Entities
         [StringLength(11)]
         public string PhoneNumber { get; set; } = string.Empty;
 
-        // Navigation properties برای Customer و Employee
+        // Navigation properties برای Customer و Employee و Seller و Cart
         public virtual Customer? Customer { get; set; }
         public virtual Employee? Employee { get; set; }
+        public virtual Seller? Seller { get; set; }
+        public virtual Cart? Cart { get; set; }
 
         // نقش‌های کاربر (Phase 1 / R45) — جدول اتصال چند-نقشی
         public virtual ICollection<UserRole> UserRoles { get; set; } = new HashSet<UserRole>();
 
+        [MaxLength(36)]
         public string SecurityStamp { get; set; } = Guid.NewGuid().ToString();
 
         public int FailedLoginAttempts { get; set; } = 0;

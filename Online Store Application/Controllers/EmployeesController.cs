@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Entities;
 using BusinessLogic.DTOs.Employee;
 using BusinessLogic.Services.Interfaces;
@@ -108,6 +108,15 @@ public class EmployeesController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Policy = "AdminOnly")]
+    [HttpPost("{id:int}/terminate")]
+    public async Task<IActionResult> TerminateAsync(int id, [FromBody] TerminateEmployeeRequest? request, CancellationToken cancellationToken)
+    {
+        var terminated = await _employeeService.TerminateEmployeeAsync(id, request?.TerminationDate, cancellationToken);
+        if (terminated == null) return NotFound();
+        return Ok(terminated);
+    }
+
     [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> GetMyProfile()
@@ -122,4 +131,9 @@ public class EmployeesController : ControllerBase
 
         return Ok(employee);
     }
+}
+
+public class TerminateEmployeeRequest
+{
+    public DateTime? TerminationDate { get; set; }
 }

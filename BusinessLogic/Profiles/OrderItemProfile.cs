@@ -22,7 +22,6 @@ public class OrderItemProfile : Profile
             // Phase 3: گروه فروشنده فقط از مسیر OrderService ساخته می‌شود.
             .ForMember(d => d.OrderSellerGroupId, opt => opt.Ignore())
             // Phase 6: واریانت هم فقط از مسیر OrderService.AddItemToOrderAsync ست می‌شود.
-            .ForMember(d => d.VariantId, opt => opt.Ignore())
-            .ForMember(d => d.IsActive, opt => opt.Ignore());
+            .ForMember(d => d.VariantId, opt => opt.Ignore());
     }
 }

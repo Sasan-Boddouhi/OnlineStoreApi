@@ -127,6 +127,8 @@ namespace DataLayer.Migrations
 
                     b.HasIndex("OccurredOnUtc");
 
+                    b.HasIndex("UserId", "Action");
+
                     b.ToTable("AuditLog");
                 });
 
@@ -268,12 +270,6 @@ namespace DataLayer.Migrations
 
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
-
-                    b.Property<int>("FailedLoginAttempts")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsBlocked")
-                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastLoginDate")
                         .HasColumnType("datetime2");
@@ -514,6 +510,8 @@ namespace DataLayer.Migrations
                     b.HasIndex("OrderId")
                         .IsUnique();
 
+                    b.HasIndex("Status");
+
                     b.ToTable("Invoice");
                 });
 
@@ -576,6 +574,12 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<string>("ShippingAddress")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -603,6 +607,8 @@ namespace DataLayer.Migrations
 
                     b.HasIndex("OrderDate");
 
+                    b.HasIndex("Status");
+
                     b.ToTable("Order");
                 });
 
@@ -623,9 +629,6 @@ namespace DataLayer.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
 
                     b.Property<int>("ListingId")
                         .HasColumnType("int");
@@ -879,7 +882,8 @@ namespace DataLayer.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ImageUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -912,6 +916,8 @@ namespace DataLayer.Migrations
                     b.HasIndex("Barcode")
                         .IsUnique()
                         .HasFilter("[Barcode] IS NOT NULL");
+
+                    b.HasIndex("IsActive");
 
                     b.HasIndex("Name");
 
@@ -1132,7 +1138,8 @@ namespace DataLayer.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("OrderItemId");
+                    b.HasIndex("OrderItemId")
+                        .IsUnique();
 
                     b.HasIndex("ProductId", "CustomerId")
                         .IsUnique();
@@ -1516,6 +1523,8 @@ namespace DataLayer.Migrations
 
                     b.HasIndex("SellerId");
 
+                    b.HasIndex("Status");
+
                     b.ToTable("SellerPayout");
                 });
 
@@ -1541,6 +1550,12 @@ namespace DataLayer.Migrations
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<int>("SellerId")
                         .HasColumnType("int");
@@ -1629,7 +1644,8 @@ namespace DataLayer.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Email")
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<int>("FailedLoginAttempts")
                         .HasColumnType("int");
@@ -1667,7 +1683,8 @@ namespace DataLayer.Migrations
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
 
                     b.Property<int>("UserType")
                         .HasColumnType("int");
@@ -1812,7 +1829,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.City", "City")
                         .WithMany("Addresses")
                         .HasForeignKey("CityId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Application.Entities.User", "User")
@@ -1829,8 +1846,8 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.Cart", b =>
                 {
                     b.HasOne("Application.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
+                        .WithOne("Cart")
+                        .HasForeignKey("Application.Entities.Cart", "UserId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("User");
@@ -1845,7 +1862,7 @@ namespace DataLayer.Migrations
                         .IsRequired();
 
                     b.HasOne("Application.Entities.SellerProduct", "Listing")
-                        .WithMany()
+                        .WithMany("CartItems")
                         .HasForeignKey("ListingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1866,7 +1883,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.Province", "Province")
                         .WithMany("Cities")
                         .HasForeignKey("ProvinceId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Province");
@@ -1926,7 +1943,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.Order", "Order")
                         .WithOne("Invoice")
                         .HasForeignKey("Application.Entities.Invoice", "OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Order");
@@ -1937,7 +1954,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.Customer", "Customer")
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Customer");
@@ -1946,7 +1963,7 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.OrderItem", b =>
                 {
                     b.HasOne("Application.Entities.SellerProduct", "Listing")
-                        .WithMany()
+                        .WithMany("OrderItems")
                         .HasForeignKey("ListingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1969,8 +1986,9 @@ namespace DataLayer.Migrations
                         .IsRequired();
 
                     b.HasOne("Application.Entities.ProductVariant", "Variant")
-                        .WithMany()
-                        .HasForeignKey("VariantId");
+                        .WithMany("OrderItems")
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Listing");
 
@@ -1988,11 +2006,11 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.Order", "Order")
                         .WithMany("SellerGroups")
                         .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Application.Entities.Seller", "Seller")
-                        .WithMany()
+                        .WithMany("OrderSellerGroups")
                         .HasForeignKey("SellerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -2007,11 +2025,11 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.Invoice", "Invoice")
                         .WithMany("Payments")
                         .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Application.Entities.Order", "Order")
-                        .WithMany()
+                        .WithMany("Payments")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -2025,7 +2043,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.ProductSubcategory", "Subcategory")
                         .WithMany("Products")
                         .HasForeignKey("SubcategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Subcategory");
@@ -2075,14 +2093,14 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.ProductReview", b =>
                 {
                     b.HasOne("Application.Entities.Customer", "Customer")
-                        .WithMany()
+                        .WithMany("ProductReviews")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Application.Entities.OrderItem", "OrderItem")
-                        .WithMany()
-                        .HasForeignKey("OrderItemId")
+                        .WithOne("Review")
+                        .HasForeignKey("Application.Entities.ProductReview", "OrderItemId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -2104,7 +2122,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.ProductCategory", "Category")
                         .WithMany("Subcategories")
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Category");
@@ -2169,7 +2187,7 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.Seller", b =>
                 {
                     b.HasOne("Application.Entities.User", "User")
-                        .WithOne()
+                        .WithOne("Seller")
                         .HasForeignKey("Application.Entities.Seller", "UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -2180,12 +2198,12 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.SellerPayout", b =>
                 {
                     b.HasOne("Application.Entities.OrderSellerGroup", "OrderSellerGroup")
-                        .WithOne()
+                        .WithOne("Payout")
                         .HasForeignKey("Application.Entities.SellerPayout", "OrderSellerGroupId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Application.Entities.Seller", "Seller")
-                        .WithMany()
+                        .WithMany("Payouts")
                         .HasForeignKey("SellerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -2217,7 +2235,7 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.SellerReview", b =>
                 {
                     b.HasOne("Application.Entities.Customer", "Customer")
-                        .WithMany()
+                        .WithMany("SellerReviews")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -2242,7 +2260,7 @@ namespace DataLayer.Migrations
                         .IsRequired();
 
                     b.HasOne("Application.Entities.User", "User")
-                        .WithMany()
+                        .WithMany("UserRoles")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -2299,6 +2317,10 @@ namespace DataLayer.Migrations
             modelBuilder.Entity("Application.Entities.Customer", b =>
                 {
                     b.Navigation("Orders");
+
+                    b.Navigation("ProductReviews");
+
+                    b.Navigation("SellerReviews");
                 });
 
             modelBuilder.Entity("Application.Entities.EmployeeType", b =>
@@ -2317,12 +2339,21 @@ namespace DataLayer.Migrations
 
                     b.Navigation("OrderItems");
 
+                    b.Navigation("Payments");
+
                     b.Navigation("SellerGroups");
+                });
+
+            modelBuilder.Entity("Application.Entities.OrderItem", b =>
+                {
+                    b.Navigation("Review");
                 });
 
             modelBuilder.Entity("Application.Entities.OrderSellerGroup", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("Payout");
                 });
 
             modelBuilder.Entity("Application.Entities.Permission", b =>
@@ -2361,6 +2392,8 @@ namespace DataLayer.Migrations
                     b.Navigation("AttributeValues");
 
                     b.Navigation("Listings");
+
+                    b.Navigation("OrderItems");
                 });
 
             modelBuilder.Entity("Application.Entities.Province", b =>
@@ -2379,6 +2412,10 @@ namespace DataLayer.Migrations
                 {
                     b.Navigation("Listings");
 
+                    b.Navigation("OrderSellerGroups");
+
+                    b.Navigation("Payouts");
+
                     b.Navigation("Reviews");
 
                     b.Navigation("Warehouses");
@@ -2386,18 +2423,28 @@ namespace DataLayer.Migrations
 
             modelBuilder.Entity("Application.Entities.SellerProduct", b =>
                 {
+                    b.Navigation("CartItems");
+
                     b.Navigation("Inventories");
+
+                    b.Navigation("OrderItems");
                 });
 
             modelBuilder.Entity("Application.Entities.User", b =>
                 {
                     b.Navigation("Addresses");
 
+                    b.Navigation("Cart");
+
                     b.Navigation("Customer");
 
                     b.Navigation("Employee");
 
+                    b.Navigation("Seller");
+
                     b.Navigation("Sessions");
+
+                    b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("Application.Entities.Warehouse", b =>

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Application.Entities
@@ -59,8 +59,7 @@ namespace Application.Entities
         [MaxLength(200)]
         public string? Description { get; set; }
 
-        public bool IsActive { get; set; } = true;
-
+        public virtual ProductReview? Review { get; set; }
 
         // سازنده بدون پارامتر برای EF Core (private یا protected)
         private OrderItem() { }

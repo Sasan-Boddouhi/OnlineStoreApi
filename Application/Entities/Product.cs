@@ -27,6 +27,7 @@ namespace Application.Entities
         public UnitOfMeasurement Unit { get; set; }
         [MaxLength(20)]
         public string? Barcode { get; set; }
+        [MaxLength(500)]
         public string? ImageUrl { get; set; }
         public DateTime? ExpirationDate { get; set; }
 

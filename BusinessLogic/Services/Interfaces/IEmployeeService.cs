@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Entities;
 using BusinessLogic.DTOs.Employee;
 using BusinessLogic.DTOs.Shared;
@@ -21,6 +21,7 @@ namespace BusinessLogic.Services.Interfaces
 
         Task<EmployeeDto> CreateAsync(CreateEmployeeDto dto, CancellationToken cancellationToken = default);
         Task<EmployeeDto?> UpdateAsync(UpdateEmployeeDto dto, CancellationToken cancellationToken = default);
+        Task<EmployeeDto?> TerminateEmployeeAsync(int id, DateTime? terminationDate = null, CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
     }
 }

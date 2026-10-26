@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using AutoMapper;
 using BusinessLogic.DTOs.Employee;
 using BusinessLogic.Common.Mapping; // اضافه کردن فضای نام افزونه جدید
@@ -17,7 +17,6 @@ public class EmployeeProfile : Profile
         CreateMap<UpdateEmployeeDto, Employee>()
             .ConfigureDbDestination()
             .ForMember(d => d.UserId, opt => opt.Ignore())
-            .ForMember(d => d.TerminationDate, opt => opt.Ignore())
             .ForAllMembers(opts =>
                 opts.Condition((src, dest, srcMember) => srcMember != null));
 
