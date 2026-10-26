@@ -30,6 +30,10 @@ public interface IProductService
         CreateProductAttributeDto dto,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<VariantAttributeDto>> GetAttributesAsync(
+        int productId,
+        CancellationToken cancellationToken = default);
+
     // M7.1: Variant CRUD completion
     Task<ProductVariantDto?> UpdateVariantAsync(int variantId, UpdateProductVariantDto dto, CancellationToken cancellationToken = default);
     Task<bool> DeleteVariantAsync(int variantId, CancellationToken cancellationToken = default);

@@ -33,4 +33,25 @@ public class SellerPayoutsController : ControllerBase
         var payouts = await _payoutService.GetAllPayoutsAsync(cancellationToken);
         return Ok(payouts);
     }
+
+    [HttpPost("{id:int}/pay")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<SellerPayoutDto>> Pay(
+        int id,
+        [FromBody] MarkPayoutPaidRequest? request,
+        CancellationToken cancellationToken = default)
+    {
+        var payout = await _payoutService.MarkAsPaidAsync(id, request?.Reference, cancellationToken);
+        return Ok(payout);
+    }
+
+    [HttpPost("{id:int}/cancel")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<SellerPayoutDto>> Cancel(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var payout = await _payoutService.CancelPayoutAsync(id, cancellationToken);
+        return Ok(payout);
+    }
 }

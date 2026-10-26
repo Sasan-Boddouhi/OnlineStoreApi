@@ -79,11 +79,16 @@ public sealed class WarehouseService : IWarehouseService
         return dto;
     }
 
-    public async Task<IReadOnlyList<WarehouseDto>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<WarehouseDto>> GetAllAsync(int? sellerId = null, CancellationToken cancellationToken = default)
     {
         var spec = new Spec<Warehouse>()
             .Include(w => w.Address)
             .Include(w => w.Seller);
+
+        if (sellerId.HasValue)
+        {
+            spec.Where(w => w.SellerId == sellerId.Value);
+        }
 
         var entities = await _unitOfWork.Repository<Warehouse>().ListAsync(spec, cancellationToken);
         

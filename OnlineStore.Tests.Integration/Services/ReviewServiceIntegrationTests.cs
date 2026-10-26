@@ -294,4 +294,64 @@ public class ReviewServiceIntegrationTests : BaseIntegrationTest
         var ex = await act.Should().ThrowAsync<BusinessException>();
         ex.And.Code.Should().Be("REVIEW_ALREADY_EXISTS");
     }
+
+    [Fact]
+    public async Task RejectProductReview_WhenApproved_RemovesFromApprovedList()
+    {
+        var (buyer, customer, _, listing) = await CreateDeliveredPurchaseAsync();
+        var product = await DbContext.Product.FindAsync(listing.ProductId);
+
+        var review = await ReviewService.AddProductReviewAsync(
+            buyer.UserId, product!.ProductId, new CreateProductReviewDto { Rating = 5, Comment = "Good" });
+
+        await ReviewService.ApproveProductReviewAsync(review.ProductReviewId);
+        (await ReviewService.GetProductReviewsAsync(product.ProductId)).Should().HaveCount(1);
+
+        await ReviewService.RejectProductReviewAsync(review.ProductReviewId);
+        (await ReviewService.GetProductReviewsAsync(product.ProductId)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteProductReview_RemovesFromDatabase()
+    {
+        var (buyer, customer, _, listing) = await CreateDeliveredPurchaseAsync();
+        var product = await DbContext.Product.FindAsync(listing.ProductId);
+
+        var review = await ReviewService.AddProductReviewAsync(
+            buyer.UserId, product!.ProductId, new CreateProductReviewDto { Rating = 4, Comment = "Nice" });
+
+        await ReviewService.DeleteProductReviewAsync(review.ProductReviewId);
+
+        var entity = await DbContext.ProductReview.FindAsync(review.ProductReviewId);
+        entity.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RejectSellerReview_WhenApproved_RemovesFromApprovedList()
+    {
+        var (buyer, _, seller, _) = await CreateDeliveredPurchaseAsync();
+
+        var review = await ReviewService.AddSellerReviewAsync(
+            buyer.UserId, seller.SellerId, new CreateSellerReviewDto { Rating = 4, Comment = "Good seller" });
+
+        await ReviewService.ApproveSellerReviewAsync(review.SellerReviewId);
+        (await ReviewService.GetSellerReviewsAsync(seller.SellerId)).Should().HaveCount(1);
+
+        await ReviewService.RejectSellerReviewAsync(review.SellerReviewId);
+        (await ReviewService.GetSellerReviewsAsync(seller.SellerId)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteSellerReview_RemovesFromDatabase()
+    {
+        var (buyer, _, seller, _) = await CreateDeliveredPurchaseAsync();
+
+        var review = await ReviewService.AddSellerReviewAsync(
+            buyer.UserId, seller.SellerId, new CreateSellerReviewDto { Rating = 4, Comment = "Seller" });
+
+        await ReviewService.DeleteSellerReviewAsync(review.SellerReviewId);
+
+        var entity = await DbContext.SellerReview.FindAsync(review.SellerReviewId);
+        entity.Should().BeNull();
+    }
 }

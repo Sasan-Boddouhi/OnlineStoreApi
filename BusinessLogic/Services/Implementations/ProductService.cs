@@ -422,6 +422,29 @@ public sealed class ProductService : IProductService
         };
     }
 
+    public async Task<IReadOnlyList<VariantAttributeDto>> GetAttributesAsync(
+        int productId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await _unitOfWork.Repository<Product>().GetByIdAsync(productId, cancellationToken);
+        if (product is null)
+            throw new NotFoundException("محصول یافت نشد.", "PRODUCT_NOT_FOUND");
+
+        var attributes = await _unitOfWork.Repository<ProductAttribute>()
+            .ListAsync(new Spec<ProductAttribute>()
+                .Where(a => a.ProductId == productId)
+                .OrderBy(a => a.AttributeId),
+                cancellationToken);
+
+        return attributes.Select(a => new VariantAttributeDto
+        {
+            AttributeId = a.AttributeId,
+            Name = a.Name,
+            Type = a.Type.ToString(),
+            Value = string.Empty
+        }).ToList();
+    }
+
     public async Task<ProductVariantDto?> UpdateVariantAsync(int variantId, UpdateProductVariantDto dto, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Updating variant {VariantId}", variantId);

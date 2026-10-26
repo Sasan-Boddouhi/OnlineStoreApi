@@ -9,5 +9,7 @@ namespace BusinessLogic.Services.Interfaces
     {
         Task<IEnumerable<SellerPayoutDto>> GetMyPayoutsAsync(CancellationToken cancellationToken = default);
         Task<IEnumerable<SellerPayoutDto>> GetAllPayoutsAsync(CancellationToken cancellationToken = default);
+        Task<SellerPayoutDto> MarkAsPaidAsync(int payoutId, string? reference, CancellationToken cancellationToken = default);
+        Task<SellerPayoutDto> CancelPayoutAsync(int payoutId, CancellationToken cancellationToken = default);
     }
 }

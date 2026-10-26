@@ -245,6 +245,44 @@ namespace BusinessLogic.Services.Implementations
             _logger.LogInformation("Product review {ReviewId} approved", reviewId);
         }
 
+        public async Task RejectProductReviewAsync(int reviewId, CancellationToken cancellationToken = default)
+        {
+            var review = await _unitOfWork.Repository<ProductReview>().GetByIdAsync(reviewId, cancellationToken);
+            if (review is null)
+                throw new NotFoundException("نظر یافت نشد.", "REVIEW_NOT_FOUND");
+
+            if (!review.IsApproved)
+                return;
+
+            review.IsApproved = false;
+            _unitOfWork.Repository<ProductReview>().Update(review);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _ratingCache.RecalculateProductAsync(review.ProductId, cancellationToken);
+
+            _logger.LogInformation("Product review {ReviewId} rejected", reviewId);
+        }
+
+        public async Task DeleteProductReviewAsync(int reviewId, CancellationToken cancellationToken = default)
+        {
+            var review = await _unitOfWork.Repository<ProductReview>().GetByIdAsync(reviewId, cancellationToken);
+            if (review is null)
+                throw new NotFoundException("نظر یافت نشد.", "REVIEW_NOT_FOUND");
+
+            var wasApproved = review.IsApproved;
+            var productId = review.ProductId;
+
+            _unitOfWork.Repository<ProductReview>().Delete(review);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (wasApproved)
+            {
+                await _ratingCache.RecalculateProductAsync(productId, cancellationToken);
+            }
+
+            _logger.LogInformation("Product review {ReviewId} deleted", reviewId);
+        }
+
         public async Task ApproveSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default)
         {
             var review = await _unitOfWork.Repository<SellerReview>().GetByIdAsync(reviewId, cancellationToken);
@@ -261,6 +299,44 @@ namespace BusinessLogic.Services.Implementations
             await _ratingCache.RecalculateSellerAsync(review.SellerId, cancellationToken);
 
             _logger.LogInformation("Seller review {ReviewId} approved", reviewId);
+        }
+
+        public async Task RejectSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default)
+        {
+            var review = await _unitOfWork.Repository<SellerReview>().GetByIdAsync(reviewId, cancellationToken);
+            if (review is null)
+                throw new NotFoundException("نظر یافت نشد.", "REVIEW_NOT_FOUND");
+
+            if (!review.IsApproved)
+                return;
+
+            review.IsApproved = false;
+            _unitOfWork.Repository<SellerReview>().Update(review);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _ratingCache.RecalculateSellerAsync(review.SellerId, cancellationToken);
+
+            _logger.LogInformation("Seller review {ReviewId} rejected", reviewId);
+        }
+
+        public async Task DeleteSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default)
+        {
+            var review = await _unitOfWork.Repository<SellerReview>().GetByIdAsync(reviewId, cancellationToken);
+            if (review is null)
+                throw new NotFoundException("نظر یافت نشد.", "REVIEW_NOT_FOUND");
+
+            var wasApproved = review.IsApproved;
+            var sellerId = review.SellerId;
+
+            _unitOfWork.Repository<SellerReview>().Delete(review);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (wasApproved)
+            {
+                await _ratingCache.RecalculateSellerAsync(sellerId, cancellationToken);
+            }
+
+            _logger.LogInformation("Seller review {ReviewId} deleted", reviewId);
         }
 
         // ==================== ابزار داخلی ====================

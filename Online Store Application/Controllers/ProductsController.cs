@@ -168,6 +168,13 @@ public class ProductsController : ControllerBase
         return Ok(await _productService.CreateVariantAsync(dto));
     }
 
+    [HttpGet("{id:int}/attributes")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<VariantAttributeDto>>> GetAttributes(
+        int id,
+        CancellationToken cancellationToken)
+        => Ok(await _productService.GetAttributesAsync(id, cancellationToken));
+
     [HttpPost("{id:int}/attributes")]
     [Authorize(Policy = "CanManageCatalog")]
     public async Task<ActionResult<VariantAttributeDto>> CreateAttribute(

@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Application.Exceptions;
 using Application.Interfaces;
 using BusinessLogic.DTOs.Review;
@@ -57,6 +57,22 @@ public class ReviewsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("product/{id:int}/reject")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> RejectProductReview(int id, CancellationToken cancellationToken)
+    {
+        await _reviewService.RejectProductReviewAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("product/{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> DeleteProductReview(int id, CancellationToken cancellationToken)
+    {
+        await _reviewService.DeleteProductReviewAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     // ==================== فروشنده ====================
 
     [HttpGet("seller/{sellerId:int}")]
@@ -85,6 +101,22 @@ public class ReviewsController : ControllerBase
     public async Task<IActionResult> ApproveSellerReview(int reviewId, CancellationToken cancellationToken)
     {
         await _reviewService.ApproveSellerReviewAsync(reviewId, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("seller/{id:int}/reject")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> RejectSellerReview(int id, CancellationToken cancellationToken)
+    {
+        await _reviewService.RejectSellerReviewAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("seller/{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> DeleteSellerReview(int id, CancellationToken cancellationToken)
+    {
+        await _reviewService.DeleteSellerReviewAsync(id, cancellationToken);
         return NoContent();
     }
 }

@@ -43,6 +43,52 @@ namespace BusinessLogic.Services.Implementations
             return payouts.Select(Map).ToList();
         }
 
+        public async Task<SellerPayoutDto> MarkAsPaidAsync(int payoutId, string? reference, CancellationToken cancellationToken = default)
+        {
+            var payout = await _unitOfWork.Repository<SellerPayout>().GetByIdAsync(payoutId, cancellationToken);
+            if (payout == null)
+                throw new NotFoundException("تسویه یافت نشد.", "PAYOUT_NOT_FOUND");
+
+            try
+            {
+                payout.MarkPaid(reference);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new BusinessException(ex.Message, "PAYOUT_INVALID_STATUS");
+            }
+
+            _unitOfWork.Repository<SellerPayout>().Update(payout);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Payout {PayoutId} marked as paid with reference {Reference}", payoutId, reference);
+
+            return Map(payout);
+        }
+
+        public async Task<SellerPayoutDto> CancelPayoutAsync(int payoutId, CancellationToken cancellationToken = default)
+        {
+            var payout = await _unitOfWork.Repository<SellerPayout>().GetByIdAsync(payoutId, cancellationToken);
+            if (payout == null)
+                throw new NotFoundException("تسویه یافت نشد.", "PAYOUT_NOT_FOUND");
+
+            try
+            {
+                payout.Cancel();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new BusinessException(ex.Message, "PAYOUT_INVALID_STATUS");
+            }
+
+            _unitOfWork.Repository<SellerPayout>().Update(payout);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Payout {PayoutId} cancelled", payoutId);
+
+            return Map(payout);
+        }
+
         private static SellerPayoutDto Map(SellerPayout p) => new SellerPayoutDto
         {
             SellerPayoutId = p.SellerPayoutId,

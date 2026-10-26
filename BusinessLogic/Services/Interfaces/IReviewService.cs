@@ -1,4 +1,4 @@
-﻿using BusinessLogic.DTOs.Review;
+using BusinessLogic.DTOs.Review;
 
 namespace BusinessLogic.Services.Interfaces
 {
@@ -27,6 +27,14 @@ namespace BusinessLogic.Services.Interfaces
 
         Task ApproveProductReviewAsync(int reviewId, CancellationToken cancellationToken = default);
 
+        Task RejectProductReviewAsync(int reviewId, CancellationToken cancellationToken = default);
+
+        Task DeleteProductReviewAsync(int reviewId, CancellationToken cancellationToken = default);
+
         Task ApproveSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default);
+
+        Task RejectSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default);
+
+        Task DeleteSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default);
     }
 }

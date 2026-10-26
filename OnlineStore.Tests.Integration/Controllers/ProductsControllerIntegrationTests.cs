@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Application.Entities;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.Shared;
 using FluentAssertions;
@@ -354,5 +355,41 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         // 3. Delete the variant
         var deleteRes = await Client.DeleteAsync($"/api/v1/products/{product.ProductId}/variants/{created!.VariantId}");
         deleteRes.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task GetAttributes_ValidProduct_ReturnsOkWithList()
+    {
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        // 1. Create a product
+        var prodRes = await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
+        {
+            Name = "P-" + Guid.NewGuid().ToString("N"),
+            Price = 1000,
+            SubcategoryId = 1
+        });
+        var product = await prodRes.Content.ReadFromJsonAsync<ProductDto>();
+
+        // 2. Create an attribute
+        var createAttrDto = new CreateProductAttributeDto
+        {
+            ProductId = product!.ProductId,
+            Name = "Color",
+            Type = AttributeType.Color
+        };
+        var attrRes = await Client.PostAsJsonAsync($"/api/v1/products/{product.ProductId}/attributes", createAttrDto);
+        attrRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // 3. Get attributes (AllowAnonymous)
+        Client.DefaultRequestHeaders.Authorization = null;
+        var getRes = await Client.GetAsync($"/api/v1/products/{product.ProductId}/attributes");
+        getRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = await getRes.Content.ReadFromJsonAsync<List<VariantAttributeDto>>();
+        list.Should().NotBeNull();
+        list.Should().HaveCount(1);
+        list![0].Name.Should().Be("Color");
     }
 }
