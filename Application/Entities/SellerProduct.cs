@@ -43,7 +43,7 @@ namespace Application.Entities
         public virtual ICollection<CartItem> CartItems { get; set; } = new HashSet<CartItem>();
 
         [Timestamp]
-        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+        public byte[] RowVersion { get; set; } = new byte[8];
     }
 
     public enum SellerProductStatus

@@ -40,7 +40,7 @@ namespace Application.Entities
         public virtual ICollection<Payment> Payments { get; set; } = new HashSet<Payment>();
 
         [Timestamp]
-        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+        public byte[] RowVersion { get; set; } = new byte[8];
 
         public void AddItem(OrderItem item)
         {

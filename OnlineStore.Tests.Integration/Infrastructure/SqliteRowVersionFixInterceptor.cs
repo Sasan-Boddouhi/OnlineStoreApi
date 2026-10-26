@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -28,7 +28,7 @@ public sealed class SqliteRowVersionFixInterceptor : SaveChangesInterceptor
         if (context is null) return;
 
         foreach (var entry in context.ChangeTracker.Entries()
-                     .Where(e => e.State == EntityState.Added))
+                     .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
         {
             if (entry.Entity is UserSession session &&
                 (session.RowVersion is null || session.RowVersion.Length == 0))
@@ -41,6 +41,14 @@ public sealed class SqliteRowVersionFixInterceptor : SaveChangesInterceptor
             if (entry.Entity is Inventory inventory &&
                 (inventory.RowVersion is null || inventory.RowVersion.Length == 0))
                 inventory.RowVersion = new byte[8];
+
+            if (entry.Entity is Order order &&
+                (order.RowVersion is null || order.RowVersion.Length == 0))
+                order.RowVersion = new byte[8];
+
+            if (entry.Entity is SellerProduct sellerProduct &&
+                (sellerProduct.RowVersion is null || sellerProduct.RowVersion.Length == 0))
+                sellerProduct.RowVersion = new byte[8];
         }
     }
 }
