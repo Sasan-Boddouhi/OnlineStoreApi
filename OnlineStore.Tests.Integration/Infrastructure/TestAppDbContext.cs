@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using DataLayer.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -30,6 +30,15 @@ public class TestAppDbContext : AppDbContext
         // Phase 0: Inventory هم RowVersion دارد و SQLite آن را تولید نمی‌کند.
         modelBuilder.Entity<Inventory>()
             .Property(i => i.RowVersion)
+            .ValueGeneratedNever();
+
+        // M7.5: Order و SellerProduct هم RowVersion دارند و SQLite آن را تولید نمی‌کند.
+        modelBuilder.Entity<Order>()
+            .Property(o => o.RowVersion)
+            .ValueGeneratedNever();
+
+        modelBuilder.Entity<SellerProduct>()
+            .Property(sp => sp.RowVersion)
             .ValueGeneratedNever();
     }
 }
