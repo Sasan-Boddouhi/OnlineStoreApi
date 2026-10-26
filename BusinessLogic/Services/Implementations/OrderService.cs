@@ -268,6 +268,7 @@ public sealed class OrderService : IOrderService
                      .ToList())
         {
             order.SellerGroups.Remove(emptyGroup);
+            _unitOfWork.Repository<OrderSellerGroup>().Delete(emptyGroup);
         }
 
         _unitOfWork.Repository<Order>().Update(order);
