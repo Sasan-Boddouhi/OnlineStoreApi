@@ -195,7 +195,7 @@ public class ReviewsControllerIntegrationTests : ControllerIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var db = GetService<AppDbContext>();
-        var updated = await db.ProductReview.FindAsync(review.ProductReviewId);
+        var updated = await db.ProductReview.AsNoTracking().FirstOrDefaultAsync(r => r.ProductReviewId == review.ProductReviewId);
         updated!.IsApproved.Should().BeFalse();
     }
 
@@ -223,7 +223,7 @@ public class ReviewsControllerIntegrationTests : ControllerIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var db = GetService<AppDbContext>();
-        var deleted = await db.ProductReview.FindAsync(review.ProductReviewId);
+        var deleted = await db.ProductReview.AsNoTracking().FirstOrDefaultAsync(r => r.ProductReviewId == review.ProductReviewId);
         deleted.Should().BeNull();
     }
 
@@ -239,7 +239,7 @@ public class ReviewsControllerIntegrationTests : ControllerIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var db = GetService<AppDbContext>();
-        var updated = await db.SellerReview.FindAsync(review.SellerReviewId);
+        var updated = await db.SellerReview.AsNoTracking().FirstOrDefaultAsync(r => r.SellerReviewId == review.SellerReviewId);
         updated!.IsApproved.Should().BeFalse();
     }
 
@@ -255,7 +255,7 @@ public class ReviewsControllerIntegrationTests : ControllerIntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         var db = GetService<AppDbContext>();
-        var deleted = await db.SellerReview.FindAsync(review.SellerReviewId);
+        var deleted = await db.SellerReview.AsNoTracking().FirstOrDefaultAsync(r => r.SellerReviewId == review.SellerReviewId);
         deleted.Should().BeNull();
     }
 }

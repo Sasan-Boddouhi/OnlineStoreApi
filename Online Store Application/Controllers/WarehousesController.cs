@@ -42,8 +42,13 @@ public class WarehousesController : ControllerBase
 
     private bool IsAdmin()
     {
-        if (User.IsInRole("Admin") || User.IsInRole("SuperAdmin"))
-            return true;
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return User.IsInRole("Admin") || User.IsInRole("SuperAdmin") ||
+                   User.Claims.Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") &&
+                                        (string.Equals(c.Value, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(c.Value, "SuperAdmin", StringComparison.OrdinalIgnoreCase)));
+        }
 
         var role = _currentUserService.GetCurrentUserRole();
         return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||

@@ -8,6 +8,7 @@ namespace Online_Store_Application.Controllers;
 
 [ApiController]
 [ApiVersion(1.0)]
+[Route("api/v{version:apiVersion}/seller-payouts")]
 [Route("api/v{version:apiVersion}/[controller]")]
 [Authorize]
 public class SellerPayoutsController : ControllerBase

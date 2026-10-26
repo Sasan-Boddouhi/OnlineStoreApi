@@ -38,16 +38,12 @@ public sealed class WarehouseService : IWarehouseService
         var entity = _mapper.Map<Warehouse>(dto);
         entity.SellerId = null;
 
-        var role = _currentUserService.GetCurrentUserRole();
-        if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        if (dto.SellerId.HasValue)
         {
-            if (dto.SellerId.HasValue)
-            {
-                var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
-                if (seller == null)
-                    throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
-                entity.SellerId = dto.SellerId.Value;
-            }
+            var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
+            if (seller == null)
+                throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
+            entity.SellerId = dto.SellerId.Value;
         }
         else
         {
