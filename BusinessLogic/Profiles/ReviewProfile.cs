@@ -10,10 +10,10 @@ public class ReviewProfile : Profile
     public ReviewProfile()
     {
         CreateMap<ProductReview, ProductReviewDto>()
-            .ForMember(d => d.CustomerName, opt => opt.MapFrom(s => s.Customer != null && s.Customer.User != null ? (s.Customer.User.FirstName + " " + s.Customer.User.LastName).Trim() : string.Empty));
+            .ForMember(d => d.CustomerName, opt => opt.Ignore());
 
         CreateMap<SellerReview, SellerReviewDto>()
-            .ForMember(d => d.CustomerName, opt => opt.MapFrom(s => s.Customer != null && s.Customer.User != null ? (s.Customer.User.FirstName + " " + s.Customer.User.LastName).Trim() : string.Empty));
+            .ForMember(d => d.CustomerName, opt => opt.Ignore());
 
         CreateMap<CreateProductReviewDto, ProductReview>()
             .ConfigureDbDestination()

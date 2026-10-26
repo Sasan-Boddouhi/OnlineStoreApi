@@ -162,8 +162,8 @@ public sealed class InventoryService : IInventoryService
 
         if (row is null)
         {
-            await _unitOfWork.Repository<Inventory>()
-                .AddAsync(new Inventory(listingId, warehouse.WarehouseId, quantity), cancellationToken);
+            row = new Inventory(listingId, warehouse.WarehouseId, quantity);
+            await _unitOfWork.Repository<Inventory>().AddAsync(row, cancellationToken);
 
             _logger.LogInformation(
                 "Inventory created for listing {ListingId} in warehouse {WarehouseId} with {Quantity}.",

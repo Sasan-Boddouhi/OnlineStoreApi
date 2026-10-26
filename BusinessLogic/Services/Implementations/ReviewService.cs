@@ -94,8 +94,9 @@ namespace BusinessLogic.Services.Implementations
                 "Product review {ReviewId} created for product {ProductId} by customer {CustomerId}",
                 review.ProductReviewId, productId, customer.CustomerId);
 
-            review.Customer = customer;
-            return _mapper.Map<ProductReviewDto>(review);
+            var reviewDto = _mapper.Map<ProductReviewDto>(review);
+            reviewDto.CustomerName = BuildName(customer.User);
+            return reviewDto;
         }
 
         public async Task<IEnumerable<ProductReviewDto>> GetProductReviewsAsync(
@@ -174,8 +175,9 @@ namespace BusinessLogic.Services.Implementations
                 "Seller review {ReviewId} created for seller {SellerId} by customer {CustomerId}",
                 review.SellerReviewId, sellerId, customer.CustomerId);
 
-            review.Customer = customer;
-            return _mapper.Map<SellerReviewDto>(review);
+            var reviewDto = _mapper.Map<SellerReviewDto>(review);
+            reviewDto.CustomerName = BuildName(customer.User);
+            return reviewDto;
         }
 
         public async Task<IEnumerable<SellerReviewDto>> GetSellerReviewsAsync(
