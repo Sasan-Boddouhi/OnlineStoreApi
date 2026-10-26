@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Exceptions;
 using Application.Interfaces;
 using Asp.Versioning;
@@ -33,7 +34,17 @@ public class ListingsController : ControllerBase
 
     private async Task<int> GetCurrentSellerIdAsync(CancellationToken cancellationToken)
     {
-        var userId = _currentUserService.GetCurrentUserId();
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        int userId;
+        if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out var parsedId))
+        {
+            userId = parsedId;
+        }
+        else
+        {
+            userId = _currentUserService.GetCurrentUserId();
+        }
+
         var seller = await _sellerService.GetByUserIdAsync(userId, cancellationToken);
         if (seller is null)
             throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");

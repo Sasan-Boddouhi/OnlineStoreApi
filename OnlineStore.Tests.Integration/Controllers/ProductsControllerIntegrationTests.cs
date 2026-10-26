@@ -290,25 +290,34 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        // 1. Create a variant
+        // 1. Create a product
+        var prodRes = await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
+        {
+            Name = "P-" + Guid.NewGuid().ToString("N"),
+            Price = 1000,
+            SubcategoryId = 1
+        });
+        var product = await prodRes.Content.ReadFromJsonAsync<ProductDto>();
+
+        // 2. Create a variant
         var createVariantDto = new CreateProductVariantDto
         {
-            ProductId = 1,
+            ProductId = product!.ProductId,
             Name = "Variant Before Update",
             Sku = $"SKU-UPD-{Guid.NewGuid():N}"
         };
-        var createRes = await Client.PostAsJsonAsync("/api/v1/products/1/variants", createVariantDto);
+        var createRes = await Client.PostAsJsonAsync($"/api/v1/products/{product.ProductId}/variants", createVariantDto);
         createRes.StatusCode.Should().Be(HttpStatusCode.OK);
         var created = await createRes.Content.ReadFromJsonAsync<ProductVariantDto>();
 
-        // 2. Update the variant
+        // 3. Update the variant
         var updateDto = new UpdateProductVariantDto
         {
             Name = "Variant After Update",
             Sku = $"SKU-NEW-{Guid.NewGuid():N}",
             IsActive = true
         };
-        var updateRes = await Client.PutAsJsonAsync($"/api/v1/products/1/variants/{created!.VariantId}", updateDto);
+        var updateRes = await Client.PutAsJsonAsync($"/api/v1/products/{product.ProductId}/variants/{created!.VariantId}", updateDto);
         updateRes.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await updateRes.Content.ReadFromJsonAsync<ProductVariantDto>();
         updated.Should().NotBeNull();
@@ -322,19 +331,28 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
-        // 1. Create a variant
+        // 1. Create a product
+        var prodRes = await Client.PostAsJsonAsync("/api/v1/products", new CreateProductDto
+        {
+            Name = "P-" + Guid.NewGuid().ToString("N"),
+            Price = 1000,
+            SubcategoryId = 1
+        });
+        var product = await prodRes.Content.ReadFromJsonAsync<ProductDto>();
+
+        // 2. Create a variant
         var createVariantDto = new CreateProductVariantDto
         {
-            ProductId = 1,
+            ProductId = product!.ProductId,
             Name = "Variant To Delete",
             Sku = $"SKU-DEL-{Guid.NewGuid():N}"
         };
-        var createRes = await Client.PostAsJsonAsync("/api/v1/products/1/variants", createVariantDto);
+        var createRes = await Client.PostAsJsonAsync($"/api/v1/products/{product.ProductId}/variants", createVariantDto);
         createRes.StatusCode.Should().Be(HttpStatusCode.OK);
         var created = await createRes.Content.ReadFromJsonAsync<ProductVariantDto>();
 
-        // 2. Delete the variant
-        var deleteRes = await Client.DeleteAsync($"/api/v1/products/1/variants/{created!.VariantId}");
+        // 3. Delete the variant
+        var deleteRes = await Client.DeleteAsync($"/api/v1/products/{product.ProductId}/variants/{created!.VariantId}");
         deleteRes.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 }
