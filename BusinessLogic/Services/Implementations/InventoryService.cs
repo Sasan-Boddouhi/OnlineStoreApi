@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -257,7 +258,7 @@ public sealed class InventoryService : IInventoryService
 
         var role = _currentUser.GetCurrentUserRole();
 
-        if (role is "SuperAdmin" or "Admin" or "Manager")
+        if (role is RoleConstants.SuperAdmin or RoleConstants.Admin or RoleConstants.Manager)
             return;
 
         throw new ForbiddenException(

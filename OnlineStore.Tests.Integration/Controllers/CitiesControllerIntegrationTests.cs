@@ -28,6 +28,39 @@ public class CitiesControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
+    public async Task GetById_AllowAnonymous_ReturnsOk()
+    {
+        Client.DefaultRequestHeaders.Authorization = null;
+
+        var db = GetService<AppDbContext>();
+        var province = new Province { ProvinceName = $"P-{Guid.NewGuid():N}" };
+        db.Province.Add(province);
+        await db.SaveChangesAsync();
+
+        var city = new City { CityName = $"City-{Guid.NewGuid():N}", ProvinceId = province.ProvinceId };
+        db.City.Add(city);
+        await db.SaveChangesAsync();
+
+        var response = await Client.GetAsync($"/api/v1/cities/{city.CityId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<CityDto>();
+        result.Should().NotBeNull();
+        result!.CityId.Should().Be(city.CityId);
+        result.CityName.Should().Be(city.CityName);
+    }
+
+    [Fact]
+    public async Task GetById_NonExistent_ReturnsNotFound()
+    {
+        Client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await Client.GetAsync("/api/v1/cities/999999");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Create_AdminToken_ReturnsCreated()
     {
         var token = await GetAdminTokenAsync();

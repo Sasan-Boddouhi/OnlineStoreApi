@@ -62,5 +62,11 @@ public class ProductProfile : Profile
             .ForMember(dest => dest.VariantId, opt => opt.Ignore())
             .ForMember(dest => dest.ProductId, opt => opt.Ignore())
             .ForMember(dest => dest.AttributeValues, opt => opt.Ignore());
+
+        CreateMap<CreateProductVariantDto, ProductVariant>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.VariantId, opt => opt.Ignore())
+            .ForMember(dest => dest.Product, opt => opt.Ignore())
+            .ForMember(dest => dest.AttributeValues, opt => opt.Ignore());
     }
 }

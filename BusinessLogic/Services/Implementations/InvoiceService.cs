@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -91,8 +92,8 @@ namespace BusinessLogic.Services.Implementations
         private async Task EnsureCanAccessAsync(Invoice invoice, CancellationToken cancellationToken)
         {
             var role = _currentUser.GetCurrentUserRole();
-            if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase))
                 return;
 
             var userId = _currentUser.TryGetCurrentUserId();

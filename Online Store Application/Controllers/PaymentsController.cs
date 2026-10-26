@@ -102,17 +102,3 @@ public class PaymentsController : ControllerBase
         CancellationToken cancellationToken)
         => Ok(await _paymentService.RefundPaymentAsync(paymentId, body?.Reason, cancellationToken));
 }
-
-/// <summary>بدنهٔ درخواست برگشت وجه.</summary>
-public class RefundPaymentRequest
-{
-    /// <summary>دلیل برگشت — در AuditLog ثبت می‌شود.</summary>
-    public string? Reason { get; set; }
-}
-
-/// <summary>بدنهٔ درخواست شروع پرداخت.</summary>
-public class InitiatePaymentRequest
-{
-    public int OrderId { get; set; }
-    public string? IdempotencyKey { get; set; }
-}

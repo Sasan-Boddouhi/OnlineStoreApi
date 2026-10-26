@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text;
 
 namespace Application.Common.Helpers
@@ -75,7 +75,7 @@ namespace Application.Common.Helpers
                     tokens.Add(ReadIdentifierOrKeyword());
                     continue;
                 }
-                throw new Exception($"Unexpected character '{ch}' at position {_position}");
+                throw new InvalidOperationException($"Unexpected character '{ch}' at position {_position}");
             }
             tokens.Add(new Token { Type = TokenType.Eof, Value = "", Position = _position });
             return tokens;
@@ -93,7 +93,7 @@ namespace Application.Common.Helpers
                 _position++;
             }
             if (_position >= _input.Length)
-                throw new Exception($"Unterminated string at position {start}");
+                throw new InvalidOperationException($"Unterminated string at position {start}");
             _position++; // skip closing quote
             return new Token
             {

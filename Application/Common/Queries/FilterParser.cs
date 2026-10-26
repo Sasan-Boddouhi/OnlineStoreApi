@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Linq.Expressions;
 using Application.Common.Helpers;
 using Application.Common.Specifications;
@@ -66,7 +66,7 @@ public sealed class FilterParser
     {
         var token = Consume(ctx);
         if (ctx.AllowedFields != null && !ctx.AllowedFields.Contains(token.Value))
-            throw new Exception($"Field '{token.Value}' is not allowed.");
+            throw new InvalidOperationException($"Field '{token.Value}' is not allowed.");
         return token.Value;
     }
 
@@ -86,14 +86,14 @@ public sealed class FilterParser
     {
         var type = prop.Type;
         if (Nullable.GetUnderlyingType(type) == null && type.IsValueType)
-            throw new Exception($"Field '{field}' is not nullable, cannot compare with null.");
+            throw new InvalidOperationException($"Field '{field}' is not nullable, cannot compare with null.");
 
         var nullConst = Expression.Constant(null, type);
         Expression body = op switch
         {
             "eq" => Expression.Equal(prop, nullConst),
             "ne" => Expression.NotEqual(prop, nullConst),
-            _ => throw new Exception($"Operator '{op}' cannot be used with null.")
+            _ => throw new InvalidOperationException($"Operator '{op}' cannot be used with null.")
         };
         return Expression.Lambda<Func<T, bool>>(body, param);
     }
@@ -101,7 +101,7 @@ public sealed class FilterParser
     private static void EnsureTypeCompatibility(Token valueToken, Type targetType)
     {
         if (IsTypeMismatch(valueToken, targetType, out var msg))
-            throw new Exception(msg);
+            throw new InvalidOperationException(msg);
     }
 
     private static readonly (Func<Token, Type, bool> Condition, Func<Token, Type, string> Message)[] MismatchRules =

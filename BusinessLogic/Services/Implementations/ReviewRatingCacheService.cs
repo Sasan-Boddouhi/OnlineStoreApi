@@ -1,4 +1,4 @@
-﻿using Application.Common.Specifications;
+using Application.Common.Specifications;
 using Application.Entities;
 using Application.Interfaces;
 using BusinessLogic.Services.Interfaces;
@@ -9,8 +9,8 @@ namespace BusinessLogic.Services.Implementations;
 /// <summary>
 /// Phase 9 (R33) — محاسبهٔ مجدد کش امتیاز.
 ///
-/// فقط نظرات <c>IsApproved == true</c> شمرده می‌شوند. محاسبه در دیتابیس انجام می‌شود
-/// (Sum/Count) نه در حافظه، تا برای محصولی با هزاران نظر حافظه مصرف نکند.
+/// فقط نظرات <c>IsApproved == true</c> شمرده می‌شوند. نظرات تأییدشده با <see cref="IGenericRepository{T}.ListAsync"/>
+/// بارگذاری شده و میانگین در حافظه با <c>reviews.Average(...)</c> محاسبه می‌شود.
 /// </summary>
 public sealed class ReviewRatingCacheService : IReviewRatingCacheService
 {

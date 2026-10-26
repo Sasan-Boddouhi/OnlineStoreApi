@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -108,7 +109,7 @@ public sealed class WarehouseService : IWarehouseService
             return null;
 
         var role = _currentUserService.GetCurrentUserRole();
-        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
 
         if (!isAdmin)
         {
@@ -148,7 +149,7 @@ public sealed class WarehouseService : IWarehouseService
             return false;
 
         var role = _currentUserService.GetCurrentUserRole();
-        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
 
         if (!isAdmin)
         {

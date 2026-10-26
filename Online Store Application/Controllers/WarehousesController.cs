@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Application.Common.Constants;
 using BusinessLogic.DTOs.Warehouse;
 using BusinessLogic.Services.Interfaces;
 using Application.Interfaces;
@@ -44,15 +45,15 @@ public class WarehousesController : ControllerBase
     {
         if (User.Identity?.IsAuthenticated == true)
         {
-            return User.IsInRole("Admin") || User.IsInRole("SuperAdmin") ||
+            return User.IsInRole(RoleConstants.Admin) || User.IsInRole(RoleConstants.SuperAdmin) ||
                    User.Claims.Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") &&
-                                        (string.Equals(c.Value, "Admin", StringComparison.OrdinalIgnoreCase) ||
-                                         string.Equals(c.Value, "SuperAdmin", StringComparison.OrdinalIgnoreCase)));
+                                        (string.Equals(c.Value, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(c.Value, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase)));
         }
 
         var role = _currentUserService.GetCurrentUserRole();
-        return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpGet]

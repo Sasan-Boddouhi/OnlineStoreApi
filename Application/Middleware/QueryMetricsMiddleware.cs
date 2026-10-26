@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Application.Interfaces;
 using Application.Models.Metrics;
 using Microsoft.AspNetCore.Http;
@@ -62,7 +62,10 @@ public class QueryMetricsMiddleware
                         userName = userService.GetCurrentUserName();
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve current user details in QueryMetricsMiddleware");
+                }
 
                 var metrics = new QueryMetrics
                 {

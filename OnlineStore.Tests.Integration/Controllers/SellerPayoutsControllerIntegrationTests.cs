@@ -152,4 +152,61 @@ public class SellerPayoutsControllerIntegrationTests : ControllerIntegrationTest
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task GetAll_Admin_ReturnsOkWithList()
+    {
+        var adminToken = await GetAdminTokenAsync();
+        await CreatePendingPayoutAsync();
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var response = await Client.GetAsync("/api/v1/seller-payouts");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await response.Content.ReadFromJsonAsync<List<SellerPayoutDto>>();
+        list.Should().NotBeNull();
+        list!.Count.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task GetAll_NonAdmin_ReturnsForbidden()
+    {
+        var (token, _) = await CreateCustomerAndTokenAsync();
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/seller-payouts");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetMy_Seller_ReturnsOkWithList()
+    {
+        var (token, userId) = await CreateCustomerAndTokenAsync();
+
+        var db = GetService<AppDbContext>();
+        var seller = new Seller
+        {
+            UserId = userId,
+            StoreName = "MyPayoutStore-" + Guid.NewGuid().ToString("N")[..8],
+            Status = SellerStatus.Approved,
+            IsActive = true
+        };
+        db.Seller.Add(seller);
+        await db.SaveChangesAsync();
+
+        var payout = new SellerPayout(seller.SellerId, null, 150000m, DateTime.UtcNow.AddDays(-7), DateTime.UtcNow);
+        db.SellerPayout.Add(payout);
+        await db.SaveChangesAsync();
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/seller-payouts/my");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await response.Content.ReadFromJsonAsync<List<SellerPayoutDto>>();
+        list.Should().NotBeNull();
+        list!.Should().Contain(p => p.SellerPayoutId == payout.SellerPayoutId);
+    }
 }

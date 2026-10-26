@@ -258,4 +258,32 @@ public class ReviewsControllerIntegrationTests : ControllerIntegrationTestBase
         var deleted = await db.SellerReview.AsNoTracking().FirstOrDefaultAsync(r => r.SellerReviewId == review.SellerReviewId);
         deleted.Should().BeNull();
     }
+
+    [Fact]
+    public async Task GetProductReviews_AllowAnonymous_ReturnsOk()
+    {
+        var review = await CreateProductReviewAsync(approved: true);
+
+        Client.DefaultRequestHeaders.Authorization = null;
+        var response = await Client.GetAsync($"/api/v1/reviews/product/{review.ProductId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = await response.Content.ReadFromJsonAsync<List<BusinessLogic.DTOs.Review.ProductReviewDto>>();
+        list.Should().NotBeNull();
+        list!.Should().Contain(r => r.ProductReviewId == review.ProductReviewId);
+    }
+
+    [Fact]
+    public async Task GetSellerReviews_AllowAnonymous_ReturnsOk()
+    {
+        var review = await CreateSellerReviewAsync(approved: true);
+
+        Client.DefaultRequestHeaders.Authorization = null;
+        var response = await Client.GetAsync($"/api/v1/reviews/seller/{review.SellerId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = await response.Content.ReadFromJsonAsync<List<BusinessLogic.DTOs.Review.SellerReviewDto>>();
+        list.Should().NotBeNull();
+        list!.Should().Contain(r => r.SellerReviewId == review.SellerReviewId);
+    }
 }

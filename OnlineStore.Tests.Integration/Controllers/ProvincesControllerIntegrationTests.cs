@@ -28,6 +28,35 @@ public class ProvincesControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
+    public async Task GetById_AllowAnonymous_ReturnsOk()
+    {
+        Client.DefaultRequestHeaders.Authorization = null;
+
+        var db = GetService<AppDbContext>();
+        var province = new Province { ProvinceName = $"P-{Guid.NewGuid():N}" };
+        db.Province.Add(province);
+        await db.SaveChangesAsync();
+
+        var response = await Client.GetAsync($"/api/v1/provinces/{province.ProvinceId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<ProvinceDto>();
+        result.Should().NotBeNull();
+        result!.ProvinceId.Should().Be(province.ProvinceId);
+        result.ProvinceName.Should().Be(province.ProvinceName);
+    }
+
+    [Fact]
+    public async Task GetById_NonExistent_ReturnsNotFound()
+    {
+        Client.DefaultRequestHeaders.Authorization = null;
+
+        var response = await Client.GetAsync("/api/v1/provinces/999999");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Create_AdminToken_ReturnsCreated()
     {
         var token = await GetAdminTokenAsync();
