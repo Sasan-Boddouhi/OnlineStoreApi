@@ -155,9 +155,8 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         if (entity == null || !entity.IsActive)
             return false;
 
-        var hasProducts = await _unitOfWork.Repository<Product>()
-            .AnyAsync(p => p.SubcategoryId == id, cancellationToken);
-        if (hasProducts)
+        var productRepo = _unitOfWork.Repository<Product>();
+        if (productRepo != null && await productRepo.AnyAsync(p => p.SubcategoryId == id, cancellationToken))
             throw new BusinessException("این زیردسته‌بندی دارای محصول است و قابل حذف نیست.", "SUBCATEGORY_HAS_PRODUCTS");
 
         _unitOfWork.Repository<ProductSubcategory>().Delete(entity);

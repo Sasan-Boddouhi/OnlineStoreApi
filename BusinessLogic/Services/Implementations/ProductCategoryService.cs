@@ -73,9 +73,8 @@ public sealed class ProductCategoryService : IProductCategoryService
                 return false;
             }
 
-            var hasSubcategories = await _unitOfWork.Repository<ProductSubcategory>()
-                .AnyAsync(sc => sc.CategoryId == id, cancellationToken);
-            if (hasSubcategories)
+            var subcategoryRepo = _unitOfWork.Repository<ProductSubcategory>();
+            if (subcategoryRepo != null && await subcategoryRepo.AnyAsync(sc => sc.CategoryId == id, cancellationToken))
                 throw new BusinessException("این دسته‌بندی دارای زیردسته‌بندی است و قابل حذف نیست.", "CATEGORY_HAS_SUBCATEGORIES");
 
             _unitOfWork.Repository<ProductCategory>().Delete(entity);

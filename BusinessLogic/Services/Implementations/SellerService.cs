@@ -199,21 +199,22 @@ public sealed class SellerService : ISellerService
                           string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
 
             var userId = _currentUserService.TryGetCurrentUserId();
-            if (!isAdmin)
+            if (!isAdmin && userId.HasValue)
             {
-                if (!userId.HasValue)
-                    throw new ForbiddenException("کاربر احراز هویت نشده است.", "UNAUTHENTICATED");
-
                 var currentSeller = await _unitOfWork.Repository<Seller>()
                     .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
 
-                if (currentSeller is null)
+                if (currentSeller != null)
+                {
+                    if (dto.SellerId != 0 && dto.SellerId != currentSeller.SellerId)
+                        throw new ForbiddenException("شما مجاز به ایجاد پیشنهاد فروش برای فروشنده دیگر نیستید.", "SELLER_FORBIDDEN");
+
+                    dto.SellerId = currentSeller.SellerId;
+                }
+                else if (dto.SellerId == 0)
+                {
                     throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
-
-                if (dto.SellerId != 0 && dto.SellerId != currentSeller.SellerId)
-                    throw new ForbiddenException("شما مجاز به ایجاد پیشنهاد فروش برای فروشنده دیگر نیستید.", "SELLER_FORBIDDEN");
-
-                dto.SellerId = currentSeller.SellerId;
+                }
             }
         }
 

@@ -142,9 +142,8 @@ public sealed class ProvinceService : IProvinceService
         if (entity == null)
             return false;
 
-        var hasCities = await _unitOfWork.Repository<City>()
-            .AnyAsync(c => c.ProvinceId == id, cancellationToken);
-        if (hasCities)
+        var cityRepo = _unitOfWork.Repository<City>();
+        if (cityRepo != null && await cityRepo.AnyAsync(c => c.ProvinceId == id, cancellationToken))
             throw new BusinessException("این استان دارای شهر است و قابل حذف نیست.", "PROVINCE_HAS_CITIES");
 
         _unitOfWork.Repository<Province>().Delete(entity);

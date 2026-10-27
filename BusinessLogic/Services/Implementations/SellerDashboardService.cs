@@ -112,10 +112,14 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var (page, size) = NormalizePaging(pageNumber, pageSize);
 
-        var query = _unitOfWork.Repository<OrderItem>()
+        var items = await _unitOfWork.Repository<OrderItem>()
             .Query()
             .Where(i => i.Listing.SellerId == sellerId && i.Order.Status == OrderStatus.Delivered)
-            .GroupBy(i => i.VariantId ?? 0)
+            .Select(i => new { VariantId = i.VariantId ?? 0, i.Quantity, i.TotalPrice })
+            .ToListAsync(cancellationToken);
+
+        var ranked = items
+            .GroupBy(i => i.VariantId)
             .Select(g => new
             {
                 VariantId = g.Key,
@@ -123,10 +127,11 @@ public sealed class SellerDashboardService : ISellerDashboardService
                 Revenue = g.Sum(x => x.TotalPrice)
             })
             .OrderByDescending(x => x.QuantitySold)
-            .ThenByDescending(x => x.Revenue);
+            .ThenByDescending(x => x.Revenue)
+            .ToList();
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var pageRows = await query.Skip((page - 1) * size).Take(size).ToListAsync(cancellationToken);
+        var totalCount = ranked.Count;
+        var pageRows = ranked.Skip((page - 1) * size).Take(size).ToList();
 
         if (pageRows.Count == 0)
             return new PagedResult<TopProductDto> { Items = Array.Empty<TopProductDto>(), PageNumber = page, PageSize = size, TotalCount = totalCount };

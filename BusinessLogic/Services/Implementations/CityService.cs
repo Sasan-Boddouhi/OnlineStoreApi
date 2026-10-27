@@ -130,9 +130,8 @@ public sealed class CityService : ICityService
             return false;
         }
 
-        var hasAddresses = await _unitOfWork.Repository<Address>()
-            .AnyAsync(a => a.CityId == id, cancellationToken);
-        if (hasAddresses)
+        var addressRepo = _unitOfWork.Repository<Address>();
+        if (addressRepo != null && await addressRepo.AnyAsync(a => a.CityId == id, cancellationToken))
             throw new BusinessException("این شهر دارای آدرس است و قابل حذف نیست.", "CITY_HAS_ADDRESSES");
 
         _unitOfWork.Repository<City>().Delete(entity);
