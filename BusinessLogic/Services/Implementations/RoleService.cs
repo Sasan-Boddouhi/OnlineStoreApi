@@ -47,18 +47,18 @@ public sealed class RoleService : IRoleService
         await _unitOfWork.Repository<Role>().AddAsync(entity, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Add permissions
-        if (dto.PermissionIds.Count > 0)
+        // Add permissions in batch
+        var distinctPermIds = dto.PermissionIds.Distinct().ToList();
+        if (distinctPermIds.Count > 0)
         {
-            foreach (var permId in dto.PermissionIds.Distinct())
+            var validPerms = await _unitOfWork.Repository<Permission>()
+                .ListAsync(new Spec<Permission>().Where(p => distinctPermIds.Contains(p.PermissionId)), cancellationToken);
+
+            foreach (var perm in validPerms)
             {
-                var perm = await _unitOfWork.Repository<Permission>().GetByIdAsync(permId, cancellationToken);
-                if (perm != null)
-                {
-                    await _unitOfWork.Repository<RolePermission>().AddAsync(
-                        new RolePermission { RoleId = entity.RoleId, PermissionId = permId },
-                        cancellationToken);
-                }
+                await _unitOfWork.Repository<RolePermission>().AddAsync(
+                    new RolePermission { RoleId = entity.RoleId, PermissionId = perm.PermissionId },
+                    cancellationToken);
             }
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
@@ -153,13 +153,16 @@ public sealed class RoleService : IRoleService
             _unitOfWork.Repository<RolePermission>().Delete(ep);
         }
 
-        foreach (var permId in dto.PermissionIds.Distinct())
+        var distinctPermIds = dto.PermissionIds.Distinct().ToList();
+        if (distinctPermIds.Count > 0)
         {
-            var perm = await _unitOfWork.Repository<Permission>().GetByIdAsync(permId, cancellationToken);
-            if (perm != null)
+            var validPerms = await _unitOfWork.Repository<Permission>()
+                .ListAsync(new Spec<Permission>().Where(p => distinctPermIds.Contains(p.PermissionId)), cancellationToken);
+
+            foreach (var perm in validPerms)
             {
                 await _unitOfWork.Repository<RolePermission>().AddAsync(
-                    new RolePermission { RoleId = roleId, PermissionId = permId },
+                    new RolePermission { RoleId = roleId, PermissionId = perm.PermissionId },
                     cancellationToken);
             }
         }

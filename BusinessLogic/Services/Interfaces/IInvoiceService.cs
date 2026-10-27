@@ -13,5 +13,6 @@ namespace BusinessLogic.Services.Interfaces
         Task<InvoiceDto?> GetByIdAsync(int invoiceId, CancellationToken cancellationToken = default);
         Task<InvoiceDto?> GetByOrderAsync(int orderId, CancellationToken cancellationToken = default);
         Task<IEnumerable<InvoiceDto>> GetMyInvoicesAsync(CancellationToken cancellationToken = default);
+        Task<InvoiceDto> MarkAsPaidAsync(int invoiceId, CancellationToken cancellationToken = default);
     }
 }

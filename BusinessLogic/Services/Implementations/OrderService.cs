@@ -237,6 +237,76 @@ public sealed class OrderService : IOrderService
         return _mapper.Map<OrderDto>(order);
     }
 
+    public async Task<OrderDto> AddItemsToOrderAsync(
+        int orderId,
+        IEnumerable<AddOrderItemDto> itemsDto,
+        CancellationToken cancellationToken = default)
+    {
+        var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
+
+        if (order.Status != OrderStatus.Pending)
+            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
+
+        foreach (var itemDto in itemsDto)
+        {
+            var listing = await _unitOfWork.Repository<SellerProduct>()
+                .FirstOrDefaultAsync(
+                    new Spec<SellerProduct>()
+                        .Where(l => l.ListingId == itemDto.ListingId)
+                        .Include(l => l.Variant),
+                    cancellationToken);
+
+            if (listing == null)
+                throw new BusinessException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
+
+            if (listing.Status != SellerProductStatus.Active)
+                throw new BusinessException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
+
+            await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
+
+            var item = new OrderItem(
+                productId: listing.Variant?.ProductId ?? 0,
+                quantity: itemDto.Quantity,
+                unitPrice: listing.Price,
+                description: itemDto.Description
+            )
+            {
+                ListingId = listing.ListingId,
+                VariantId = listing.VariantId
+            };
+
+            var group = order.SellerGroups.FirstOrDefault(g => g.SellerId == listing.SellerId);
+            if (group is null)
+            {
+                group = new OrderSellerGroup(
+                    listing.SellerId,
+                    await ResolveCommissionRateAsync(listing.SellerId, cancellationToken));
+
+                order.SellerGroups.Add(group);
+            }
+
+            item.OrderSellerGroup = group;
+            order.AddItem(item);
+        }
+
+        RecalculateGroupSubTotals(order);
+        _unitOfWork.Repository<Order>().Update(order);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new BusinessException(
+                "موجودی به‌طور هم‌زمان توسط درخواست دیگری تغییر کرد. لطفاً دوباره تلاش کنید.",
+                "INVENTORY_CONCURRENCY");
+        }
+
+        _logger.LogInformation("Batch items added to order {OrderId}, new total: {TotalAmount}", order.OrderId, order.TotalAmount);
+        return _mapper.Map<OrderDto>(order);
+    }
+
     #endregion
 
     #region RemoveItemFromOrder
@@ -348,7 +418,14 @@ public sealed class OrderService : IOrderService
         }
 
         _unitOfWork.Repository<Order>().Update(order);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+        }
 
         _logger.LogInformation(
             "Order {OrderId} delivered; {Count} seller payouts created",
@@ -473,7 +550,65 @@ public sealed class OrderService : IOrderService
             cancellationToken);
 
         _unitOfWork.Repository<Order>().Update(order);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+        }
+
+        return _mapper.Map<OrderDto>(order);
+    }
+
+    public async Task<OrderDto> MarkReturnedAsync(int orderId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Marking order {OrderId} as returned", orderId);
+
+        var spec = new Spec<Order>()
+            .Where(o => o.OrderId == orderId)
+            .Include(o => o.OrderItems)
+            .Include(o => o.SellerGroups)
+            .AsTracking();
+
+        var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(spec, cancellationToken);
+        if (order is null)
+            throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
+
+        order.MarkReturned();
+
+        foreach (var group in order.SellerGroups)
+            group.Cancel();
+
+        foreach (var item in order.OrderItems)
+            await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
+
+        var payouts = await _unitOfWork.Repository<SellerPayout>()
+            .ListAsync(new Spec<SellerPayout>()
+                .Where(p => p.OrderSellerGroup != null && p.OrderSellerGroup.OrderId == orderId && p.Status == PayoutStatus.Pending)
+                .AsTracking(),
+                cancellationToken);
+
+        foreach (var payout in payouts)
+            payout.Cancel();
+
+        await _auditService.RecordAsync(
+            "Order.Returned",
+            nameof(Order),
+            orderId.ToString(),
+            $"amount={order.TotalAmount}",
+            cancellationToken);
+
+        _unitOfWork.Repository<Order>().Update(order);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+        }
 
         return _mapper.Map<OrderDto>(order);
     }

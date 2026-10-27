@@ -41,4 +41,12 @@ public class InvoicesController : ControllerBase
         var invoices = await _invoiceService.GetMyInvoicesAsync(cancellationToken);
         return Ok(invoices);
     }
+
+    [HttpPost("{id:int}/pay")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> MarkAsPaid(int id, CancellationToken cancellationToken = default)
+    {
+        var invoice = await _invoiceService.MarkAsPaidAsync(id, cancellationToken);
+        return Ok(invoice);
+    }
 }

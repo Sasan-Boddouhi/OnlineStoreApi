@@ -317,6 +317,44 @@ namespace BusinessLogic.Services.Implementations
             _logger.LogInformation("Seller review {ReviewId} deleted", reviewId);
         }
 
+        public async Task<IEnumerable<ProductReviewDto>> GetPendingProductReviewsAsync(CancellationToken cancellationToken = default)
+        {
+            var reviews = await _unitOfWork.Repository<ProductReview>()
+                .ListAsync(
+                    new Spec<ProductReview>()
+                        .Where(r => !r.IsApproved)
+                        .OrderByDescending(r => r.CreatedOn),
+                    cancellationToken);
+
+            var names = await LoadCustomerNamesAsync(reviews.Select(r => r.CustomerId), cancellationToken);
+
+            return reviews.Select(r =>
+            {
+                var dto = _mapper.Map<ProductReviewDto>(r);
+                dto.CustomerName = names.GetValueOrDefault(r.CustomerId, string.Empty);
+                return dto;
+            });
+        }
+
+        public async Task<IEnumerable<SellerReviewDto>> GetPendingSellerReviewsAsync(CancellationToken cancellationToken = default)
+        {
+            var reviews = await _unitOfWork.Repository<SellerReview>()
+                .ListAsync(
+                    new Spec<SellerReview>()
+                        .Where(r => !r.IsApproved)
+                        .OrderByDescending(r => r.CreatedOn),
+                    cancellationToken);
+
+            var names = await LoadCustomerNamesAsync(reviews.Select(r => r.CustomerId), cancellationToken);
+
+            return reviews.Select(r =>
+            {
+                var dto = _mapper.Map<SellerReviewDto>(r);
+                dto.CustomerName = names.GetValueOrDefault(r.CustomerId, string.Empty);
+                return dto;
+            });
+        }
+
         // ==================== ابزار داخلی ====================
 
         private async Task<Customer> GetCustomerAsync(int userId, CancellationToken cancellationToken)

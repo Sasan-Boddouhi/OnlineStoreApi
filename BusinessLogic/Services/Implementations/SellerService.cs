@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -6,6 +7,7 @@ using AutoMapper;
 using BusinessLogic.DTOs.Listing;
 using BusinessLogic.DTOs.Seller;
 using BusinessLogic.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
@@ -18,16 +20,27 @@ public sealed class SellerService : ISellerService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<SellerService> _logger;
 
     public SellerService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
+        ICurrentUserService currentUserService,
         ILogger<SellerService> logger)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
+        _currentUserService = currentUserService;
         _logger = logger;
+    }
+
+    public SellerService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ILogger<SellerService> logger)
+        : this(unitOfWork, mapper, null!, logger)
+    {
     }
 
     #region Seller
@@ -178,6 +191,31 @@ public sealed class SellerService : ISellerService
     {
         if (dto.Price <= 0)
             throw new BusinessException("قیمت باید بزرگ‌تر از صفر باشد.", "INVALID_PRICE");
+
+        if (_currentUserService != null)
+        {
+            var role = _currentUserService.GetCurrentUserRole();
+            var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+            var userId = _currentUserService.TryGetCurrentUserId();
+            if (!isAdmin)
+            {
+                if (!userId.HasValue)
+                    throw new ForbiddenException("کاربر احراز هویت نشده است.", "UNAUTHENTICATED");
+
+                var currentSeller = await _unitOfWork.Repository<Seller>()
+                    .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
+
+                if (currentSeller is null)
+                    throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
+
+                if (dto.SellerId != 0 && dto.SellerId != currentSeller.SellerId)
+                    throw new ForbiddenException("شما مجاز به ایجاد پیشنهاد فروش برای فروشنده دیگر نیستید.", "SELLER_FORBIDDEN");
+
+                dto.SellerId = currentSeller.SellerId;
+            }
+        }
 
         var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId, cancellationToken);
         if (seller == null)
@@ -334,6 +372,11 @@ public sealed class SellerService : ISellerService
             _logger.LogInformation("Listing {ListingId} price updated to {Price}", listingId, newPrice);
 
             return _mapper.Map<SellerProductDto>(listing);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
         catch (BusinessException)
         {

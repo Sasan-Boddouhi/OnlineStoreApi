@@ -65,11 +65,17 @@ public class ListingsController : ControllerBase
         => Ok(await _sellerService.GetListingAsync(id, cancellationToken));
 
     [HttpPost]
-    [Authorize(Policy = "CanManageCatalog")]
+    [Authorize]
     public async Task<ActionResult<SellerProductDto>> Create(
         [FromBody] CreateSellerProductDto dto,
         CancellationToken cancellationToken)
     {
+        if (!User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
+        {
+            var sellerId = await GetCurrentSellerIdAsync(cancellationToken);
+            dto.SellerId = sellerId;
+        }
+
         var created = await _sellerService.CreateListingAsync(dto, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = created.ListingId }, created);
     }

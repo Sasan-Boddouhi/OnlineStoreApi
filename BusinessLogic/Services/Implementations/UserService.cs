@@ -363,26 +363,32 @@ public sealed class UserService : IUserService
         try
         {
             // Capture old role codes for the audit trail (Q3 fix).
-            var oldRoleCodes = new List<string>();
             var existing = await _unitOfWork.Repository<UserRole>().ListAsync(
                 new Spec<UserRole>().Where(ur => ur.UserId == userId), cancellationToken);
+
+            var oldRoleIds = existing.Select(e => e.RoleId).Distinct().ToList();
+            var oldRoleEntities = oldRoleIds.Count > 0
+                ? await _unitOfWork.Repository<Role>().ListAsync(new Spec<Role>().Where(r => oldRoleIds.Contains(r.RoleId)), cancellationToken)
+                : (IReadOnlyList<Role>)Array.Empty<Role>();
+
+            var oldRoleCodes = oldRoleEntities.Select(r => r.Code).ToList();
             foreach (var existingEntry in existing)
             {
-                var oldRole = await _unitOfWork.Repository<Role>().GetByIdAsync(
-                    existingEntry.RoleId, cancellationToken);
-                if (oldRole is not null)
-                    oldRoleCodes.Add(oldRole.Code);
                 _unitOfWork.Repository<UserRole>().Delete(existingEntry);
             }
 
-            var newRoleCodes = new List<string>();
-            foreach (var roleId in roleIds.Distinct())
-            {
-                var role = await _unitOfWork.Repository<Role>().GetByIdAsync(roleId, cancellationToken);
-                if (role is null)
-                    throw new BusinessException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND");
+            var distinctRoleIds = roleIds.Distinct().ToList();
+            var newRoleEntities = distinctRoleIds.Count > 0
+                ? await _unitOfWork.Repository<Role>().ListAsync(new Spec<Role>().Where(r => distinctRoleIds.Contains(r.RoleId)), cancellationToken)
+                : (IReadOnlyList<Role>)Array.Empty<Role>();
 
-                var userRole = new UserRole { UserId = userId, RoleId = roleId };
+            if (newRoleEntities.Count != distinctRoleIds.Count)
+                throw new BusinessException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND");
+
+            var newRoleCodes = new List<string>();
+            foreach (var role in newRoleEntities)
+            {
+                var userRole = new UserRole { UserId = userId, RoleId = role.RoleId };
                 await _unitOfWork.Repository<UserRole>().AddAsync(userRole, cancellationToken);
                 newRoleCodes.Add(role.Code);
             }

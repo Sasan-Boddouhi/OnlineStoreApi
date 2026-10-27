@@ -28,9 +28,8 @@ namespace BusinessLogic.Services.Implementations
             var userId = _currentUser.TryGetCurrentUserId();
             if (userId is null) return Enumerable.Empty<SellerPayoutDto>();
 
-            var seller = (await _unitOfWork.Repository<Seller>()
-                .ListAsync(new Application.Common.Specifications.Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken))
-                .FirstOrDefault();
+            var seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Application.Common.Specifications.Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
             if (seller is null) return Enumerable.Empty<SellerPayoutDto>();
 
             var payouts = await _unitOfWork.Repository<SellerPayout>()

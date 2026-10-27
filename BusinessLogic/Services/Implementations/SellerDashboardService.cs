@@ -6,6 +6,7 @@ using Application.Interfaces;
 using BusinessLogic.DTOs.Dashboard;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
@@ -111,15 +112,9 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var (page, size) = NormalizePaging(pageNumber, pageSize);
 
-        // فقط آیتم‌های تحویل‌شده معیار «فروش» هستند.
-        var items = await _unitOfWork.Repository<OrderItem>()
-            .ListAsync(
-                new Spec<OrderItem>()
-                    .Where(i => i.Listing.SellerId == sellerId
-                             && i.Order.Status == OrderStatus.Delivered),
-                cancellationToken);
-
-        var ranked = items
+        var query = _unitOfWork.Repository<OrderItem>()
+            .Query()
+            .Where(i => i.Listing.SellerId == sellerId && i.Order.Status == OrderStatus.Delivered)
             .GroupBy(i => i.VariantId ?? 0)
             .Select(g => new
             {
@@ -128,12 +123,10 @@ public sealed class SellerDashboardService : ISellerDashboardService
                 Revenue = g.Sum(x => x.TotalPrice)
             })
             .OrderByDescending(x => x.QuantitySold)
-            .ThenByDescending(x => x.Revenue)
-            .ToList();
+            .ThenByDescending(x => x.Revenue);
 
-        // Phase 9 (R32): صفحه‌بندی روی مجموعهٔ کامل، سپس برش.
-        var totalCount = ranked.Count;
-        var pageRows = ranked.Skip((page - 1) * size).Take(size).ToList();
+        var totalCount = await query.CountAsync(cancellationToken);
+        var pageRows = await query.Skip((page - 1) * size).Take(size).ToListAsync(cancellationToken);
 
         if (pageRows.Count == 0)
             return new PagedResult<TopProductDto> { Items = Array.Empty<TopProductDto>(), PageNumber = page, PageSize = size, TotalCount = totalCount };

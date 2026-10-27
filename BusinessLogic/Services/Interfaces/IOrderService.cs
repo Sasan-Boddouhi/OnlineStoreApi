@@ -1,4 +1,4 @@
-﻿using BusinessLogic.DTOs.Invoice;
+using BusinessLogic.DTOs.Invoice;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
 using BusinessLogic.DTOs.Payment;
@@ -12,6 +12,9 @@ namespace BusinessLogic.Services.Interfaces
 
         // افزودن آیتم به سفارش (اگر سفارش در وضعیت Pending باشد)
         Task<OrderDto> AddItemToOrderAsync(int orderId, AddOrderItemDto itemDto, CancellationToken cancellationToken = default);
+
+        // افزودن دسته‌ای آیتم‌ها به سفارش در یک مرحله
+        Task<OrderDto> AddItemsToOrderAsync(int orderId, IEnumerable<AddOrderItemDto> itemsDto, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         // حذف آیتم از سفارش
         Task<OrderDto> RemoveItemFromOrderAsync(int orderId, int orderItemId, CancellationToken cancellationToken = default);
@@ -30,5 +33,8 @@ namespace BusinessLogic.Services.Interfaces
 
         // Phase 3: تحویل سفارش و ساخت تسویهٔ فروشندگان (عملیات مدیریتی)
         Task<OrderDto> MarkDeliveredAsync(int orderId, CancellationToken cancellationToken = default);
+
+        // Phase 9: مرجوعی سفارش تحویل‌شده
+        Task<OrderDto> MarkReturnedAsync(int orderId, CancellationToken cancellationToken = default);
     }
 }

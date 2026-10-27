@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -141,6 +141,11 @@ public sealed class ProvinceService : IProvinceService
         var entity = await _unitOfWork.Repository<Province>().GetByIdAsync(id, cancellationToken);
         if (entity == null)
             return false;
+
+        var hasCities = await _unitOfWork.Repository<City>()
+            .AnyAsync(c => c.ProvinceId == id, cancellationToken);
+        if (hasCities)
+            throw new BusinessException("این استان دارای شهر است و قابل حذف نیست.", "PROVINCE_HAS_CITIES");
 
         _unitOfWork.Repository<Province>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

@@ -158,9 +158,7 @@ public sealed class PaymentService : IPaymentService
         if (amount <= 0)
             throw new BusinessException("مبلغ سفارش نامعتبر است.", "INVALID_PAYMENT_AMOUNT");
 
-        var invoice = await EnsureInvoiceAsync(order, cancellationToken);
-
-        // ---- فراخوانی درگاه ----
+        // ---- فراخوانی درگاه (ابتدا درگاه صدا زده می‌شود تا در صورت شکست فاکتور بی‌مصرف ساخته نشود) ----
         var initiation = await _gateway.InitiateAsync(
             new PaymentInitiationRequest(orderId, amount, _settings.CallbackUrl, $"Order {orderId}"),
             cancellationToken);
@@ -176,31 +174,40 @@ public sealed class PaymentService : IPaymentService
                 initiation.ErrorCode ?? "PAYMENT_INITIATION_FAILED");
         }
 
-        var payment = new Payment
-        {
-            Amount = amount,
-            OrderId = orderId,
-            InvoiceId = invoice.InvoiceId,
-            Gateway = ResolveGatewayType(),
-            IdempotencyKey = key,
-            PaymentMethod = PaymentMethod.CreditCard,
-            State = PaymentState.Initiated
-        };
-
-        // پرداخت فقط بعد از دریافت Authority معتبر Pending می‌شود.
-        payment.TransactionId = initiation.Authority;
-        payment.TransitionTo(PaymentState.Pending);
-
-        await _unitOfWork.Repository<Payment>().AddAsync(payment, cancellationToken);
-
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        Payment payment;
         try
         {
+            var invoice = await EnsureInvoiceAsync(order, cancellationToken);
+
+            payment = new Payment
+            {
+                Amount = amount,
+                OrderId = orderId,
+                InvoiceId = invoice.InvoiceId,
+                Gateway = ResolveGatewayType(),
+                IdempotencyKey = key,
+                PaymentMethod = PaymentMethod.CreditCard,
+                State = PaymentState.Initiated
+            };
+
+            // پرداخت فقط بعد از دریافت Authority معتبر Pending می‌شود.
+            payment.TransactionId = initiation.Authority;
+            payment.TransitionTo(PaymentState.Pending);
+
+            await _unitOfWork.Repository<Payment>().AddAsync(payment, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // ثبت شروع پرداخت در AuditLog (بعد از دریافت شناسه از دیتابیس).
+            await AuditAsync(
+                "Payment.Initiated", payment.PaymentId, $"order={orderId}", cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (key is not null)
         {
-            // مسابقهٔ همزمانی: درخواست دیگر همان کلید را ثبت کرد.
-            // این دقیقاً همان حالتی است که idempotency برای آن وجود دارد.
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogWarning(ex, "Concurrent payment insert for key {Key}; returning existing", key);
 
             var winner = await FindByKeyAsync(key, cancellationToken);
@@ -219,11 +226,11 @@ public sealed class PaymentService : IPaymentService
                 IsReplay = true
             };
         }
-
-        // ثبت شروع پرداخت در AuditLog (بعد از دریافت شناسه از دیتابیس).
-        await AuditAsync(
-            "Payment.Initiated", payment.PaymentId, $"order={orderId}", cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+            throw;
+        }
 
         return new InitiatePaymentResultDto
         {

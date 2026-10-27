@@ -138,4 +138,41 @@ public class OrdersControllerIntegrationTests : ControllerIntegrationTestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task ReturnOrder_DeliveredOrder_ReturnsOk()
+    {
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var db = GetService<AppDbContext>();
+        var admin = await db.User.FirstAsync(u => u.PhoneNumber == "09123456789");
+
+        var customer = await db.Customer.FirstOrDefaultAsync(c => c.UserId == admin.UserId);
+        if (customer is null)
+        {
+            customer = new Customer { UserId = admin.UserId };
+            db.Customer.Add(customer);
+            await db.SaveChangesAsync();
+        }
+
+        var order = new Order
+        {
+            CustomerId = customer.CustomerId,
+            ShippingFullName = "Integration Test",
+            ShippingAddress = "Test Address",
+            ShippingPhoneNumber = "09120000000"
+        };
+        order.Confirm();
+        order.MarkDelivered();
+        db.Order.Add(order);
+        await db.SaveChangesAsync();
+
+        var response = await Client.PostAsync($"/api/v1/orders/{order.OrderId}/return", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<OrderDto>();
+        result.Should().NotBeNull();
+        result!.Status.Should().Be(OrderStatus.Returned.ToString());
+    }
 }

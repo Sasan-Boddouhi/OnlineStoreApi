@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -154,6 +154,11 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(id, cancellationToken);
         if (entity == null || !entity.IsActive)
             return false;
+
+        var hasProducts = await _unitOfWork.Repository<Product>()
+            .AnyAsync(p => p.SubcategoryId == id, cancellationToken);
+        if (hasProducts)
+            throw new BusinessException("این زیردسته‌بندی دارای محصول است و قابل حذف نیست.", "SUBCATEGORY_HAS_PRODUCTS");
 
         _unitOfWork.Repository<ProductSubcategory>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

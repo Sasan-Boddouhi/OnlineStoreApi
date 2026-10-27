@@ -78,15 +78,30 @@ namespace BusinessLogic.Services.Implementations
             var userId = _currentUser.TryGetCurrentUserId();
             if (userId is null) return Enumerable.Empty<InvoiceDto>();
 
-            var customer = (await _unitOfWork.Repository<Customer>()
-                .ListAsync(new Spec<Customer>().Where(c => c.UserId == userId.Value), cancellationToken))
-                .FirstOrDefault();
+            var customer = await _unitOfWork.Repository<Customer>()
+                .FirstOrDefaultAsync(new Spec<Customer>().Where(c => c.UserId == userId.Value), cancellationToken);
             if (customer is null) return Enumerable.Empty<InvoiceDto>();
 
             var invoices = await _unitOfWork.Repository<Invoice>()
                 .ListAsync(new Spec<Invoice>().Where(i => i.Order.CustomerId == customer.CustomerId).Include(i => i.Order), cancellationToken);
 
             return _mapper.Map<IEnumerable<InvoiceDto>>(invoices);
+        }
+
+        public async Task<InvoiceDto> MarkAsPaidAsync(int invoiceId, CancellationToken cancellationToken = default)
+        {
+            var invoice = await _unitOfWork.Repository<Invoice>()
+                .FirstOrDefaultAsync(new Spec<Invoice>().Where(i => i.InvoiceId == invoiceId).Include(i => i.Order), cancellationToken);
+
+            if (invoice is null)
+                throw new NotFoundException("فاکتور یافت نشد.", "INVOICE_NOT_FOUND");
+
+            invoice.MarkAsPaid();
+            _unitOfWork.Repository<Invoice>().Update(invoice);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Invoice {InvoiceId} marked as paid", invoiceId);
+            return _mapper.Map<InvoiceDto>(invoice);
         }
 
         private async Task EnsureCanAccessAsync(Invoice invoice, CancellationToken cancellationToken)

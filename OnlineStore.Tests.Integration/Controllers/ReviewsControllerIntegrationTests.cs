@@ -286,4 +286,34 @@ public class ReviewsControllerIntegrationTests : ControllerIntegrationTestBase
         list.Should().NotBeNull();
         list!.Should().Contain(r => r.SellerReviewId == review.SellerReviewId);
     }
+
+    [Fact]
+    public async Task GetPendingProductReviews_Admin_ReturnsOk()
+    {
+        var review = await CreateProductReviewAsync(approved: false);
+
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/reviews/product/pending");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = await response.Content.ReadFromJsonAsync<List<BusinessLogic.DTOs.Review.ProductReviewDto>>();
+        list.Should().NotBeNull();
+        list!.Should().Contain(r => r.ProductReviewId == review.ProductReviewId);
+    }
+
+    [Fact]
+    public async Task GetPendingSellerReviews_Admin_ReturnsOk()
+    {
+        var review = await CreateSellerReviewAsync(approved: false);
+
+        var token = await GetAdminTokenAsync();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.GetAsync("/api/v1/reviews/seller/pending");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var list = await response.Content.ReadFromJsonAsync<List<BusinessLogic.DTOs.Review.SellerReviewDto>>();
+        list.Should().NotBeNull();
+        list!.Should().Contain(r => r.SellerReviewId == review.SellerReviewId);
+    }
 }

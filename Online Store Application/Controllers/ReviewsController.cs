@@ -25,6 +25,11 @@ public class ReviewsController : ControllerBase
 
     // ==================== محصول ====================
 
+    [HttpGet("product/pending")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<IEnumerable<ProductReviewDto>>> GetPendingProductReviews(CancellationToken cancellationToken)
+        => Ok(await _reviewService.GetPendingProductReviewsAsync(cancellationToken));
+
     [HttpGet("product/{productId:int}")]
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<ProductReviewDto>>> GetProductReviews(
@@ -74,6 +79,11 @@ public class ReviewsController : ControllerBase
     }
 
     // ==================== فروشنده ====================
+
+    [HttpGet("seller/pending")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<IEnumerable<SellerReviewDto>>> GetPendingSellerReviews(CancellationToken cancellationToken)
+        => Ok(await _reviewService.GetPendingSellerReviewsAsync(cancellationToken));
 
     [HttpGet("seller/{sellerId:int}")]
     [AllowAnonymous]

@@ -48,9 +48,8 @@ public sealed class WarehouseService : IWarehouseService
         }
         else
         {
-            var seller = (await _unitOfWork.Repository<Seller>()
-                .ListAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken))
-                .FirstOrDefault();
+            var seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken);
             if (seller != null)
                 entity.SellerId = seller.SellerId;
         }
@@ -113,9 +112,8 @@ public sealed class WarehouseService : IWarehouseService
 
         if (!isAdmin)
         {
-            var seller = (await _unitOfWork.Repository<Seller>()
-                .ListAsync(new Spec<Seller>().Where(s => s.UserId == userId), cancellationToken))
-                .FirstOrDefault();
+            var seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId), cancellationToken);
             if (seller == null || entity.SellerId != seller.SellerId)
                 throw new ForbiddenException("WAREHOUSE_FORBIDDEN");
         }
@@ -153,9 +151,8 @@ public sealed class WarehouseService : IWarehouseService
 
         if (!isAdmin)
         {
-            var seller = (await _unitOfWork.Repository<Seller>()
-                .ListAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken))
-                .FirstOrDefault();
+            var seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken);
             if (seller == null || entity.SellerId != seller.SellerId)
                 throw new ForbiddenException("WAREHOUSE_FORBIDDEN");
         }

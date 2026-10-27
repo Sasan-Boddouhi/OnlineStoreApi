@@ -546,5 +546,8 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
 
         public Task<OrderDto> MarkDeliveredAsync(int orderId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public Task<OrderDto> MarkReturnedAsync(int orderId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

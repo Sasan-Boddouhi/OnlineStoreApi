@@ -481,13 +481,10 @@ namespace BusinessLogic.Services.Implementations
                 orderId = created.OrderId;
                 result = created;
 
-                foreach (var item in cart.Items.OrderBy(i => i.CartItemId))
-                {
-                    result = await _orderService.AddItemToOrderAsync(
-                        orderId,
-                        new AddOrderItemDto { ListingId = item.ListingId, Quantity = item.Quantity },
-                        cancellationToken);
-                }
+                var itemsDto = cart.Items.OrderBy(i => i.CartItemId)
+                    .Select(item => new AddOrderItemDto { ListingId = item.ListingId, Quantity = item.Quantity });
+
+                result = await _orderService.AddItemsToOrderAsync(orderId, itemsDto, cancellationToken);
 
                 // ---- پاک‌سازی سبد ----
                 foreach (var item in cart.Items.ToList())

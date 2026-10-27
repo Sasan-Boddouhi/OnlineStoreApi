@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using Application.Interfaces;
 using Application.Common.Specifications;
 using Application.Exceptions;
@@ -72,6 +72,11 @@ public sealed class ProductCategoryService : IProductCategoryService
                     id, _currentUserService.GetCurrentUserName(), DateTime.Now);
                 return false;
             }
+
+            var hasSubcategories = await _unitOfWork.Repository<ProductSubcategory>()
+                .AnyAsync(sc => sc.CategoryId == id, cancellationToken);
+            if (hasSubcategories)
+                throw new BusinessException("این دسته‌بندی دارای زیردسته‌بندی است و قابل حذف نیست.", "CATEGORY_HAS_SUBCATEGORIES");
 
             _unitOfWork.Repository<ProductCategory>().Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

@@ -36,5 +36,9 @@ namespace BusinessLogic.Services.Interfaces
         Task RejectSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default);
 
         Task DeleteSellerReviewAsync(int reviewId, CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<ProductReviewDto>> GetPendingProductReviewsAsync(CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<SellerReviewDto>> GetPendingSellerReviewsAsync(CancellationToken cancellationToken = default);
     }
 }

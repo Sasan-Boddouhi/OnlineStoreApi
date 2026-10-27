@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -129,6 +129,11 @@ public sealed class CityService : ICityService
             _logger.LogWarning("Delete failed: city not found {Id}", id);
             return false;
         }
+
+        var hasAddresses = await _unitOfWork.Repository<Address>()
+            .AnyAsync(a => a.CityId == id, cancellationToken);
+        if (hasAddresses)
+            throw new BusinessException("این شهر دارای آدرس است و قابل حذف نیست.", "CITY_HAS_ADDRESSES");
 
         _unitOfWork.Repository<City>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
