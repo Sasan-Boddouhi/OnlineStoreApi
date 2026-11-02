@@ -82,13 +82,14 @@ public class ListingsController : ControllerBase
 
     [HttpPut("{id:int}")]
     [Authorize]
-    public async Task<ActionResult<SellerProductDto>> Update(
+    public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateSellerProductDto dto,
         CancellationToken cancellationToken)
     {
         var sellerId = await GetCurrentSellerIdAsync(cancellationToken);
-        return Ok(await _sellerService.UpdateListingAsync(sellerId, id, dto, cancellationToken));
+        await _sellerService.UpdateListingAsync(sellerId, id, dto, cancellationToken);
+        return NoContent();
     }
 
     [HttpDelete("{id:int}")]
@@ -107,7 +108,7 @@ public class ListingsController : ControllerBase
 
     [HttpPatch("{id:int}/price")]
     [Authorize]
-    public async Task<ActionResult<SellerProductDto>> UpdatePrice(
+    public async Task<IActionResult> UpdatePrice(
         int id,
         [FromBody] UpdateListingPriceRequest request,
         CancellationToken cancellationToken)
@@ -117,7 +118,7 @@ public class ListingsController : ControllerBase
         if (updated is null)
             return NotFound();
 
-        return Ok(updated);
+        return NoContent();
     }
 
     /// <summary>

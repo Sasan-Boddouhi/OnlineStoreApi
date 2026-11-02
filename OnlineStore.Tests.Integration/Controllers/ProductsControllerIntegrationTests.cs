@@ -308,7 +308,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             Sku = $"SKU-UPD-{Guid.NewGuid():N}"
         };
         var createRes = await Client.PostAsJsonAsync($"/api/v1/products/{product.ProductId}/variants", createVariantDto);
-        createRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        createRes.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await createRes.Content.ReadFromJsonAsync<ProductVariantDto>();
 
         // 3. Update the variant
@@ -319,10 +319,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             IsActive = true
         };
         var updateRes = await Client.PutAsJsonAsync($"/api/v1/products/{product.ProductId}/variants/{created!.VariantId}", updateDto);
-        updateRes.StatusCode.Should().Be(HttpStatusCode.OK);
-        var updated = await updateRes.Content.ReadFromJsonAsync<ProductVariantDto>();
-        updated.Should().NotBeNull();
-        updated!.Name.Should().Be("Variant After Update");
+        updateRes.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
     [Fact]
@@ -381,7 +378,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             Type = AttributeType.Color
         };
         var attrRes = await Client.PostAsJsonAsync($"/api/v1/products/{product.ProductId}/attributes", createAttrDto);
-        attrRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        attrRes.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // 3. Get attributes (AllowAnonymous)
         Client.DefaultRequestHeaders.Authorization = null;

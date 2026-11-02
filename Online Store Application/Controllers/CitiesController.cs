@@ -74,7 +74,7 @@ public class CitiesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create(
         [FromBody] CreateCityDto dto,
         CancellationToken cancellationToken)
@@ -87,7 +87,7 @@ public class CitiesController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateCityDto dto,
@@ -107,7 +107,7 @@ public class CitiesController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
         var deleted = await _cityService.DeleteAsync(id, cancellationToken);

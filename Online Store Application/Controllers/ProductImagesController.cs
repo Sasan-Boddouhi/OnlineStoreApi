@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using BusinessLogic.DTOs.Media;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -51,7 +51,27 @@ public class ProductImagesController : ControllerBase
             isPrimary,
             cancellationToken);
 
-        return Ok(result);
+        return CreatedAtAction(nameof(Get), new { productId }, result);
+    }
+
+    [HttpPost("url")]
+    [Authorize(Policy = "CanManageCatalog")]
+    public async Task<ActionResult<ProductImageDto>> AddByUrl(
+        int productId,
+        [FromBody] AddProductImageUrlRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _imageService.AddAsync(
+            productId,
+            request.Url,
+            request.Alt,
+            request.IsPrimary,
+            cancellationToken);
+
+        return CreatedAtAction(nameof(Get), new { productId }, result);
     }
 
     [HttpDelete("{imageId:int}")]
@@ -61,4 +81,11 @@ public class ProductImagesController : ControllerBase
         await _imageService.DeleteAsync(productId, imageId, cancellationToken);
         return NoContent();
     }
+}
+
+public class AddProductImageUrlRequest
+{
+    public string Url { get; set; } = null!;
+    public string? Alt { get; set; }
+    public bool IsPrimary { get; set; }
 }

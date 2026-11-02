@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Asp.Versioning;
 using BusinessLogic.DTOs.Invoice;
 using BusinessLogic.Services.Interfaces;
@@ -42,6 +43,15 @@ public class InvoicesController : ControllerBase
         return Ok(invoices);
     }
 
+    [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Create([FromBody] CreateInvoiceRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var created = await _invoiceService.CreateInvoiceAsync(request.OrderId, request.TaxAmount, request.DiscountAmount, cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = created.InvoiceId }, created);
+    }
+
     [HttpPost("{id:int}/pay")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> MarkAsPaid(int id, CancellationToken cancellationToken = default)
@@ -49,4 +59,16 @@ public class InvoicesController : ControllerBase
         var invoice = await _invoiceService.MarkAsPaidAsync(id, cancellationToken);
         return Ok(invoice);
     }
+}
+
+public class CreateInvoiceRequest
+{
+    [Range(1, int.MaxValue, ErrorMessage = "OrderId must be a positive integer.")]
+    public int OrderId { get; set; }
+
+    [Range(0, double.MaxValue, ErrorMessage = "TaxAmount cannot be negative.")]
+    public decimal TaxAmount { get; set; } = 0;
+
+    [Range(0, double.MaxValue, ErrorMessage = "DiscountAmount cannot be negative.")]
+    public decimal DiscountAmount { get; set; } = 0;
 }

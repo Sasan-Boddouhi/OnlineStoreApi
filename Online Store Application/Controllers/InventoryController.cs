@@ -30,6 +30,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("available/{listingId:int}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAvailable(int listingId)
     {
         var available = await _inventoryService.GetAvailableAsync(listingId);

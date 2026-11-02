@@ -74,7 +74,7 @@ public class ProvincesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create(
         [FromBody] CreateProvinceDto dto,
         CancellationToken cancellationToken)
@@ -87,7 +87,7 @@ public class ProvincesController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateProvinceDto dto,
@@ -109,7 +109,7 @@ public class ProvincesController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
         var deleted = await _provinceService.DeleteAsync(id, cancellationToken);

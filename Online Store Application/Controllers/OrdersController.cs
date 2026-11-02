@@ -59,6 +59,11 @@ public class OrdersController : ControllerBase
     public async Task<ActionResult<OrderDto>> Deliver(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.MarkDeliveredAsync(id, cancellationToken));
 
+    [HttpPost("{id:int}/confirm")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<OrderDto>> Confirm(int id, CancellationToken cancellationToken)
+        => Ok(await _orderService.ConfirmOrderAsync(id, cancellationToken));
+
     [HttpPost("{id:int}/cancel")]
     public async Task<ActionResult<OrderDto>> Cancel(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.CancelOrderAsync(id, cancellationToken));

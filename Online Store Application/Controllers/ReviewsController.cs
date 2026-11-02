@@ -51,7 +51,7 @@ public class ReviewsController : ControllerBase
             ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         var review = await _reviewService.AddProductReviewAsync(userId, productId, dto, cancellationToken);
-        return Ok(review);
+        return CreatedAtAction(nameof(GetProductReviews), new { productId }, review);
     }
 
     [HttpPost("product/{reviewId:int}/approve")]
@@ -103,7 +103,7 @@ public class ReviewsController : ControllerBase
             ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         var review = await _reviewService.AddSellerReviewAsync(userId, sellerId, dto, cancellationToken);
-        return Ok(review);
+        return CreatedAtAction(nameof(GetSellerReviews), new { sellerId }, review);
     }
 
     [HttpPost("seller/{reviewId:int}/approve")]

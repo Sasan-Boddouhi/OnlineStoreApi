@@ -27,11 +27,17 @@ public class SellersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize]
     public async Task<ActionResult<SellerDto>> Create(
         [FromBody] CreateSellerDto dto,
         CancellationToken cancellationToken)
     {
+        if (!User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            dto.UserId = userId;
+        }
+
         var created = await _sellerService.CreateAsync(dto, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = created.SellerId }, created);
     }
@@ -69,12 +75,23 @@ public class SellersController : ControllerBase
         => Ok(await _sellerService.GetByIdAsync(id, cancellationToken));
 
     [HttpPut("{id:int}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize]
     public async Task<ActionResult<SellerDto>> Update(
         int id,
         [FromBody] UpdateSellerDto dto,
         CancellationToken cancellationToken)
-        => Ok(await _sellerService.UpdateAsync(id, dto, cancellationToken));
+    {
+        if (!User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            var seller = await _sellerService.GetByIdAsync(id, cancellationToken);
+            if (seller == null) return NotFound();
+            if (seller.UserId != userId)
+                return Forbid();
+        }
+
+        return Ok(await _sellerService.UpdateAsync(id, dto, cancellationToken));
+    }
 
     [HttpDelete("{id:int}")]
     [Authorize(Policy = "AdminOnly")]

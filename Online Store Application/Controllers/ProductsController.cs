@@ -165,7 +165,8 @@ public class ProductsController : ControllerBase
         [FromBody] CreateProductVariantDto dto)
     {
         dto.ProductId = id;
-        return Ok(await _productService.CreateVariantAsync(dto));
+        var created = await _productService.CreateVariantAsync(dto);
+        return CreatedAtAction(nameof(GetVariants), new { id }, created);
     }
 
     [HttpGet("{id:int}/attributes")]
@@ -182,12 +183,13 @@ public class ProductsController : ControllerBase
         [FromBody] CreateProductAttributeDto dto)
     {
         dto.ProductId = id;
-        return Ok(await _productService.CreateAttributeAsync(dto));
+        var created = await _productService.CreateAttributeAsync(dto);
+        return CreatedAtAction(nameof(GetAttributes), new { id }, created);
     }
 
     [HttpPut("{id:int}/variants/{variantId:int}")]
     [Authorize(Policy = "CanManageCatalog")]
-    public async Task<ActionResult<ProductVariantDto>> UpdateVariant(
+    public async Task<IActionResult> UpdateVariant(
         int id,
         int variantId,
         [FromBody] UpdateProductVariantDto dto,
@@ -197,7 +199,7 @@ public class ProductsController : ControllerBase
         if (updated is null)
             return NotFound();
 
-        return Ok(updated);
+        return NoContent();
     }
 
     [HttpDelete("{id:int}/variants/{variantId:int}")]

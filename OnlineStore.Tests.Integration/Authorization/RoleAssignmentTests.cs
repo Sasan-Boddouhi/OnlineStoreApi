@@ -53,7 +53,7 @@ public class RoleAssignmentTests : ControllerIntegrationTestBase
         };
 
         var response = await client.PutAsJsonAsync($"/api/v1/users/{targetUserId}/roles", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Do NOT use DbContext.Users.Include... because it might be cached.
         // Query the join table directly with AsNoTracking to bypass the cache.
@@ -200,7 +200,7 @@ public class RoleAssignmentTests : ControllerIntegrationTestBase
         };
 
         var response = await client.PutAsJsonAsync($"/api/v1/users/{targetUserId}/roles", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Verify security stamp changed — query from DB directly with AsNoTracking
         var updatedUser = await db.User

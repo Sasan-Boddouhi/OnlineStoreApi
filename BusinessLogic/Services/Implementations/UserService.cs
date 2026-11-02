@@ -228,6 +228,31 @@ public sealed class UserService : IUserService
         return await GetByIdAsync(user.UserId, includeRoles: true, cancellationToken);
     }
 
+    public async Task<UserDto?> UpdateProfileAsync(int userId, UpdateUserProfileDto dto, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating profile for user ID: {UserId}", userId);
+
+        var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            _logger.LogWarning("User not found for profile update with ID: {UserId}", userId);
+            return null;
+        }
+
+        user.FirstName = dto.FirstName.Trim();
+        user.LastName = dto.LastName.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.DateOfBirth))
+            user.DateOfBirth = PersianDateHelper.ToGregorian(dto.DateOfBirth);
+
+        _unitOfWork.Repository<User>().Update(user);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await InvalidateUserCache(userId, cancellationToken);
+        _logger.LogInformation("User profile updated successfully: {UserId}", userId);
+
+        return await GetByIdAsync(userId, includeRoles: true, cancellationToken);
+    }
+
     #endregion
 
     #region DeleteAsync

@@ -137,6 +137,22 @@ public class UsersController : ControllerBase
             created);
     }
 
+    // PUT: api/users/me
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateUserProfileDto dto, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var updated = await _userService.UpdateProfileAsync(userId, dto, cancellationToken);
+        if (updated == null) return NotFound();
+        return Ok(updated);
+    }
+
     // PUT: api/users/{id}
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
@@ -181,7 +197,16 @@ public class UsersController : ControllerBase
             return BadRequest(ModelState);
 
         await _userService.AssignRolesAsync(id, dto.RoleIds);
-        return Ok();
+        return NoContent();
+    }
+
+    // GET: api/users/roles
+    [Authorize(Policy = "AdminOnly")]
+    [HttpGet("roles")]
+    public async Task<IActionResult> GetRoles([FromQuery] string? userType, CancellationToken cancellationToken)
+    {
+        var roles = await _userService.GetRolesAsync(userType, cancellationToken);
+        return Ok(roles);
     }
 
     // ==================== Address Endpoints ====================

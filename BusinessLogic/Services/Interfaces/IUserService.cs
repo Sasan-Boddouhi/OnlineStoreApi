@@ -19,6 +19,7 @@ public interface IUserService
 
     // متدهای نوشتاری
     Task<UserDto?> UpdateAsync(UpdateUserDto dto, CancellationToken cancellationToken = default);
+    Task<UserDto?> UpdateProfileAsync(int userId, UpdateUserProfileDto dto, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
     Task<bool> SetActiveStatusAsync(int id, bool isActive, CancellationToken cancellationToken = default);
 

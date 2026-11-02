@@ -100,10 +100,9 @@ public class ListingsControllerIntegrationTests : ControllerIntegrationTestBase
 
         var response = await Client.PutAsJsonAsync($"/api/v1/listings/{listing.ListingId}", updateDto);
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var updated = await response.Content.ReadFromJsonAsync<SellerProductDto>();
-        updated.Should().NotBeNull();
-        updated!.Price.Should().Be(150);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var reloaded = await db.SellerProduct.AsNoTracking().FirstAsync(l => l.ListingId == listing.ListingId);
+        reloaded.Price.Should().Be(150);
     }
 
     [Fact]
@@ -164,10 +163,9 @@ public class ListingsControllerIntegrationTests : ControllerIntegrationTestBase
 
         var response = await Client.PatchAsJsonAsync($"/api/v1/listings/{listing.ListingId}/price", patchDto);
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var updated = await response.Content.ReadFromJsonAsync<SellerProductDto>();
-        updated.Should().NotBeNull();
-        updated!.Price.Should().Be(175);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var reloaded = await db.SellerProduct.AsNoTracking().FirstAsync(l => l.ListingId == listing.ListingId);
+        reloaded.Price.Should().Be(175);
     }
 
     [Fact]

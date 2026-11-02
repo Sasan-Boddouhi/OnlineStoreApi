@@ -53,6 +53,14 @@ public class RolesController : ControllerBase
         return Ok(permissions);
     }
 
+    [HttpGet("permissions/{id:int}")]
+    public async Task<IActionResult> GetPermissionById(int id, CancellationToken cancellationToken = default)
+    {
+        var permission = await _permissionService.GetByIdAsync(id, cancellationToken);
+        if (permission == null) return NotFound();
+        return Ok(permission);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateRoleDto dto)
     {
