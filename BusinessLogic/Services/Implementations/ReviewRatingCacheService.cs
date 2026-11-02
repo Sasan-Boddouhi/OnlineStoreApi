@@ -1,6 +1,7 @@
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Interfaces;
+using Application.Interfaces.Services;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -16,13 +17,16 @@ public sealed class ReviewRatingCacheService : IReviewRatingCacheService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ReviewRatingCacheService> _logger;
+    private readonly ICacheService? _cacheService;
 
     public ReviewRatingCacheService(
         IUnitOfWork unitOfWork,
-        ILogger<ReviewRatingCacheService> logger)
+        ILogger<ReviewRatingCacheService> logger,
+        ICacheService? cacheService = null)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     public async Task RecalculateProductAsync(int productId, CancellationToken cancellationToken = default)
@@ -44,6 +48,11 @@ public sealed class ReviewRatingCacheService : IReviewRatingCacheService
 
         _unitOfWork.Repository<Product>().Update(product);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (_cacheService != null)
+        {
+            await _cacheService.RemoveAsync($"products:{productId}", cancellationToken);
+        }
 
         _logger.LogInformation(
             "Rating cache updated for product {ProductId}: {Average} / {Count}",

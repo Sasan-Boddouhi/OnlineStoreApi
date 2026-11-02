@@ -24,7 +24,10 @@ public class OrdersController : ControllerBase
         _currentUser = currentUser;
     }
 
+    /// <summary>دریافت فهرست سفارش‌های کاربر جاری.</summary>
     [HttpGet]
+    [ProducesResponseType(typeof(IEnumerable<OrderDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<IEnumerable<OrderDto>>> GetOrders(
         CancellationToken cancellationToken)
     {
@@ -33,7 +36,11 @@ public class OrdersController : ControllerBase
         return Ok(orders);
     }
 
+    /// <summary>دریافت جزئیات یک سفارش بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(OrderDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderDetailsDto>> GetOrderById(
         int id,
         CancellationToken cancellationToken)
@@ -56,20 +63,42 @@ public class OrdersController : ControllerBase
     /// </summary>
     [HttpPost("{id:int}/deliver")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderDto>> Deliver(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.MarkDeliveredAsync(id, cancellationToken));
 
+    /// <summary>تأیید سفارش توسط ادمین.</summary>
     [HttpPost("{id:int}/confirm")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderDto>> Confirm(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.ConfirmOrderAsync(id, cancellationToken));
 
+    /// <summary>لغو سفارش.</summary>
     [HttpPost("{id:int}/cancel")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderDto>> Cancel(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.CancelOrderAsync(id, cancellationToken));
 
+    /// <summary>مرجوع کردن سفارش توسط ادمین.</summary>
     [HttpPost("{id:int}/return")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderDto>> ReturnOrder(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.MarkReturnedAsync(id, cancellationToken));
 }

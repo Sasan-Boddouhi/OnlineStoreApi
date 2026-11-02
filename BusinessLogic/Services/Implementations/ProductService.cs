@@ -4,6 +4,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Interfaces.Services;
 using AutoMapper;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.Shared;
@@ -25,19 +26,22 @@ public sealed class ProductService : IProductService
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ProductService> _logger;
     private readonly IAuditService _auditService;
+    private readonly ICacheService? _cacheService;
 
     public ProductService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         ICurrentUserService currentUserService,
         IAuditService auditService,
-        ILogger<ProductService> logger)
+        ILogger<ProductService> logger,
+        ICacheService? cacheService = null)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _currentUserService = currentUserService;
         _auditService = auditService;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     #region Query
@@ -47,6 +51,17 @@ public sealed class ProductService : IProductService
         CancellationToken cancellationToken = default)
     {
         using var activity = ActivitySource.StartActivity("Product.GetByQuery", ActivityKind.Internal);
+
+        var cacheKey = $"products:all:{query.GetHashCode()}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<PagedResult<ProductDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+            {
+                activity?.SetTag("cache.hit", true);
+                return cached;
+            }
+        }
 
         try
         {
@@ -76,13 +91,20 @@ public sealed class ProductService : IProductService
             activity?.SetTag("page.size", pageSize);
             activity?.SetStatus(ActivityStatusCode.Ok);
 
-            return new PagedResult<ProductDto>
+            var result = new PagedResult<ProductDto>
             {
                 Items = items,
                 TotalCount = totalCount,
                 PageNumber = pageNumber,
                 PageSize = pageSize
             };
+
+            if (_cacheService != null)
+            {
+                await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5), cancellationToken);
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
@@ -98,6 +120,17 @@ public sealed class ProductService : IProductService
         using var activity = ActivitySource.StartActivity("Product.GetById", ActivityKind.Internal);
         activity?.SetTag("product.id", id);
 
+        var cacheKey = $"products:{id}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<ProductDto>(cacheKey, cancellationToken);
+            if (cached != null)
+            {
+                activity?.SetTag("cache.hit", true);
+                return cached;
+            }
+        }
+
         try
         {
             var spec = new Spec<Product>().Where(p => p.ProductId == id).Where(p => p.IsActive);
@@ -107,6 +140,11 @@ public sealed class ProductService : IProductService
 
             activity?.SetTag("product.found", result != null);
             activity?.SetStatus(ActivityStatusCode.Ok);
+
+            if (_cacheService != null && result != null)
+            {
+                await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5), cancellationToken);
+            }
 
             return result;
         }
@@ -215,6 +253,11 @@ public sealed class ProductService : IProductService
             _unitOfWork.Repository<Product>().Update(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (_cacheService != null)
+            {
+                await _cacheService.RemoveAsync($"products:{dto.ProductId}", cancellationToken);
+            }
+
             _logger.LogInformation("Product updated successfully: {ProductId}", dto.ProductId);
             return await GetByIdAsync(entity.ProductId, cancellationToken);
         }
@@ -252,6 +295,11 @@ public sealed class ProductService : IProductService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            if (_cacheService != null)
+            {
+                await _cacheService.RemoveAsync($"products:{id}", cancellationToken);
+            }
 
             _logger.LogInformation("Product soft deleted successfully: {ProductId}", id);
             return true;

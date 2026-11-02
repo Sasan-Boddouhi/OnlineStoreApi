@@ -1,5 +1,6 @@
 using Application.Entities;
 using Application.Interfaces;
+using Application.Interfaces.Services;
 using Application.Common.Specifications;
 using Application.Exceptions;
 using AutoMapper;
@@ -12,21 +13,26 @@ namespace BusinessLogic.Services.Implementations;
 
 public sealed class ProductCategoryService : IProductCategoryService
 {
+    private const string AllCategoriesCacheKey = "categories:all";
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ProductCategoryService> _logger;
+    private readonly ICacheService? _cacheService;
 
     public ProductCategoryService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         ICurrentUserService currentUserService,
-        ILogger<ProductCategoryService> logger)
+        ILogger<ProductCategoryService> logger,
+        ICacheService? cacheService = null)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _currentUserService = currentUserService;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     #region Create
@@ -43,6 +49,9 @@ public sealed class ProductCategoryService : IProductCategoryService
             var entity = _mapper.Map<ProductCategory>(dto);
             await _unitOfWork.Repository<ProductCategory>().AddAsync(entity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_cacheService != null)
+                await _cacheService.RemoveAsync(AllCategoriesCacheKey, cancellationToken);
 
             _logger.LogInformation("Category created by {User} at {Time}. Id={Id}, Name={Name}",
                 _currentUserService.GetCurrentUserName(), DateTime.Now, entity.CategoryId, entity.CategoryName);
@@ -80,6 +89,12 @@ public sealed class ProductCategoryService : IProductCategoryService
             _unitOfWork.Repository<ProductCategory>().Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (_cacheService != null)
+            {
+                await _cacheService.RemoveAsync(AllCategoriesCacheKey, cancellationToken);
+                await _cacheService.RemoveAsync($"categories:{id}", cancellationToken);
+            }
+
             _logger.LogInformation("Category deleted successfully by {User} at {Time}. Deleted id={Id}",
                 _currentUserService.GetCurrentUserName(), DateTime.Now, id);
             return true;
@@ -98,6 +113,13 @@ public sealed class ProductCategoryService : IProductCategoryService
 
     public async Task<IEnumerable<ProductCategoryDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<List<ProductCategoryDto>>(AllCategoriesCacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         try
         {
             var spec = new Spec<ProductCategory>()
@@ -107,10 +129,15 @@ public sealed class ProductCategoryService : IProductCategoryService
             var categories = await _unitOfWork.Repository<ProductCategory>()
                 .ListAsync(spec, ProductCategoryQueryConfig.Projection, cancellationToken);
 
+            var list = categories.ToList();
+
+            if (_cacheService != null)
+                await _cacheService.SetAsync(AllCategoriesCacheKey, list, TimeSpan.FromHours(1), cancellationToken);
+
             _logger.LogInformation("{Count} categories fetched by {User} at {Time}.",
                 categories.Count, _currentUserService.GetCurrentUserName(), DateTime.Now);
 
-            return categories;
+            return list;
         }
         catch (Exception ex)
         {
@@ -126,6 +153,14 @@ public sealed class ProductCategoryService : IProductCategoryService
 
     public async Task<ProductCategoryDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"categories:{id}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<ProductCategoryDto>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         try
         {
             var spec = new Spec<ProductCategory>()
@@ -139,8 +174,13 @@ public sealed class ProductCategoryService : IProductCategoryService
                 _logger.LogWarning("Category with Id={Id} not found. Requested by {User} at {Time}.",
                     id, _currentUserService.GetCurrentUserName(), DateTime.Now);
             else
+            {
+                if (_cacheService != null)
+                    await _cacheService.SetAsync(cacheKey, dto, TimeSpan.FromHours(1), cancellationToken);
+
                 _logger.LogInformation("Category fetched by {User} at {Time}. Id={Id}",
                     _currentUserService.GetCurrentUserName(), DateTime.Now, id);
+            }
 
             return dto;
         }
@@ -175,6 +215,12 @@ public sealed class ProductCategoryService : IProductCategoryService
             _mapper.Map(dto, entity);
             _unitOfWork.Repository<ProductCategory>().Update(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            if (_cacheService != null)
+            {
+                await _cacheService.RemoveAsync(AllCategoriesCacheKey, cancellationToken);
+                await _cacheService.RemoveAsync($"categories:{entity.CategoryId}", cancellationToken);
+            }
 
             var updatedDto = _mapper.Map<ProductCategoryDto>(entity);
             _logger.LogInformation("Category updated by {User} at {Time}. Id={Id}",

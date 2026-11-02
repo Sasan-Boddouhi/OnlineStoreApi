@@ -1,3 +1,5 @@
+using Application.BackgroundJobs;
+using Infrastructure.BackgroundJobs;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Asp.Versioning;
@@ -166,7 +168,7 @@ builder.Services.AddDataLayerServices(databaseOptions);
 builder.Services.AddApplicationHealthChecks(databaseOptions, redisOptions);
 
 builder.Services.AddBusinessLogicServices();
-builder.Services.AddAutoMapper(typeof(CreateUserMappingProfile).Assembly);
+builder.Services.AddAutoMapper(cfg => { }, typeof(CreateUserMappingProfile).Assembly);
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssemblyContaining<CreateUserCommandHandler>();
@@ -193,8 +195,17 @@ builder.Services.Configure<StorageSettings>(
 // وگرنه IProductImageService در زمان اجرا قابل ساخت نیست.
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
 // ---------------- Phase 8: Payment ----------------
-builder.Services.Configure<PaymentGatewaySettings>(
-    builder.Configuration.GetSection(PaymentGatewaySettings.SectionName));
+builder.Services.AddOptions<PaymentGatewaySettings>()
+    .Bind(builder.Configuration.GetSection(PaymentGatewaySettings.SectionName))
+    .Validate(settings =>
+    {
+        if (builder.Environment.IsProduction())
+        {
+            return !string.IsNullOrWhiteSpace(settings.WebhookSecret);
+        }
+        return true;
+    }, "PaymentGatewaySettings:WebhookSecret must be configured in production environment.")
+    .ValidateOnStart();
 
 builder.Services.AddHttpClient();
 
@@ -220,6 +231,14 @@ builder.Services.Configure<AbandonedPaymentSettings>(
 builder.Services.TryAddSingleton(TimeProvider.System);
 
 builder.Services.AddHostedService<AbandonedPaymentCleanupService>();
+builder.Services.AddHostedService<CartCleanupService>();
+builder.Services.AddHostedService<ExpiredTokenCleanupService>();
+
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddBackgroundProcessing(builder.Configuration);
+    builder.Services.AddBackgroundJobHandler<MaintenanceHeartbeatJob, MaintenanceHeartbeatJobHandler>();
+}
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
@@ -449,6 +468,20 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swa
         }
     });
 }
+
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+    context.Response.Headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
 
 app.UseStaticFiles();
 

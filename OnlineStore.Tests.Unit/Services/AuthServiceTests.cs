@@ -1,4 +1,4 @@
-﻿using Application.Common.Specifications;
+using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
@@ -335,7 +335,7 @@ public class AuthServiceTests
     // LOGIN - USER LOCKED OUT
     // ---------------------------------------------------------------
     [Fact]
-    public async Task LoginAsync_UserLockedOut_ReturnsNull()
+    public async Task LoginAsync_UserLockedOut_ThrowsLockedOutException()
     {
         var user = new User
         {
@@ -352,8 +352,41 @@ public class AuthServiceTests
         _userRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<User>>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync(user);
 
-        var result = await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "any" });
-        result.Should().BeNull();
+        var act = async () => await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "any" });
+        var ex = await act.Should().ThrowAsync<LockedOutException>();
+        ex.Which.StatusCode.Should().Be(403);
+        ex.Which.RemainingSeconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task LoginAsync_LockoutExpired_ResetsFailedAttemptsAndAllowsLogin()
+    {
+        var user = new User
+        {
+            UserId = 1,
+            FirstName = "Test",
+            LastName = "User",
+            PhoneNumber = "09120000000",
+            PasswordHash = "hashed",
+            IsActive = true,
+            UserType = UserType.Customer,
+            SecurityStamp = "stamp",
+            FailedLoginAttempts = 5,
+            LockoutEnd = DateTime.UtcNow.AddMinutes(-5) // Expired 5 min ago
+        };
+        _userRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<User>>(), It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(user);
+        _hasherMock.Setup(h => h.Verify("correct_pass", user.PasswordHash)).Returns(true);
+        _jwtMock.Setup(j => j.GenerateToken(It.IsAny<List<Claim>>())).Returns("access_token");
+        _jwtMock.Setup(j => j.GenerateRefreshToken()).Returns("refresh_token");
+        _sessionRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<UserSession>>(), It.IsAny<CancellationToken>()))
+                        .ReturnsAsync(new List<UserSession>());
+
+        var result = await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "correct_pass" });
+
+        result.Should().NotBeNull();
+        user.LockoutEnd.Should().BeNull();
+        user.FailedLoginAttempts.Should().Be(0);
     }
 
     // ---------------------------------------------------------------

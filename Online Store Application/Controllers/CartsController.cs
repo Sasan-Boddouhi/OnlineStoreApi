@@ -1,4 +1,4 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Application.Exceptions;
 using Application.Interfaces;
 using BusinessLogic.DTOs.Cart;
@@ -57,12 +57,16 @@ public class CartsController : ControllerBase
     /// <summary>سبد فعلی؛ برای مهمان ساخته می‌شود.</summary>
     [HttpGet("current")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(CartDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<CartDto>> GetCurrent(CancellationToken cancellationToken)
         => Ok(await _cartService.GetCartAsync(UserId, SessionId, cancellationToken));
 
     /// <summary>افزودن قلم به سبد.</summary>
     [HttpPost("items")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(CartDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CartDto>> AddItem(
         [FromBody] AddCartItemDto dto,
         CancellationToken cancellationToken)
@@ -71,6 +75,10 @@ public class CartsController : ControllerBase
     /// <summary>تغییر تعداد یک قلم.</summary>
     [HttpPut("items/{listingId:int}")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(CartDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CartDto>> UpdateQuantity(
         int listingId,
         [FromBody] UpdateCartItemDto dto,
@@ -80,12 +88,15 @@ public class CartsController : ControllerBase
     /// <summary>حذف یک قلم.</summary>
     [HttpDelete("items/{listingId:int}")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(CartDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CartDto>> RemoveItem(int listingId, CancellationToken cancellationToken)
         => Ok(await _cartService.RemoveItemAsync(UserId, SessionId, listingId, cancellationToken));
 
     /// <summary>خالی‌کردن سبد.</summary>
     [HttpDelete("current")]
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Clear(CancellationToken cancellationToken)
     {
         await _cartService.ClearCartAsync(UserId, SessionId, cancellationToken);
@@ -99,6 +110,8 @@ public class CartsController : ControllerBase
     /// </summary>
     [HttpPost("merge")]
     [Authorize]
+    [ProducesResponseType(typeof(CartDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<CartDto>> Merge(CancellationToken cancellationToken)
     {
         var userId = UserId ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
@@ -113,6 +126,10 @@ public class CartsController : ControllerBase
     /// <summary>تبدیل سبد به سفارش.</summary>
     [HttpPost("checkout")]
     [Authorize]
+    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<OrderDto>> Checkout(
         [FromBody] CheckoutDto dto,
         CancellationToken cancellationToken)

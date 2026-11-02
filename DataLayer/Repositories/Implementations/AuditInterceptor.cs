@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -52,15 +52,17 @@ namespace DataLayer.Repositories.Implementations
 
                 if (entry.State == EntityState.Added)
                 {
-                    entity.CreatedOn = DateTime.Now;
-                    entity.ModifiedOn = DateTime.Now;
+                    entity.CreatedOn = DateTime.UtcNow;
+                    entity.ModifiedOn = DateTime.UtcNow;
                     entity.CreatedById = userId;
                     entity.ModifiedById = userId;
                 }
                 else if (entry.State == EntityState.Modified)
                 {
-                    entity.ModifiedOn = DateTime.Now;
+                    entity.ModifiedOn = DateTime.UtcNow;
                     entity.ModifiedById = userId;
+                    entry.Property(nameof(AuditableEntity.CreatedOn)).IsModified = false;
+                    entry.Property(nameof(AuditableEntity.CreatedById)).IsModified = false;
                 }
             }
         }

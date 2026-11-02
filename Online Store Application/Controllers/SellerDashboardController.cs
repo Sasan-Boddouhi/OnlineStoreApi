@@ -26,7 +26,12 @@ public class SellerDashboardController : ControllerBase
         _dashboardService = dashboardService;
     }
 
+    /// <summary>دریافت خلاصه فروش و آمارهای کلیدی فروشنده.</summary>
     [HttpGet("summary")]
+    [ProducesResponseType(typeof(SellerSalesSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SellerSalesSummaryDto>> GetSummary(
         int sellerId,
         [FromQuery] DateTime? from,
@@ -36,7 +41,12 @@ public class SellerDashboardController : ControllerBase
 
     // Phase 9 (R32): صفحه‌بندی به‌جای «limit».
     // limit یک برش بی‌فراداده بود: کلاینت نمی‌دانست چند صفحه وجود دارد.
+    /// <summary>دریافت محصولات پرفروش فروشنده با صفحه‌بندی.</summary>
     [HttpGet("top-products")]
+    [ProducesResponseType(typeof(PagedResult<TopProductDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PagedResult<TopProductDto>>> GetTopProducts(
         int sellerId,
         [FromQuery] int pageNumber = 1,
@@ -44,7 +54,12 @@ public class SellerDashboardController : ControllerBase
         CancellationToken cancellationToken = default)
         => Ok(await _dashboardService.GetTopProductsAsync(sellerId, pageNumber, pageSize, cancellationToken));
 
+    /// <summary>دریافت آخرین سفارش‌های فروشنده با صفحه‌بندی.</summary>
     [HttpGet("recent-orders")]
+    [ProducesResponseType(typeof(PagedResult<SellerRecentOrderDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PagedResult<SellerRecentOrderDto>>> GetRecentOrders(
         int sellerId,
         [FromQuery] int pageNumber = 1,

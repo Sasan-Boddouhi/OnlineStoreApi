@@ -48,7 +48,8 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["Redis:Configuration"] = "localhost:6379",
                 ["Redis:InstanceName"] = "OnlineStore_Test:",
                 ["Swagger:Enabled"] = "true",
-                ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:"
+                ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:",
+                ["PaymentGatewaySettings:WebhookSecret"] = "test-webhook-secret-for-integration-tests"
             });
         });
 
@@ -91,6 +92,9 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
 
     public async Task InitializeDatabaseAsync()
     {
+        var cache = Services.GetService<ICacheService>() as FakeCacheService;
+        cache?.Clear();
+
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 

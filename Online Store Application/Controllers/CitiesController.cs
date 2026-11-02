@@ -2,6 +2,7 @@ using Application.Common.Queries;
 using Application.Entities;
 using Asp.Versioning;
 using BusinessLogic.DTOs.City;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Cities;
 using Microsoft.AspNetCore.Authorization;
@@ -28,8 +29,11 @@ public class CitiesController : ControllerBase
         _cityService = cityService;
     }
 
+    /// <summary>جستجو و دریافت فهرست شهرها با فیلتر و صفحه‌بندی.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(PagedResult<CityDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Get(
         [FromQuery] string? filter,
         [FromQuery] string? sort,
@@ -65,16 +69,25 @@ public class CitiesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>دریافت مشخصات شهر بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(CityDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
         var result = await _cityService.GetByIdAsync(id, cancellationToken);
         return result == null ? NotFound() : Ok(result);
     }
 
+    /// <summary>ایجاد شهر جدید توسط ادمین.</summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(CityDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Create(
         [FromBody] CreateCityDto dto,
         CancellationToken cancellationToken)
@@ -86,8 +99,15 @@ public class CitiesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.CityId }, created);
     }
 
+    /// <summary>ویرایش مشخصات شهر توسط ادمین.</summary>
     [HttpPut("{id:int}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateCityDto dto,
@@ -106,8 +126,14 @@ public class CitiesController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>حذف شهر توسط ادمین.</summary>
     [HttpDelete("{id:int}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
         var deleted = await _cityService.DeleteAsync(id, cancellationToken);

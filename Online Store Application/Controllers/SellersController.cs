@@ -26,8 +26,13 @@ public class SellersController : ControllerBase
         _currentUserService = currentUserService;
     }
 
+    /// <summary>ایجاد فروشگاه و ثبت درخواست فروشندگی.</summary>
     [HttpPost]
     [Authorize]
+    [ProducesResponseType(typeof(SellerDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SellerDto>> Create(
         [FromBody] CreateSellerDto dto,
         CancellationToken cancellationToken)
@@ -42,8 +47,12 @@ public class SellersController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.SellerId }, created);
     }
 
+    /// <summary>دریافت فهرست تمام فروشندگان (مخصوص ادمین).</summary>
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(IEnumerable<SellerDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IEnumerable<SellerDto>>> GetAll(CancellationToken cancellationToken)
         => Ok(await _sellerService.GetAllAsync(cancellationToken));
 
@@ -56,6 +65,9 @@ public class SellersController : ControllerBase
     /// </summary>
     [HttpGet("me")]
     [Authorize]
+    [ProducesResponseType(typeof(SellerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SellerDto>> GetMe(CancellationToken cancellationToken)
     {
         var userId = _currentUserService.GetCurrentUserId();
@@ -71,11 +83,20 @@ public class SellersController : ControllerBase
     /// <summary>پروفایل عمومی فروشگاه برای صفحهٔ فروشنده.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(SellerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SellerDto>> GetById(int id, CancellationToken cancellationToken)
         => Ok(await _sellerService.GetByIdAsync(id, cancellationToken));
 
+    /// <summary>ویرایش مشخصات فروشگاه.</summary>
     [HttpPut("{id:int}")]
     [Authorize]
+    [ProducesResponseType(typeof(SellerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SellerDto>> Update(
         int id,
         [FromBody] UpdateSellerDto dto,
@@ -93,8 +114,13 @@ public class SellersController : ControllerBase
         return Ok(await _sellerService.UpdateAsync(id, dto, cancellationToken));
     }
 
+    /// <summary>حذف فروشگاه توسط ادمین.</summary>
     [HttpDelete("{id:int}")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
         await _sellerService.DeleteAsync(id, cancellationToken);

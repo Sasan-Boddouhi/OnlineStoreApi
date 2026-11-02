@@ -3,6 +3,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Interfaces.Services;
 using AutoMapper;
 using BusinessLogic.DTOs.ProductSubcategory;
 using BusinessLogic.DTOs.Shared;
@@ -18,17 +19,20 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ProductSubcategoryService> _logger;
+    private readonly ICacheService? _cacheService;
 
     public ProductSubcategoryService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
         ICurrentUserService currentUserService,
-        ILogger<ProductSubcategoryService> logger)
+        ILogger<ProductSubcategoryService> logger,
+        ICacheService? cacheService = null)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _currentUserService = currentUserService;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     #region GetByQueryAsync
@@ -37,6 +41,14 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         QueryContract<ProductSubcategory> query,
         CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"subcategories:all:{query.GetHashCode()}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<PagedResult<ProductSubcategoryDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         var spec = query.ToSpec();
         var projection = ProductSubcategoryQueryConfig.Projection;
         var items = await _unitOfWork.Repository<ProductSubcategory>()
@@ -57,13 +69,18 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
             pageSize = query.Size ?? 20;
         }
 
-        return new PagedResult<ProductSubcategoryDto>
+        var result = new PagedResult<ProductSubcategoryDto>
         {
             Items = items,
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize
         };
+
+        if (_cacheService != null)
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
+
+        return result;
     }
 
     #endregion
@@ -72,12 +89,25 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
     public async Task<ProductSubcategoryDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"subcategories:{id}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<ProductSubcategoryDto>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         var spec = new Spec<ProductSubcategory>()
             .Where(ps => ps.SubcategoryId == id)
             .Where(ps => ps.IsActive);
 
-        return await _unitOfWork.Repository<ProductSubcategory>()
+        var result = await _unitOfWork.Repository<ProductSubcategory>()
             .FirstOrDefaultAsync(spec, ProductSubcategoryQueryConfig.Projection, cancellationToken);
+
+        if (_cacheService != null && result != null)
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
+
+        return result;
     }
 
     #endregion
@@ -139,6 +169,9 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         _unitOfWork.Repository<ProductSubcategory>().Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (_cacheService != null)
+            await _cacheService.RemoveAsync($"subcategories:{dto.SubcategoryId}", cancellationToken);
+
         _logger.LogInformation("Product subcategory updated: {Id}", dto.SubcategoryId);
         return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
                ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی به‌روز شده", "SUBCATEGORY_RETRIEVAL_ERROR");
@@ -161,6 +194,10 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
         _unitOfWork.Repository<ProductSubcategory>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (_cacheService != null)
+            await _cacheService.RemoveAsync($"subcategories:{id}", cancellationToken);
+
         _logger.LogInformation("Product subcategory deleted: {Id}", id);
         return true;
     }

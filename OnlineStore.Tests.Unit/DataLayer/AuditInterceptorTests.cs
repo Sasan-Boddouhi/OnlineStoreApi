@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using Application.Interfaces;
 using DataLayer.Context;
 using DataLayer.Repositories.Implementations;
@@ -58,6 +58,27 @@ public class AuditInterceptorTests
         product.ModifiedOn.Should().BeAfter(previousModifiedOn);
         product.ModifiedById.Should().Be(42);
         product.CreatedById.Should().Be(42); // unchanged
+    }
+
+    [Fact]
+    public void SavingChanges_OnModifiedEntity_PreservesCreatedOnAndCreatedByIdEvenIfOverwritten()
+    {
+        var product = new Product { Name = "Original", Price = 50, SubcategoryId = 1 };
+        _context.Product.Add(product);
+        _context.SaveChanges();
+
+        var originalCreatedOn = product.CreatedOn;
+        var originalCreatedById = product.CreatedById;
+
+        // Simulate an external update attempting to reset CreatedOn
+        product.CreatedOn = default;
+        product.CreatedById = null;
+        product.Name = "UpdatedAgain";
+        _context.SaveChanges();
+
+        var entry = _context.Entry(product);
+        entry.Property(nameof(AuditableEntity.CreatedOn)).IsModified.Should().BeFalse();
+        entry.Property(nameof(AuditableEntity.CreatedById)).IsModified.Should().BeFalse();
     }
 
     [Fact]

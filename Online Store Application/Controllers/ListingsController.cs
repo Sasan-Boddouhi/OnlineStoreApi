@@ -52,20 +52,30 @@ public class ListingsController : ControllerBase
         return seller.SellerId;
     }
 
+    /// <summary>دریافت فهرست پیشنهادهای فروش.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<SellerProductDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<SellerProductDto>>> GetAll(
         [FromQuery] int? sellerId,
         CancellationToken cancellationToken)
         => Ok(await _sellerService.GetListingsAsync(sellerId, cancellationToken));
 
+    /// <summary>دریافت مشخصات یک پیشنهاد فروش بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(SellerProductDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SellerProductDto>> GetById(int id, CancellationToken cancellationToken)
         => Ok(await _sellerService.GetListingAsync(id, cancellationToken));
 
+    /// <summary>ایجاد پیشنهاد فروش جدید توسط فروشنده.</summary>
     [HttpPost]
     [Authorize]
+    [ProducesResponseType(typeof(SellerProductDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<SellerProductDto>> Create(
         [FromBody] CreateSellerProductDto dto,
         CancellationToken cancellationToken)
@@ -80,8 +90,14 @@ public class ListingsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.ListingId }, created);
     }
 
+    /// <summary>ویرایش پیشنهاد فروش.</summary>
     [HttpPut("{id:int}")]
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateSellerProductDto dto,
@@ -92,8 +108,13 @@ public class ListingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>حذف پیشنهاد فروش.</summary>
     [HttpDelete("{id:int}")]
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(
         int id,
         CancellationToken cancellationToken)
@@ -106,8 +127,14 @@ public class ListingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>تغییر قیمت پیشنهاد فروش.</summary>
     [HttpPatch("{id:int}/price")]
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdatePrice(
         int id,
         [FromBody] UpdateListingPriceRequest request,
@@ -132,6 +159,11 @@ public class ListingsController : ControllerBase
     /// </summary>
     [HttpPost("{id:int}/inventory")]
     [Authorize]
+    [ProducesResponseType(typeof(InventoryStockDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<InventoryStockDto>> AddStock(
         int id,
         [FromBody] AddStockDto dto,

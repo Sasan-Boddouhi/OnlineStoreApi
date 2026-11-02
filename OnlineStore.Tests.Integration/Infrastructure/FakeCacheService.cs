@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using Application.Interfaces.Services;
 
 namespace OnlineStore.Tests.Integration.Infrastructure;
@@ -24,4 +24,6 @@ public class FakeCacheService : ICacheService
         _cache.TryRemove(key, out _);
         return Task.CompletedTask;
     }
+
+    public void Clear() => _cache.Clear();
 }

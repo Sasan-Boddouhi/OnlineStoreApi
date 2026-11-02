@@ -3,6 +3,8 @@ using Application.Entities;
 using Application.Exceptions;
 using Application.Features.Users.CreateUser;
 using BusinessLogic.DTOs.Address;
+using BusinessLogic.DTOs.Role;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.DTOs.User;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Users;
@@ -47,8 +49,13 @@ public class UsersController : ControllerBase
     }
 
     // GET: api/users?filter=...&sort=...&pageNumber=1&pageSize=20
+    /// <summary>جستجو و دریافت فهرست کاربران با فیلتر و صفحه‌بندی (مخصوص ادمین).</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpGet]
+    [ProducesResponseType(typeof(PagedResult<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUsers(
         [FromQuery] string? filter,
         [FromQuery] string? sort,
@@ -84,8 +91,13 @@ public class UsersController : ControllerBase
     }
 
     // GET: api/users/{id}
+    /// <summary>دریافت مشخصات کاربر بر اساس شناسه (مخصوص ادمین).</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserById(int id, [FromQuery] bool includeRoles = false)
     {
         var user = await _userService.GetByIdAsync(id, includeRoles);
@@ -94,8 +106,14 @@ public class UsersController : ControllerBase
     }
 
     // POST: api/users
+    /// <summary>ایجاد کاربر جدید توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPost]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -138,8 +156,13 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/me
+    /// <summary>ویرایش مشخصات پروفایل کاربر جاری.</summary>
     [Authorize]
     [HttpPut("me")]
+    [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateUserProfileDto dto, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -154,8 +177,15 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/{id}
+    /// <summary>ویرایش مشخصات کاربر توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
     {
         if (id != dto.UserId) return BadRequest("ID mismatch");
@@ -167,8 +197,14 @@ public class UsersController : ControllerBase
     }
 
     // PATCH: api/users/{id}
+    /// <summary>تغییر وضعیت فعال بودن کاربر توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPatch("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchUserStatus(int id, [FromBody] UpdateUserStatusDto dto)
     {
         if (id != dto.UserId) return BadRequest("ID mismatch");
@@ -179,8 +215,13 @@ public class UsersController : ControllerBase
     }
 
     // DELETE: api/users/{id}
+    /// <summary>حذف کاربر توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUser(int id)
     {
         var deleted = await _userService.DeleteAsync(id);
@@ -189,8 +230,13 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/{id}/roles
+    /// <summary>تخصیص نقش به کاربر توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}/roles")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> AssignRoles(int id, [FromBody] AssignRolesDto dto)
     {
         if (!ModelState.IsValid)
@@ -201,8 +247,12 @@ public class UsersController : ControllerBase
     }
 
     // GET: api/users/roles
+    /// <summary>دریافت نقش‌ها بر اساس نوع کاربر توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("roles")]
+    [ProducesResponseType(typeof(IEnumerable<RoleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetRoles([FromQuery] string? userType, CancellationToken cancellationToken)
     {
         var roles = await _userService.GetRolesAsync(userType, cancellationToken);
@@ -212,8 +262,11 @@ public class UsersController : ControllerBase
     // ==================== Address Endpoints ====================
 
     // GET: api/users/me/addresses
+    /// <summary>دریافت نشانی‌های ثبت‌شده کاربر جاری.</summary>
     [Authorize]
     [HttpGet("me/addresses")]
+    [ProducesResponseType(typeof(IEnumerable<AddressDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyAddresses()
     {
         var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -225,8 +278,13 @@ public class UsersController : ControllerBase
     }
 
     // POST: api/users/me/addresses
+    /// <summary>ثبت نشانی جدید برای کاربر جاری.</summary>
     [Authorize]
     [HttpPost("me/addresses")]
+    [ProducesResponseType(typeof(AddressDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> CreateMyAddress([FromBody] CreateAddressDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -240,8 +298,14 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/me/addresses/{addressId}
+    /// <summary>ویرایش نشانی کاربر جاری.</summary>
     [Authorize]
     [HttpPut("me/addresses/{addressId:int}")]
+    [ProducesResponseType(typeof(AddressDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> UpdateMyAddress(int addressId, [FromBody] UpdateAddressDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -256,8 +320,12 @@ public class UsersController : ControllerBase
     }
 
     // DELETE: api/users/me/addresses/{addressId}
+    /// <summary>حذف نشانی کاربر جاری.</summary>
     [Authorize]
     [HttpDelete("me/addresses/{addressId:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMyAddress(int addressId)
     {
         var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -270,8 +338,12 @@ public class UsersController : ControllerBase
     }
 
     // GET: api/users/me
+    /// <summary>دریافت مشخصات پروفایل کاربر جاری.</summary>
     [Authorize]
     [HttpGet("me")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyProfile()
     {
         var userIdClaim = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier);

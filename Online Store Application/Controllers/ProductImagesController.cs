@@ -19,8 +19,10 @@ public class ProductImagesController : ControllerBase
         _imageService = imageService;
     }
 
+    /// <summary>دریافت فهرست تصاویر یک محصول.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<ProductImageDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<ProductImageDto>>> Get(int productId, CancellationToken cancellationToken)
         => Ok(await _imageService.GetForProductAsync(productId, cancellationToken));
 
@@ -30,6 +32,10 @@ public class ProductImagesController : ControllerBase
     [HttpPost]
     [Authorize(Policy = "CanManageCatalog")]
     [RequestSizeLimit(10 * 1024 * 1024)]
+    [ProducesResponseType(typeof(ProductImageDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ProductImageDto>> Upload(
         int productId,
         [FromForm] IFormFile file,
@@ -54,8 +60,13 @@ public class ProductImagesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { productId }, result);
     }
 
+    /// <summary>ثبت تصویر محصول از طریق آدرس اینترنتی (URL).</summary>
     [HttpPost("url")]
     [Authorize(Policy = "CanManageCatalog")]
+    [ProducesResponseType(typeof(ProductImageDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ProductImageDto>> AddByUrl(
         int productId,
         [FromBody] AddProductImageUrlRequest request,
@@ -74,8 +85,13 @@ public class ProductImagesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { productId }, result);
     }
 
+    /// <summary>حذف تصویر محصول.</summary>
     [HttpDelete("{imageId:int}")]
     [Authorize(Policy = "CanManageCatalog")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int productId, int imageId, CancellationToken cancellationToken)
     {
         await _imageService.DeleteAsync(productId, imageId, cancellationToken);

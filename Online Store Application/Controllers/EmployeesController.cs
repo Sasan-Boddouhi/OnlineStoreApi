@@ -1,6 +1,7 @@
 using Application.Common.Queries;
 using Application.Entities;
 using BusinessLogic.DTOs.Employee;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Employees;
 using Microsoft.AspNetCore.Authorization;
@@ -32,8 +33,13 @@ public class EmployeesController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>جستجو و دریافت فهرست کارمندان با فیلتر و صفحه‌بندی.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpGet]
+    [ProducesResponseType(typeof(PagedResult<EmployeeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetEmployees(
         [FromQuery] string? filter,
         [FromQuery] string? sort,
@@ -68,8 +74,13 @@ public class EmployeesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>دریافت مشخصات کارمند بر اساس شناسه.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByIdAsync(int id)
     {
         var employee = await _employeeService.GetByIdAsync(id);
@@ -77,8 +88,14 @@ public class EmployeesController : ControllerBase
         return Ok(employee);
     }
 
+    /// <summary>ایجاد پرونده کارمند جدید.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPost]
+    [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> CreateAsync([FromBody] CreateEmployeeDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -87,8 +104,14 @@ public class EmployeesController : ControllerBase
         return CreatedAtAction(nameof(GetByIdAsync), new { id = created.EmployeeId }, created);
     }
 
+    /// <summary>ویرایش پرونده کارمند.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAsync(int id, [FromBody] UpdateEmployeeDto dto)
     {
         if (id != dto.EmployeeId) return BadRequest("ID mismatch");
@@ -99,8 +122,13 @@ public class EmployeesController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>حذف کارمند.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAsync(int id)
     {
         var deleted = await _employeeService.DeleteAsync(id);
@@ -108,8 +136,13 @@ public class EmployeesController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>خاتمه خدمت یا اخراج کارمند.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPost("{id:int}/terminate")]
+    [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> TerminateAsync(int id, [FromBody] TerminateEmployeeRequest? request, CancellationToken cancellationToken)
     {
         var terminated = await _employeeService.TerminateEmployeeAsync(id, request?.TerminationDate, cancellationToken);
@@ -117,8 +150,12 @@ public class EmployeesController : ControllerBase
         return Ok(terminated);
     }
 
+    /// <summary>دریافت مشخصات کارمندی کاربر جاری.</summary>
     [Authorize]
     [HttpGet("me")]
+    [ProducesResponseType(typeof(EmployeeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyProfile()
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);

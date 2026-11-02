@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json;
 using Application.Exceptions;
 using FluentValidation;
@@ -41,11 +41,23 @@ public sealed class ExceptionHandlingMiddleware
             problem.Extensions["code"] = ex.Code;
             problem.Extensions["traceId"] = context.TraceIdentifier;
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            if (ex is LockedOutException lockedOut)
+            {
+                problem.Extensions["lockoutEnd"] = lockedOut.LockoutEnd;
+                problem.Extensions["remainingSeconds"] = lockedOut.RemainingSeconds;
+            }
+
+            if (!context.Response.HasStarted)
+            {
+                await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            }
         }
         catch (ValidationException ex)
         {
             _logger.LogWarning(ex, "Validation failed");
+
+            if (context.Response.HasStarted)
+                return;
 
             context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
             context.Response.ContentType = "application/problem+json";
@@ -61,13 +73,21 @@ public sealed class ExceptionHandlingMiddleware
                 Detail = "One or more validation errors occurred.",
                 Instance = context.Request.Path
             };
+            problem.Extensions["code"] = "VALIDATION_ERROR";
             problem.Extensions["traceId"] = context.TraceIdentifier;
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Request was cancelled by the client");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception");
+
+            if (context.Response.HasStarted)
+                return;
 
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             context.Response.ContentType = "application/problem+json";

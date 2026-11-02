@@ -23,14 +23,23 @@ public class RolesController : ControllerBase
         _permissionService = permissionService;
     }
 
+    /// <summary>دریافت فهرست تمام نقش‌ها.</summary>
     [HttpGet]
+    [ProducesResponseType(typeof(IEnumerable<RoleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAll()
     {
         var roles = await _roleService.GetAllAsync();
         return Ok(roles);
     }
 
+    /// <summary>دریافت مشخصات نقش بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id)
     {
         var role = await _roleService.GetByIdAsync(id);
@@ -38,7 +47,12 @@ public class RolesController : ControllerBase
         return Ok(role);
     }
 
+    /// <summary>دریافت مشخصات نقش بر اساس کد نقش.</summary>
     [HttpGet("code/{code}")]
+    [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByCode(string code)
     {
         var role = await _roleService.GetByCodeAsync(code);
@@ -46,14 +60,23 @@ public class RolesController : ControllerBase
         return Ok(role);
     }
 
+    /// <summary>دریافت فهرست تمام مجوزهای موجود در سیستم.</summary>
     [HttpGet("permissions")]
+    [ProducesResponseType(typeof(IEnumerable<PermissionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetPermissions()
     {
         var permissions = await _permissionService.GetAllAsync();
         return Ok(permissions);
     }
 
+    /// <summary>دریافت مشخصات مجوز بر اساس شناسه.</summary>
     [HttpGet("permissions/{id:int}")]
+    [ProducesResponseType(typeof(PermissionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPermissionById(int id, CancellationToken cancellationToken = default)
     {
         var permission = await _permissionService.GetByIdAsync(id, cancellationToken);
@@ -61,7 +84,13 @@ public class RolesController : ControllerBase
         return Ok(permission);
     }
 
+    /// <summary>ایجاد نقش کاربری جدید.</summary>
     [HttpPost]
+    [ProducesResponseType(typeof(RoleDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Create([FromBody] CreateRoleDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -70,7 +99,14 @@ public class RolesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = role.RoleId }, role);
     }
 
+    /// <summary>ویرایش مشخصات نقش کاربری.</summary>
     [HttpPut("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateRoleDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -81,7 +117,12 @@ public class RolesController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>حذف نقش کاربری.</summary>
     [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id)
     {
         var deleted = await _roleService.DeleteAsync(id);

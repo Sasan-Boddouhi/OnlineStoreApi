@@ -24,5 +24,11 @@ public sealed class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOption
                 Version = description.ApiVersion.ToString()
             });
         }
+
+        var xmlFile = Path.Combine(AppContext.BaseDirectory, "Online Store Application(API).xml");
+        if (File.Exists(xmlFile))
+        {
+            options.IncludeXmlComments(xmlFile);
+        }
     }
 }

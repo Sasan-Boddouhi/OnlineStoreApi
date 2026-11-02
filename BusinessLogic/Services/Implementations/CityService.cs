@@ -3,6 +3,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Interfaces.Services;
 using AutoMapper;
 using BusinessLogic.DTOs.City;
 using BusinessLogic.DTOs.Shared;
@@ -17,12 +18,18 @@ public sealed class CityService : ICityService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly ILogger<CityService> _logger;
+    private readonly ICacheService? _cacheService;
 
-    public CityService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<CityService> logger)
+    public CityService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ILogger<CityService> logger,
+        ICacheService? cacheService = null)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     #region Query
@@ -31,6 +38,14 @@ public sealed class CityService : ICityService
         QueryContract<City> query,
         CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"cities:all:{query.GetHashCode()}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<PagedResult<CityDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         var spec = query.ToSpec();
         var items = await _unitOfWork.Repository<City>()
             .ListAsync(spec, CityQueryConfig.Projection, cancellationToken);
@@ -50,20 +65,38 @@ public sealed class CityService : ICityService
             pageSize = query.Size ?? 20;
         }
 
-        return new PagedResult<CityDto>
+        var result = new PagedResult<CityDto>
         {
             Items = items,
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize
         };
+
+        if (_cacheService != null)
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
+
+        return result;
     }
 
     public async Task<CityDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"cities:{id}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<CityDto>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         var spec = new Spec<City>().Where(c => c.CityId == id);
-        return await _unitOfWork.Repository<City>()
+        var result = await _unitOfWork.Repository<City>()
             .FirstOrDefaultAsync(spec, CityQueryConfig.Projection, cancellationToken);
+
+        if (_cacheService != null && result != null)
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
+
+        return result;
     }
 
     #endregion
@@ -116,6 +149,9 @@ public sealed class CityService : ICityService
         _unitOfWork.Repository<City>().Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (_cacheService != null)
+            await _cacheService.RemoveAsync($"cities:{entity.CityId}", cancellationToken);
+
         _logger.LogInformation("City updated: {Id}", dto.CityId);
         return await GetByIdAsync(entity.CityId, cancellationToken);
     }
@@ -136,6 +172,10 @@ public sealed class CityService : ICityService
 
         _unitOfWork.Repository<City>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (_cacheService != null)
+            await _cacheService.RemoveAsync($"cities:{id}", cancellationToken);
+
         _logger.LogInformation("City deleted: {Id}", id);
         return true;
     }

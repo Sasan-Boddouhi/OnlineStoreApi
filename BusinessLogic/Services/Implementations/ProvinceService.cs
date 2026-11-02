@@ -3,6 +3,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Interfaces.Services;
 using AutoMapper;
 using BusinessLogic.DTOs.Province;
 using BusinessLogic.DTOs.Shared;
@@ -17,12 +18,18 @@ public sealed class ProvinceService : IProvinceService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly ILogger<ProvinceService> _logger;
+    private readonly ICacheService? _cacheService;
 
-    public ProvinceService(IUnitOfWork unitOfWork, IMapper mapper, ILogger<ProvinceService> logger)
+    public ProvinceService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        ILogger<ProvinceService> logger,
+        ICacheService? cacheService = null)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _logger = logger;
+        _cacheService = cacheService;
     }
 
     #region GetByQueryAsync
@@ -31,6 +38,14 @@ public sealed class ProvinceService : IProvinceService
         QueryContract<Province> query,
         CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"provinces:all:{query.GetHashCode()}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<PagedResult<ProvinceDto>>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         var spec = query.ToSpec();
         var items = await _unitOfWork.Repository<Province>()
             .ListAsync(spec, ProvinceQueryConfig.Projection, cancellationToken);
@@ -50,13 +65,18 @@ public sealed class ProvinceService : IProvinceService
             pageSize = query.Size ?? 20;
         }
 
-        return new PagedResult<ProvinceDto>
+        var result = new PagedResult<ProvinceDto>
         {
             Items = items,
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize
         };
+
+        if (_cacheService != null)
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
+
+        return result;
     }
 
     #endregion
@@ -65,9 +85,22 @@ public sealed class ProvinceService : IProvinceService
 
     public async Task<ProvinceDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
+        var cacheKey = $"provinces:{id}";
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<ProvinceDto>(cacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
         var spec = new Spec<Province>().Where(p => p.ProvinceId == id);
-        return await _unitOfWork.Repository<Province>()
+        var result = await _unitOfWork.Repository<Province>()
             .FirstOrDefaultAsync(spec, ProvinceQueryConfig.Projection, cancellationToken);
+
+        if (_cacheService != null && result != null)
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromHours(1), cancellationToken);
+
+        return result;
     }
 
     #endregion
@@ -127,6 +160,9 @@ public sealed class ProvinceService : IProvinceService
         _unitOfWork.Repository<Province>().Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        if (_cacheService != null)
+            await _cacheService.RemoveAsync($"provinces:{entity.ProvinceId}", cancellationToken);
+
         _logger.LogInformation("Province updated: {Id}", dto.ProvinceId);
         return await GetByIdAsync(entity.ProvinceId, cancellationToken);
     }
@@ -148,6 +184,10 @@ public sealed class ProvinceService : IProvinceService
 
         _unitOfWork.Repository<Province>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (_cacheService != null)
+            await _cacheService.RemoveAsync($"provinces:{id}", cancellationToken);
+
         _logger.LogInformation("Province deleted: {Id}", id);
         return true;
     }

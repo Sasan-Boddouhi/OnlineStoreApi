@@ -1,4 +1,4 @@
-﻿using Application.Common.Specifications;
+using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Helper;
@@ -144,14 +144,21 @@ public sealed class AuthService : IAuthService
 
         activity?.SetTag("user.id", user.UserId);
 
-        if (user.LockoutEnd.HasValue && user.LockoutEnd > DateTime.UtcNow)
+        if (user.LockoutEnd.HasValue)
         {
-            OnlineStoreMetrics.LoginFailure.Add(
-                1,
-                new KeyValuePair<string, object?>("reason", "account_locked"));
+            if (user.LockoutEnd.Value > DateTime.UtcNow)
+            {
+                OnlineStoreMetrics.LoginFailure.Add(
+                    1,
+                    new KeyValuePair<string, object?>("reason", "account_locked"));
 
-            activity?.SetStatus(ActivityStatusCode.Error, "Account locked");
-            return null;
+                activity?.SetStatus(ActivityStatusCode.Error, "Account locked");
+                throw new LockedOutException(user.LockoutEnd.Value);
+            }
+
+            user.FailedLoginAttempts = 0;
+            user.LockoutEnd = null;
+            await _unitOfWork.SaveChangesAsync(ct);
         }
 
         if (!_passwordHasher.Verify(dto.Password, user.PasswordHash))
@@ -170,6 +177,10 @@ public sealed class AuthService : IAuthService
             _logger.LogWarning("Invalid password for {UserId}", user.UserId);
             activity?.SetTag("auth.failed_attempts", user.FailedLoginAttempts);
             activity?.SetStatus(ActivityStatusCode.Error, "Invalid password");
+
+            if (user.LockoutEnd.HasValue)
+                throw new LockedOutException(user.LockoutEnd.Value);
+
             return null;
         }
 

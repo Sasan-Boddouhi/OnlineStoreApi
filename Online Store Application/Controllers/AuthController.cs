@@ -21,8 +21,12 @@ namespace WebApi.Controllers
             _authService = authService;
         }
 
-        // ثبت‌نام
+        /// <summary>ثبت‌نام کاربر جدید.</summary>
         [HttpPost("register")]
+        [EnableRateLimiting("LoginLimiter")]
+        [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
             var result =
@@ -31,10 +35,13 @@ namespace WebApi.Controllers
             return Ok(result);
         }
 
-
-        // ورود و دریافت AccessToken + RefreshToken
+        /// <summary>ورود کاربر و دریافت AccessToken و RefreshToken.</summary>
         [HttpPost("login")]
         [EnableRateLimiting("LoginLimiter")]
+        [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var tokenResult = await _authService.LoginAsync(dto);
@@ -44,9 +51,11 @@ namespace WebApi.Controllers
             return Ok(tokenResult);
         }
 
-        // گرفتن اطلاعات کاربر جاری
+        /// <summary>دریافت اطلاعات پروفایل کاربر احراز هویت شده.</summary>
         [Authorize]
         [HttpGet("me")]
+        [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public IActionResult Me()
         {
             var profile = new UserProfileDto(
@@ -58,9 +67,11 @@ namespace WebApi.Controllers
             return Ok(profile);
         }
 
-        // تازه‌سازی توکن با RefreshToken
+        /// <summary>تازه‌سازی توکن احراز هویت با استفاده از RefreshToken.</summary>
         [HttpPost("refresh")]
         [EnableRateLimiting("RefreshLimiter")]
+        [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenDto dto)
         {
             var tokenResult = await _authService.RefreshTokenAsync(dto.RefreshToken);
@@ -70,8 +81,11 @@ namespace WebApi.Controllers
             return Ok(tokenResult);
         }
 
+        /// <summary>خروج از نشست جاری و ابطال توکن‌ها.</summary>
         [Authorize]
         [HttpPost("logout")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Logout()
         {
             var sessionId = User.FindFirstValue("SessionId");

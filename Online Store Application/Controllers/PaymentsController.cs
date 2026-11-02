@@ -33,6 +33,10 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("initiate")]
     [Authorize]
+    [ProducesResponseType(typeof(InitiatePaymentResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<InitiatePaymentResultDto>> Initiate(
         [FromBody] InitiatePaymentRequest body,
         CancellationToken cancellationToken)
@@ -47,6 +51,9 @@ public class PaymentsController : ControllerBase
     /// <summary>تأیید پرداخت پس از بازگشت کاربر از درگاه.</summary>
     [HttpPost("verify")]
     [Authorize]
+    [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<PaymentDto>> Verify(
         [FromQuery] string authority,
         CancellationToken cancellationToken)
@@ -61,6 +68,8 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("webhook")]
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Webhook(CancellationToken cancellationToken)
     {
         // بدنهٔ خام لازم است؛ بازسازی JSON امضا را می‌شکند.
@@ -75,8 +84,12 @@ public class PaymentsController : ControllerBase
         return Ok(new { received = true });
     }
 
+    /// <summary>دریافت پرداخت بر اساس شناسه سفارش.</summary>
     [HttpGet("order/{orderId:int}")]
     [Authorize]
+    [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<PaymentDto>> GetByOrder(int orderId, CancellationToken cancellationToken)
     {
         var payment = await _paymentService.GetByOrderAsync(orderId, cancellationToken);
@@ -96,6 +109,11 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("{paymentId:int}/refund")]
     [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PaymentDto>> Refund(
         int paymentId,
         [FromBody] RefundPaymentRequest? body,
