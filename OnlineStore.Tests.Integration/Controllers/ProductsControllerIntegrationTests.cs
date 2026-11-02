@@ -346,7 +346,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
             Sku = $"SKU-DEL-{Guid.NewGuid():N}"
         };
         var createRes = await Client.PostAsJsonAsync($"/api/v1/products/{product.ProductId}/variants", createVariantDto);
-        createRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        createRes.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await createRes.Content.ReadFromJsonAsync<ProductVariantDto>();
 
         // 3. Delete the variant
