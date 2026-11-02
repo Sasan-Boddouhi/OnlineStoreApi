@@ -53,11 +53,15 @@ public class ProductsController : ControllerBase
 
         if (!parseResult.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query syntax",
-                Errors = parseResult.Errors
-            });
+                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = parseResult.Errors;
+            return BadRequest(problem);
         }
 
         var normalized = QueryPolicy.Normalize(
@@ -70,11 +74,15 @@ public class ProductsController : ControllerBase
 
         if (!validation.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query values",
-                Errors = validation.Errors
-            });
+                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = validation.Errors;
+            return BadRequest(problem);
         }
 
         var result = await _productService.GetByQueryAsync(validation.Value!);
@@ -120,7 +128,15 @@ public class ProductsController : ControllerBase
         }
         catch (BusinessException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            var problem = new ProblemDetails
+            {
+                Status = ex.StatusCode,
+                Title = "Bad Request",
+                Detail = ex.Message,
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["code"] = ex.Code;
+            return BadRequest(problem);
         }
     }
 
@@ -137,7 +153,13 @@ public class ProductsController : ControllerBase
     public async Task<ActionResult<ProductDto>> UpdateProduct(int id, UpdateProductDto dto)
     {
         if (id != dto.ProductId)
-            return BadRequest(new { message = "ID mismatch" });
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
 
         try
         {
@@ -150,7 +172,15 @@ public class ProductsController : ControllerBase
         }
         catch (BusinessException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            var problem = new ProblemDetails
+            {
+                Status = ex.StatusCode,
+                Title = "Bad Request",
+                Detail = ex.Message,
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["code"] = ex.Code;
+            return BadRequest(problem);
         }
     }
 

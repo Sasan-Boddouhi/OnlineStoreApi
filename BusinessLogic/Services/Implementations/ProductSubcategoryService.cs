@@ -41,7 +41,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         QueryContract<ProductSubcategory> query,
         CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"subcategories:all:{query.GetHashCode()}";
+        var cacheKey = query.ToCacheKey("subcategories");
         if (_cacheService != null)
         {
             var cached = await _cacheService.GetAsync<PagedResult<ProductSubcategoryDto>>(cacheKey, cancellationToken);

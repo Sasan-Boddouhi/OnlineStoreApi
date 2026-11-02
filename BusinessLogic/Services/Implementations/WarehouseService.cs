@@ -117,17 +117,24 @@ public sealed class WarehouseService : IWarehouseService
             if (seller == null || entity.SellerId != seller.SellerId)
                 throw new ForbiddenException("WAREHOUSE_FORBIDDEN");
         }
+        else if (dto.SellerId != entity.SellerId)
+        {
+            if (dto.SellerId.HasValue)
+            {
+                var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
+                if (seller == null)
+                    throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
+                entity.SellerId = dto.SellerId.Value;
+            }
+            else
+            {
+                entity.SellerId = null;
+            }
+        }
 
         var address = await _unitOfWork.Repository<Address>().GetByIdAsync(dto.AddressId, cancellationToken);
         if (address == null)
             throw new NotFoundException("آدرس یافت نشد.", "ADDRESS_NOT_FOUND");
-
-        if (dto.SellerId.HasValue)
-        {
-            var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(dto.SellerId.Value, cancellationToken);
-            if (seller == null)
-                throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
-        }
 
         _mapper.Map(dto, entity);
         _unitOfWork.Repository<Warehouse>().Update(entity);

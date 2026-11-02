@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Application.Common.Constants;
+using Application.Exceptions;
 using BusinessLogic.DTOs.Warehouse;
 using BusinessLogic.Services.Interfaces;
 using Application.Interfaces;
@@ -115,10 +116,12 @@ public class WarehousesController : ControllerBase
         if (!IsAdmin())
         {
             var seller = await _sellerService.GetByUserIdAsync(userId, cancellationToken);
-            if (seller != null)
+            if (seller == null)
             {
-                dto.SellerId = seller.SellerId;
+                throw new ForbiddenException("تنها فروشندگان و مدیران مجاز به ثبت انبار هستند.", "NOT_A_SELLER");
             }
+
+            dto.SellerId = seller.SellerId;
         }
 
         var warehouse = await _warehouseService.CreateAsync(dto, userId, cancellationToken);
@@ -136,7 +139,14 @@ public class WarehousesController : ControllerBase
     public async Task<IActionResult> Update(int id, [FromBody] UpdateWarehouseDto dto, CancellationToken cancellationToken = default)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        if (id != dto.WarehouseId) return BadRequest("ID mismatch");
+        if (id != dto.WarehouseId)
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
 
         var userId = GetCurrentUserId();
         var warehouse = await _warehouseService.UpdateAsync(userId, id, dto, cancellationToken);

@@ -15,7 +15,8 @@ public class WarehouseProfile : Profile
 
         CreateMap<UpdateWarehouseDto, Warehouse>()
             .ConfigureDbDestination()
-            .ForMember(d => d.WarehouseId, opt => opt.Ignore());
+            .ForMember(d => d.WarehouseId, opt => opt.Ignore())
+            .ForMember(d => d.SellerId, opt => opt.Ignore());
 
         CreateMap<Warehouse, WarehouseDto>()
             .ForMember(d => d.AddressName, opt => opt.Ignore()) // Set manually

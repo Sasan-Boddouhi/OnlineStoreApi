@@ -38,7 +38,7 @@ public sealed class ProvinceService : IProvinceService
         QueryContract<Province> query,
         CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"provinces:all:{query.GetHashCode()}";
+        var cacheKey = query.ToCacheKey("provinces");
         if (_cacheService != null)
         {
             var cached = await _cacheService.GetAsync<PagedResult<ProvinceDto>>(cacheKey, cancellationToken);

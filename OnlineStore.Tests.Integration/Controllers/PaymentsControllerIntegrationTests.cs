@@ -79,6 +79,30 @@ public class PaymentsControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
+    public async Task GetByOrder_OtherCustomer_ReturnsForbidden()
+    {
+        var (order, _) = await SeedOrderAndPaymentAsync();
+        var phone = $"0912{Random.Shared.Next(0, 10_000_000):D7}";
+        var registerData = new
+        {
+            PhoneNumber = phone,
+            Password = "Customer@123",
+            FirstName = "Other",
+            LastName = "Customer",
+            DeviceId = "device-other-customer",
+            DateOfBirth = "1370/01/01"
+        };
+        var regRes = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        regRes.EnsureSuccessStatusCode();
+        var auth = await regRes.Content.ReadFromJsonAsync<BusinessLogic.DTOs.Auth.AuthResultDto>();
+
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
+
+        var response = await Client.GetAsync($"/api/v1/payments/order/{order.OrderId}");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Initiate_Unauthorized_Returns401()
     {
         Client.DefaultRequestHeaders.Authorization = null;

@@ -52,7 +52,8 @@ public sealed class ProductService : IProductService
     {
         using var activity = ActivitySource.StartActivity("Product.GetByQuery", ActivityKind.Internal);
 
-        var cacheKey = $"products:all:{query.GetHashCode()}";
+        var version = _cacheService != null ? await _cacheService.GetAsync<string>("products:version", cancellationToken) ?? "v1" : "v1";
+        var cacheKey = $"{query.ToCacheKey("products")}:{version}";
         if (_cacheService != null)
         {
             var cached = await _cacheService.GetAsync<PagedResult<ProductDto>>(cacheKey, cancellationToken);
@@ -190,6 +191,11 @@ public sealed class ProductService : IProductService
 
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
+            if (_cacheService != null)
+            {
+                await _cacheService.SetAsync("products:version", Guid.NewGuid().ToString("N"), TimeSpan.FromDays(7), cancellationToken);
+            }
+
             _logger.LogInformation("Product created successfully with ID: {ProductId}", entity.ProductId);
             activity?.SetTag("product.id", entity.ProductId);
             activity?.SetStatus(ActivityStatusCode.Ok);
@@ -255,6 +261,7 @@ public sealed class ProductService : IProductService
 
             if (_cacheService != null)
             {
+                await _cacheService.SetAsync("products:version", Guid.NewGuid().ToString("N"), TimeSpan.FromDays(7), cancellationToken);
                 await _cacheService.RemoveAsync($"products:{dto.ProductId}", cancellationToken);
             }
 
@@ -298,6 +305,7 @@ public sealed class ProductService : IProductService
 
             if (_cacheService != null)
             {
+                await _cacheService.SetAsync("products:version", Guid.NewGuid().ToString("N"), TimeSpan.FromDays(7), cancellationToken);
                 await _cacheService.RemoveAsync($"products:{id}", cancellationToken);
             }
 

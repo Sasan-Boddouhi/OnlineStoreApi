@@ -28,6 +28,4 @@ public class UserDto
     public List<AddressDto> Addresses { get; set; } = new();
 
     public List<string> Roles { get; set; } = new();
-
-    public string? SecurityStamp { get; set; }
 }

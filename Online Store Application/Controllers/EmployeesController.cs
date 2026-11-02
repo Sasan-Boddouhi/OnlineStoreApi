@@ -51,11 +51,15 @@ public class EmployeesController : ControllerBase
 
         if (!parseResult.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query syntax",
-                Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
-            });
+                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
+            return BadRequest(problem);
         }
 
         var normalizedContract = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -63,11 +67,15 @@ public class EmployeesController : ControllerBase
 
         if (!validation.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query values",
-                Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
-            });
+                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
+            return BadRequest(problem);
         }
 
         var result = await _employeeService.GetByQueryAsync(validation.Value!);
@@ -114,7 +122,14 @@ public class EmployeesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAsync(int id, [FromBody] UpdateEmployeeDto dto)
     {
-        if (id != dto.EmployeeId) return BadRequest("ID mismatch");
+        if (id != dto.EmployeeId)
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var updated = await _employeeService.UpdateAsync(dto);
@@ -164,7 +179,13 @@ public class EmployeesController : ControllerBase
 
         var employee = await _employeeService.GetByUserIdAsync(userId);
         if (employee == null)
-            return NotFound("Employee record not found for the current user.");
+            return NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Not Found",
+                Detail = "Employee record not found for the current user.",
+                Instance = HttpContext.Request.Path
+            });
 
         return Ok(employee);
     }

@@ -8,6 +8,13 @@ namespace Online_Store_Application.Middleware;
 
 public sealed class ExceptionHandlingMiddleware
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
@@ -49,7 +56,7 @@ public sealed class ExceptionHandlingMiddleware
 
             if (!context.Response.HasStarted)
             {
-                await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+                await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
             }
         }
         catch (ValidationException ex)
@@ -76,7 +83,7 @@ public sealed class ExceptionHandlingMiddleware
             problem.Extensions["code"] = "VALIDATION_ERROR";
             problem.Extensions["traceId"] = context.TraceIdentifier;
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
         }
         catch (OperationCanceledException)
         {
@@ -101,7 +108,7 @@ public sealed class ExceptionHandlingMiddleware
             };
             problem.Extensions["traceId"] = context.TraceIdentifier;
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
         }
     }
 

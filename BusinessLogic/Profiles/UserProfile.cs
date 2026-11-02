@@ -31,10 +31,7 @@ public class UserProfile : Profile
                 opt => opt.MapFrom(s => s.DateOfBirth.HasValue ? PersianDateHelper.ToPersian(s.DateOfBirth.Value) : null))
 
             .ForMember(d => d.Roles,
-                opt => opt.MapFrom(s => s.UserRoles.Select(ur => ur.Role.Code).ToList()))
-
-            .ForMember(d => d.SecurityStamp,
-                opt => opt.Ignore());
+                opt => opt.MapFrom(s => s.UserRoles.Select(ur => ur.Role.Code).ToList()));
 
         // =========================
         // Create DTO -> Entity

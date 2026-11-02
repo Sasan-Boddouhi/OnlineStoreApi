@@ -49,7 +49,7 @@ builder.Host.UseSerilog();
 
 builder.Services.AddControllers(options =>
 {
-    options.ReturnHttpNotAcceptable = true;
+    options.ReturnHttpNotAcceptable = false;
 
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
 })
@@ -329,16 +329,25 @@ builder.Services.AddAuthorization(options =>
         policy.AddRequirements(new PermissionRequirement(Permissions.CatalogProductsWrite)));
 });
 
+var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>()
+    ?? new[]
+    {
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "http://localhost:5173",
+        "https://localhost:5173",
+        "http://localhost:5174",
+        "https://localhost:5174",
+        "http://localhost:5178",
+        "https://localhost:5178"
+    };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactFrontend",
         policy =>
         {
-            policy.WithOrigins(
-                    "https://localhost:5173",
-                    "http://localhost:5173",
-                    "http://localhost:5178"
-                )
+            policy.WithOrigins(corsOrigins)
                 // AllowAnyHeader شامل هدر سفارشی سبد مهمان (X-Cart-Session) هم می‌شود،
                 // پس preflight برای آن پاسخ می‌گیرد. اگر روزی این سیاست محدود شد،
                 // این هدر باید صریحاً در WithHeaders باقی بماند.
@@ -420,37 +429,7 @@ await app.Services.ApplyMigrationsAsync(
     app.Configuration,
     app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AutoMigrate"));
 
-
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (!app.Environment.IsEnvironment("Testing") && context.Database.IsRelational())
-    {
-        var retryCount = 0;
-        const int maxRetries = 10;
-        while (retryCount < maxRetries)
-        {
-            try
-            {
-                await context.Database.MigrateAsync();
-                break;
-            }
-            catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException ||
-                                       ex is System.TimeoutException ||
-                                       ex.InnerException is System.TimeoutException)
-            {
-                retryCount++;
-                if (retryCount >= maxRetries)
-                    throw;
-                Console.WriteLine($"Database not ready, retrying in 5 seconds... (attempt {retryCount})");
-                await Task.Delay(5000);
-            }
-        }
-    }
-}
 
 // pipeline
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))

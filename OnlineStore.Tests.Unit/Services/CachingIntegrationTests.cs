@@ -8,6 +8,7 @@ using BusinessLogic.DTOs.City;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.ProductCategory;
 using BusinessLogic.DTOs.Province;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Services.Implementations;
 using FluentAssertions;
@@ -100,5 +101,72 @@ public class CachingIntegrationTests
 
         result.Should().BeEquivalentTo(expected);
         _uowMock.Verify(u => u.Repository<City>(), Times.Never);
+    }
+
+    [Fact]
+    public void QueryContract_ToCacheKey_IsDeterministic()
+    {
+        var query1 = new QueryContract<Product>
+        {
+            Page = 1,
+            Size = 20
+        };
+
+        var query2 = new QueryContract<Product>
+        {
+            Page = 1,
+            Size = 20
+        };
+
+        var key1 = query1.ToCacheKey("products");
+        var key2 = query2.ToCacheKey("products");
+
+        key1.Should().Be(key2);
+        key1.Should().StartWith("products:all:p1:s20");
+    }
+
+    [Fact]
+    public async Task ProductService_GetByQueryAsync_UsesDeterministicCacheKey()
+    {
+        var query = new QueryContract<Product>
+        {
+            Page = 1,
+            Size = 10
+        };
+
+        var expectedResult = new PagedResult<ProductDto>
+        {
+            Items = new List<ProductDto>
+            {
+                new ProductDto
+                {
+                    ProductId = 1,
+                    Name = "Cached P1",
+                    SubcategoryId = 1,
+                    SubcategoryName = "Sub1",
+                    CategoryId = 1,
+                    CategoryName = "Cat1"
+                }
+            },
+            TotalCount = 1,
+            PageNumber = 1,
+            PageSize = 10
+        };
+
+        _cacheMock.Setup(c => c.GetAsync<string>("products:version", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("v1");
+
+        var expectedKey = $"{query.ToCacheKey("products")}:v1";
+        _cacheMock.Setup(c => c.GetAsync<PagedResult<ProductDto>>(expectedKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResult);
+
+        var service = new ProductService(
+            _uowMock.Object, _mapperMock.Object, _userMock.Object, _auditMock.Object,
+            Mock.Of<ILogger<ProductService>>(), _cacheMock.Object);
+
+        var result = await service.GetByQueryAsync(query);
+
+        result.Should().BeEquivalentTo(expectedResult);
+        _uowMock.Verify(u => u.Repository<Product>(), Times.Never);
     }
 }

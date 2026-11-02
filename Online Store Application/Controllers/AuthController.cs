@@ -46,7 +46,13 @@ namespace WebApi.Controllers
         {
             var tokenResult = await _authService.LoginAsync(dto);
             if (tokenResult == null)
-                return Unauthorized("شماره تماس یا رمز عبور اشتباه است");
+                return Unauthorized(new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "Unauthorized",
+                    Detail = "شماره تماس یا رمز عبور اشتباه است",
+                    Instance = HttpContext.Request.Path
+                });
 
             return Ok(tokenResult);
         }
@@ -76,7 +82,13 @@ namespace WebApi.Controllers
         {
             var tokenResult = await _authService.RefreshTokenAsync(dto.RefreshToken);
             if (tokenResult == null)
-                return Unauthorized("توکن منقضی یا نامعتبر است");
+                return Unauthorized(new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "Unauthorized",
+                    Detail = "توکن منقضی یا نامعتبر است",
+                    Instance = HttpContext.Request.Path
+                });
 
             return Ok(tokenResult);
         }

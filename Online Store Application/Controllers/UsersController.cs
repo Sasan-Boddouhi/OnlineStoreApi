@@ -67,11 +67,15 @@ public class UsersController : ControllerBase
 
         if (!parseResult.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query syntax",
-                Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
-            });
+                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
+            return BadRequest(problem);
         }
 
         var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -79,11 +83,15 @@ public class UsersController : ControllerBase
 
         if (!validation.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query values",
-                Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
-            });
+                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
+            return BadRequest(problem);
         }
 
         var result = await _userService.GetByQueryAsync(validation.Value!);
@@ -188,7 +196,14 @@ public class UsersController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
     {
-        if (id != dto.UserId) return BadRequest("ID mismatch");
+        if (id != dto.UserId)
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var updated = await _userService.UpdateAsync(dto);
@@ -207,7 +222,14 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchUserStatus(int id, [FromBody] UpdateUserStatusDto dto)
     {
-        if (id != dto.UserId) return BadRequest("ID mismatch");
+        if (id != dto.UserId)
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
 
         var result = await _userService.SetActiveStatusAsync(id, dto.IsActive);
         if (!result) return NotFound();

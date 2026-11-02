@@ -38,7 +38,7 @@ public sealed class CityService : ICityService
         QueryContract<City> query,
         CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"cities:all:{query.GetHashCode()}";
+        var cacheKey = query.ToCacheKey("cities");
         if (_cacheService != null)
         {
             var cached = await _cacheService.GetAsync<PagedResult<CityDto>>(cacheKey, cancellationToken);

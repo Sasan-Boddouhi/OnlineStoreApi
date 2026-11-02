@@ -77,7 +77,13 @@ public class CategoriesController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (id != dto.ProductCategoryId)
-            return BadRequest("ID mismatch");
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
 
         if (!ModelState.IsValid)
             return BadRequest(ModelState);

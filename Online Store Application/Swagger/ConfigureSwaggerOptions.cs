@@ -30,5 +30,45 @@ public sealed class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOption
         {
             options.IncludeXmlComments(xmlFile);
         }
+
+        var blXml = Path.Combine(AppContext.BaseDirectory, "BusinessLogic.xml");
+        if (File.Exists(blXml))
+        {
+            options.IncludeXmlComments(blXml);
+        }
+
+        var appXml = Path.Combine(AppContext.BaseDirectory, "Application.xml");
+        if (File.Exists(appXml))
+        {
+            options.IncludeXmlComments(appXml);
+        }
+
+        if (!options.SwaggerGeneratorOptions.SecuritySchemes.ContainsKey("Bearer"))
+        {
+            var securityScheme = new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Enter JWT Bearer token"
+            };
+            options.AddSecurityDefinition("Bearer", securityScheme);
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
+            });
+        }
     }
 }

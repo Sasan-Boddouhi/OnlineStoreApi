@@ -57,42 +57,48 @@ public sealed class SellerDashboardService : ISellerDashboardService
         var end = to ?? DateTime.MaxValue;
 
         // فقط سفارش‌های زنده در فروش حساب می‌شوند.
-        var groups = await _unitOfWork.Repository<OrderSellerGroup>()
-            .ListAsync(
-                new Spec<OrderSellerGroup>()
-                    .Where(g => g.SellerId == sellerId
-                             && g.Order.Status != OrderStatus.Cancelled
-                             && g.Order.Status != OrderStatus.Returned),
-                cancellationToken);
+        var groupQuery = _unitOfWork.Repository<OrderSellerGroup>()
+            .Query()
+            .Where(g => g.SellerId == sellerId
+                     && g.Order.Status != OrderStatus.Cancelled
+                     && g.Order.Status != OrderStatus.Returned);
 
-        if (filtered)
-        {
-            // تحویل‌نشده‌ها DeliveredAt ندارند و در بازهٔ تحویل نمی‌گنجند.
-            groups = groups
-                .Where(g => g.DeliveredAt.HasValue
-                         && g.DeliveredAt.Value >= start
-                         && g.DeliveredAt.Value <= end)
-                .ToList();
-        }
+        if (from.HasValue)
+            groupQuery = groupQuery.Where(g => g.DeliveredAt.HasValue && g.DeliveredAt.Value >= from.Value);
+
+        if (to.HasValue)
+            groupQuery = groupQuery.Where(g => g.DeliveredAt.HasValue && g.DeliveredAt.Value <= to.Value);
+
+        var groupStats = await groupQuery
+            .Select(g => new
+            {
+                g.OrderId,
+                g.SubTotal,
+                g.CommissionAmount,
+                g.SellerPayable
+            })
+            .ToListAsync(cancellationToken);
 
         // Phase 8 (R37): داشبورد باید بگوید چقدر پرداخت شده و چقدر مانده.
-        // این دو عدد از SellerPayout می‌آید، نه از سفارش‌ها، چون تسویه منبع حقیقت است.
-        var payouts = await _unitOfWork.Repository<SellerPayout>()
-            .ListAsync(
-                new Spec<SellerPayout>().Where(p => p.SellerId == sellerId),
-                cancellationToken);
+        var payoutQuery = _unitOfWork.Repository<SellerPayout>()
+            .Query()
+            .Where(p => p.SellerId == sellerId);
+
+        var payoutStats = await payoutQuery
+            .Select(p => new { p.Status, p.Amount })
+            .ToListAsync(cancellationToken);
 
         var summary = new SellerSalesSummaryDto
         {
             SellerId = sellerId,
             From = from,
             To = to,
-            TotalSales = groups.Sum(g => g.SubTotal),
-            TotalOrders = groups.Select(g => g.OrderId).Distinct().Count(),
-            CommissionPaid = groups.Sum(g => g.CommissionAmount),
-            NetEarnings = groups.Sum(g => g.SellerPayable),
-            PaidEarnings = payouts.Where(p => p.Status == PayoutStatus.Paid).Sum(p => p.Amount),
-            PendingPayouts = payouts.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount)
+            TotalSales = groupStats.Sum(g => g.SubTotal),
+            TotalOrders = groupStats.Select(g => g.OrderId).Distinct().Count(),
+            CommissionPaid = groupStats.Sum(g => g.CommissionAmount),
+            NetEarnings = groupStats.Sum(g => g.SellerPayable),
+            PaidEarnings = payoutStats.Where(p => p.Status == PayoutStatus.Paid).Sum(p => p.Amount),
+            PendingPayouts = payoutStats.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount)
         };
 
         _logger.LogInformation(
@@ -178,59 +184,46 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var (page, size) = NormalizePaging(pageNumber, pageSize);
 
-        var items = await _unitOfWork.Repository<OrderItem>()
-            .ListAsync(
-                new Spec<OrderItem>()
-                    .Where(i => i.Listing.SellerId == sellerId)
-                    .Include(i => i.Order),
-                cancellationToken);
+        var baseQuery = _unitOfWork.Repository<OrderItem>()
+            .Query()
+            .Where(i => i.Listing.SellerId == sellerId);
 
-        var ordered = items
-            .OrderByDescending(i => i.Order.OrderDate)
-            .ThenByDescending(i => i.OrderItemId)
-            .ToList();
+        var totalCount = await baseQuery.CountAsync(cancellationToken);
 
-        var totalCount = ordered.Count;
-        var recent = ordered.Skip((page - 1) * size).Take(size).ToList();
-
-        if (recent.Count == 0)
+        if (totalCount == 0)
             return new PagedResult<SellerRecentOrderDto> { Items = Array.Empty<SellerRecentOrderDto>(), PageNumber = page, PageSize = size, TotalCount = totalCount };
 
-        // نام محصول و واریانت در یک کوئری جدا خوانده می‌شود (Spec فقط Include تک‌سطحی دارد).
-        var variantIds = recent
-            .Select(i => i.VariantId ?? 0)
-            .Where(id => id > 0)
-            .Distinct()
-            .ToList();
-
-        var variants = variantIds.Count == 0
-            ? new List<ProductVariant>()
-            : (await _unitOfWork.Repository<ProductVariant>()
-                .ListAsync(
-                    new Spec<ProductVariant>()
-                        .Where(v => variantIds.Contains(v.VariantId))
-                        .Include(v => v.Product),
-                    cancellationToken)).ToList();
-
-        var rows = recent
-            .Select(i =>
+        var recentItems = await baseQuery
+            .OrderByDescending(i => i.Order.OrderDate)
+            .ThenByDescending(i => i.OrderItemId)
+            .Skip((page - 1) * size)
+            .Take(size)
+            .Select(i => new
             {
-                var variant = variants.FirstOrDefault(v => v.VariantId == i.VariantId);
-
-                return new SellerRecentOrderDto
-                {
-                    OrderId = i.OrderId,
-                    OrderItemId = i.OrderItemId,
-                    OrderDate = i.Order.OrderDate,
-                    OrderStatus = i.Order.Status.ToString(),
-                    ProductName = variant?.Product?.Name ?? string.Empty,
-                    VariantName = variant?.Name,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.UnitPrice,
-                    LineTotal = i.TotalPrice
-                };
+                i.OrderId,
+                i.OrderItemId,
+                OrderDate = i.Order.OrderDate,
+                OrderStatus = i.Order.Status.ToString(),
+                ProductName = i.Variant != null && i.Variant.Product != null ? i.Variant.Product.Name : (i.Product != null ? i.Product.Name : string.Empty),
+                VariantName = i.Variant != null ? i.Variant.Name : null,
+                i.Quantity,
+                i.UnitPrice,
+                LineTotal = i.TotalPrice
             })
-            .ToList();
+            .ToListAsync(cancellationToken);
+
+        var rows = recentItems.Select(i => new SellerRecentOrderDto
+        {
+            OrderId = i.OrderId,
+            OrderItemId = i.OrderItemId,
+            OrderDate = i.OrderDate,
+            OrderStatus = i.OrderStatus,
+            ProductName = i.ProductName,
+            VariantName = i.VariantName,
+            Quantity = i.Quantity,
+            UnitPrice = i.UnitPrice,
+            LineTotal = i.LineTotal
+        }).ToList();
 
         return new PagedResult<SellerRecentOrderDto> { Items = rows, PageNumber = page, PageSize = size, TotalCount = totalCount };
     }

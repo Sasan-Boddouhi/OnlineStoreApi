@@ -44,7 +44,17 @@ public class ProductImagesController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)
-            return BadRequest(new { message = "فایلی ارسال نشده است.", code = "FILE_REQUIRED" });
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "فایلی ارسال نشده است.",
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["code"] = "FILE_REQUIRED";
+            return BadRequest(problem);
+        }
 
         await using var stream = file.OpenReadStream();
 

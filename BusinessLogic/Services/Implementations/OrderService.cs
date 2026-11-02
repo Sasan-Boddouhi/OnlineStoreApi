@@ -525,41 +525,49 @@ public sealed class OrderService : IOrderService
     {
         _logger.LogInformation("Cancelling order {OrderId}", orderId);
 
-        var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
-
-        order.Cancel();
-
-        // R6: گروه‌های فروشنده هم باید لغو شوند، وگرنه سفارش لغوشده در گزارش
-        // تسویه با وضعیت Processing می‌ماند و پول پرداخت‌نشده نشان می‌دهد.
-        foreach (var group in order.SellerGroups)
-            group.Cancel();
-
-        foreach (var item in order.OrderItems)
-            await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
-
-        // Phase 8 (H): اگر سفارش پرداخت‌شده بود، پول باید برگردد.
-        // بدون این، پول مشتری نزد ما می‌ماند و گزارش مالی دروغ می‌گوید.
-        await RefundSucceededPaymentsAsync(orderId, cancellationToken);
-
-        // Phase 9 (R40): لغو سفارش یک رویداد حساس است.
-        await _auditService.RecordAsync(
-            "Order.Cancelled",
-            nameof(Order),
-            orderId.ToString(),
-            $"amount={order.TotalAmount}",
-            cancellationToken);
-
-        _unitOfWork.Repository<Order>().Update(order);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
+            var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
+
+            order.Cancel();
+
+            // R6: گروه‌های فروشنده هم باید لغو شوند، وگرنه سفارش لغوشده در گزارش
+            // تسویه با وضعیت Processing می‌ماند و پول پرداخت‌نشده نشان می‌دهد.
+            foreach (var group in order.SellerGroups)
+                group.Cancel();
+
+            foreach (var item in order.OrderItems)
+                await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
+
+            // Phase 8 (H): اگر سفارش پرداخت‌شده بود، پول باید برگردد.
+            // بدون این، پول مشتری نزد ما می‌ماند و گزارش مالی دروغ می‌گوید.
+            await RefundSucceededPaymentsAsync(orderId, cancellationToken);
+
+            // Phase 9 (R40): لغو سفارش یک رویداد حساس است.
+            await _auditService.RecordAsync(
+                "Order.Cancelled",
+                nameof(Order),
+                orderId.ToString(),
+                $"amount={order.TotalAmount}",
+                cancellationToken);
+
+            _unitOfWork.Repository<Order>().Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            return _mapper.Map<OrderDto>(order);
         }
         catch (DbUpdateConcurrencyException)
         {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
-
-        return _mapper.Map<OrderDto>(order);
+        catch (Exception)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
     }
 
     public async Task<OrderDto> MarkReturnedAsync(int orderId, CancellationToken cancellationToken = default)

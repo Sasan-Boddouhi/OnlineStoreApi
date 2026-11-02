@@ -46,11 +46,15 @@ public class CitiesController : ControllerBase
 
         if (!parseResult.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query syntax",
-                Errors = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target })
-            });
+                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
+            return BadRequest(problem);
         }
 
         var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -58,11 +62,15 @@ public class CitiesController : ControllerBase
 
         if (!validation.Success)
         {
-            return BadRequest(new
+            var problem = new ProblemDetails
             {
+                Status = StatusCodes.Status400BadRequest,
                 Title = "Invalid query values",
-                Errors = validation.Errors.Select(e => new { e.Code, e.Message, e.Target })
-            });
+                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
+                Instance = HttpContext.Request.Path
+            };
+            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
+            return BadRequest(problem);
         }
 
         var result = await _cityService.GetByQueryAsync(validation.Value!, cancellationToken);
@@ -114,7 +122,13 @@ public class CitiesController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (id != dto.CityId)
-            return BadRequest("ID mismatch");
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "ID mismatch",
+                Instance = HttpContext.Request.Path
+            });
 
         if (!ModelState.IsValid)
             return BadRequest(ModelState);

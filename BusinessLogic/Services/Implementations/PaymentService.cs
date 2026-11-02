@@ -280,19 +280,30 @@ public sealed class PaymentService : IPaymentService
                 verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
         }
 
-        payment.GatewayReference = verification.ReferenceId;
-        payment.TransitionTo(PaymentState.Succeeded);
-        await AuditAsync("Payment.Succeeded", payment.PaymentId, verification.ReferenceId, cancellationToken);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            payment.GatewayReference = verification.ReferenceId;
+            payment.TransitionTo(PaymentState.Succeeded);
+            await AuditAsync("Payment.Succeeded", payment.PaymentId, verification.ReferenceId, cancellationToken);
 
-        await ApplyPaidStatusToOrderAsync(payment, cancellationToken);
+            await ApplyPaidStatusToOrderAsync(payment, cancellationToken);
 
-        _unitOfWork.Repository<Payment>().Update(payment);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-        _logger.LogInformation(
-            "Payment {PaymentId} succeeded for order {OrderId}", payment.PaymentId, payment.OrderId);
+            _logger.LogInformation(
+                "Payment {PaymentId} succeeded for order {OrderId}", payment.PaymentId, payment.OrderId);
 
-        return _mapper.Map<PaymentDto>(payment);
+            return _mapper.Map<PaymentDto>(payment);
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            _logger.LogError(ex, "Failed to complete payment {PaymentId} verification transaction", payment.PaymentId);
+            throw;
+        }
     }
 
     // ==================== Webhook ====================
@@ -373,6 +384,12 @@ public sealed class PaymentService : IPaymentService
 
     public async Task<PaymentDto?> GetByOrderAsync(int orderId, CancellationToken cancellationToken = default)
     {
+        var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
+        if (order is null)
+            return null;
+
+        await EnsureOrderBelongsToCurrentUserAsync(order, cancellationToken);
+
         var payment = await _unitOfWork.Repository<Payment>()
             .FirstOrDefaultAsync(
                 new Spec<Payment>()
