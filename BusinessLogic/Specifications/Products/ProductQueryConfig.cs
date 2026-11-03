@@ -15,10 +15,13 @@ public static class ProductQueryConfig
         "description",
         "subcategory.subcategoryname",
         "isactive",
-        "ExpirationDate"
+        "ExpirationDate",
+        "brandid",
+        "brand.name",
+        "brand.slug"
     };
 
-    // پروجکشن کامل (با دسته‌بندی و زیردسته‌بندی)
+    // پروجکشن کامل (با دسته‌بندی و زیردسته‌بندی و برند)
     // ProductQueryConfig.cs
     public static Expression<Func<Product, ProductDto>> Projection =>
         p => new ProductDto
@@ -33,6 +36,8 @@ public static class ProductQueryConfig
             CategoryName = p.Subcategory != null && p.Subcategory.Category != null
                 ? p.Subcategory.Category.CategoryName
                 : string.Empty,
+            BrandId = p.BrandId,
+            BrandName = p.Brand != null ? p.Brand.Name : null,
             IsActive = p.IsActive,
             Barcode = p.Barcode,
             Unit = p.Unit,
@@ -72,7 +77,11 @@ public static class ProductQueryConfig
                         })
                         .ToList(),
                     Listings = v.Listings
-                        .Where(l => l.Status == SellerProductStatus.Active && l.Inventories.Any(inv => inv.IsActive && inv.Quantity > 0))
+                        .Where(l => l.Status == SellerProductStatus.Active 
+                                 && l.Seller != null 
+                                 && l.Seller.Status == SellerStatus.Approved 
+                                 && l.Seller.IsActive
+                                 && l.Inventories.Any(inv => inv.IsActive && inv.Quantity > 0))
                         .Select(l => new VariantListingDto
                         {
                             ListingId = l.ListingId,

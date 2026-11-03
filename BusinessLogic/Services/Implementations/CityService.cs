@@ -99,6 +99,18 @@ public sealed class CityService : ICityService
         return result;
     }
 
+    public async Task<IReadOnlyList<CityDto>> GetByProvinceIdAsync(int provinceId, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<City>()
+            .Where(c => c.ProvinceId == provinceId)
+            .OrderBy(c => c.CityName);
+
+        var items = await _unitOfWork.Repository<City>()
+            .ListAsync(spec, CityQueryConfig.Projection, cancellationToken);
+
+        return items;
+    }
+
     #endregion
 
     #region Commands

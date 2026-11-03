@@ -1,4 +1,4 @@
-﻿using Application.Common.Queries;
+using Application.Common.Queries;
 using Application.Entities;
 using BusinessLogic.DTOs.Auth;
 using BusinessLogic.DTOs.City;
@@ -19,6 +19,7 @@ namespace BusinessLogic.Services.Interfaces
             CancellationToken cancellationToken = default);
 
         Task<CityDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<CityDto>> GetByProvinceIdAsync(int provinceId, CancellationToken cancellationToken = default);
         Task<CityDto> CreateAsync(CreateCityDto dto, CancellationToken cancellationToken = default);
         Task<CityDto?> UpdateAsync(UpdateCityDto dto, CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);

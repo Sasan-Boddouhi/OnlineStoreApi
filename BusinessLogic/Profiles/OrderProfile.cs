@@ -15,7 +15,9 @@ public class OrderProfile : Profile
 
         CreateMap<OrderDto, Order>()
             .ConfigureDbDestination()
-            .ForMember(d => d.CustomerId, opt => opt.Ignore());
+            .ForMember(d => d.CustomerId, opt => opt.Ignore())
+            .ForMember(d => d.ShippingMethodId, opt => opt.Ignore())
+            .ForMember(d => d.CouponId, opt => opt.Ignore());
 
         CreateMap<Order, OrderDetailsDto>()
             .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()))
@@ -25,6 +27,8 @@ public class OrderProfile : Profile
 
         CreateMap<OrderDetailsDto, Order>()
             .ConfigureDbDestination()
-            .ForMember(d => d.CustomerId, opt => opt.Ignore());
+            .ForMember(d => d.CustomerId, opt => opt.Ignore())
+            .ForMember(d => d.ShippingMethodId, opt => opt.Ignore())
+            .ForMember(d => d.CouponId, opt => opt.Ignore());
     }
 }

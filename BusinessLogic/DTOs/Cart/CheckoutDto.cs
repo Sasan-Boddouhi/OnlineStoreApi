@@ -1,4 +1,4 @@
-﻿namespace BusinessLogic.DTOs.Cart
+namespace BusinessLogic.DTOs.Cart
 {
     /// <summary>
     /// اطلاعات لازم برای تبدیل سبد به سفارش.
@@ -10,5 +10,7 @@
         public string ShippingAddress { get; set; } = null!;
         public string ShippingPhoneNumber { get; set; } = null!;
         public string? Description { get; set; }
+        public string? CouponCode { get; set; }
+        public int? ShippingMethodId { get; set; }
     }
 }

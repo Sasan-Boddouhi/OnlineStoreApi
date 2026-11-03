@@ -34,7 +34,9 @@ public sealed class OrderService : IOrderService
         Status = o.Status.ToString(),
         ShippingFullName = o.ShippingFullName,
         ShippingAddress = o.ShippingAddress,
-        ShippingPhoneNumber = o.ShippingPhoneNumber
+        ShippingPhoneNumber = o.ShippingPhoneNumber,
+        ShippingCost = o.ShippingCost,
+        DiscountAmount = o.DiscountAmount
     };
 
     private static readonly Expression<Func<Order, OrderDetailsDto>> OrderDetailsProjection = o => new OrderDetailsDto
@@ -46,6 +48,8 @@ public sealed class OrderService : IOrderService
         ShippingFullName = o.ShippingFullName,
         ShippingAddress = o.ShippingAddress,
         ShippingPhoneNumber = o.ShippingPhoneNumber,
+        ShippingCost = o.ShippingCost,
+        DiscountAmount = o.DiscountAmount,
         Items = o.OrderItems.Select(i => new OrderItemDto
         {
             OrderItemId = i.OrderItemId,
@@ -245,7 +249,7 @@ public sealed class OrderService : IOrderService
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new BusinessException(
+            throw new ConflictException(
                 "موجودی به‌طور هم‌زمان توسط درخواست دیگری تغییر کرد. لطفاً دوباره تلاش کنید.",
                 "INVENTORY_CONCURRENCY");
         }
@@ -324,7 +328,7 @@ public sealed class OrderService : IOrderService
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new BusinessException(
+            throw new ConflictException(
                 "موجودی به‌طور هم‌زمان توسط درخواست دیگری تغییر کرد. لطفاً دوباره تلاش کنید.",
                 "INVENTORY_CONCURRENCY");
         }
@@ -430,17 +434,25 @@ public sealed class OrderService : IOrderService
 
         foreach (var group in order.SellerGroups)
         {
-            // Phase 8 (R35): لحظهٔ تحویل ثبت می‌شود تا گزارش ماهانه دقیق باشد.
-            group.MarkDelivered(now);
+            if (group.Status != SellerGroupStatus.Delivered && group.Status != SellerGroupStatus.Cancelled)
+            {
+                group.MarkDelivered(now);
+            }
 
-            var payout = new SellerPayout(
-                group.SellerId,
-                group.OrderSellerGroupId,
-                group.SellerPayable,
-                order.OrderDate,
-                now);
+            var existingPayout = await _unitOfWork.Repository<SellerPayout>()
+                .FirstOrDefaultAsync(new Spec<SellerPayout>().Where(p => p.OrderSellerGroupId == group.OrderSellerGroupId), cancellationToken);
 
-            await _unitOfWork.Repository<SellerPayout>().AddAsync(payout, cancellationToken);
+            if (existingPayout == null && group.Status != SellerGroupStatus.Cancelled)
+            {
+                var payout = new SellerPayout(
+                    group.SellerId,
+                    group.OrderSellerGroupId,
+                    group.SellerPayable,
+                    order.OrderDate,
+                    now);
+
+                await _unitOfWork.Repository<SellerPayout>().AddAsync(payout, cancellationToken);
+            }
         }
 
         _unitOfWork.Repository<Order>().Update(order);
@@ -450,7 +462,7 @@ public sealed class OrderService : IOrderService
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
 
         _logger.LogInformation(
@@ -544,6 +556,8 @@ public sealed class OrderService : IOrderService
             ShippingFullName = order.ShippingFullName,
             ShippingAddress = order.ShippingAddress,
             ShippingPhoneNumber = order.ShippingPhoneNumber,
+            ShippingCost = order.ShippingCost,
+            DiscountAmount = order.DiscountAmount,
             Items = order.OrderItems.Select(i => new OrderItemDto
             {
                 OrderItemId = i.OrderItemId,
@@ -637,7 +651,7 @@ public sealed class OrderService : IOrderService
         catch (DbUpdateConcurrencyException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
         catch (Exception)
         {
@@ -691,7 +705,7 @@ public sealed class OrderService : IOrderService
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
 
         return _mapper.Map<OrderDto>(order);

@@ -38,5 +38,15 @@ public class SellerProfile : Profile
             // Phase 9 (R33): کش امتیاز از نظرها محاسبه می‌شود، نه از DTO.
             .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
             .ForMember(dest => dest.ReviewCount, opt => opt.Ignore());
+
+        CreateMap<UpdateSellerProfileDto, Seller>()
+            .ConfigureDbDestination()
+            .ForMember(dest => dest.SellerId, opt => opt.Ignore())
+            .ForMember(dest => dest.UserId, opt => opt.Ignore())
+            .ForMember(dest => dest.Status, opt => opt.Ignore())
+            .ForMember(dest => dest.IsActive, opt => opt.Ignore())
+            .ForMember(dest => dest.CommissionRate, opt => opt.Ignore())
+            .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
+            .ForMember(dest => dest.ReviewCount, opt => opt.Ignore());
     }
 }

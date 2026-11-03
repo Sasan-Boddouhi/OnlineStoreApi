@@ -1,4 +1,4 @@
-﻿using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -27,7 +27,7 @@ public class JwtTokenService : IJwtTokenService
             issuer: _config["Jwt:Issuer"],
             audience: _config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.Now.AddMinutes(
+            expires: DateTime.UtcNow.AddMinutes(
                 int.Parse(_config["Jwt:ExpireMinutes"]!)
             ),
             signingCredentials: creds

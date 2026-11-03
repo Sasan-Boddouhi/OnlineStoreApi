@@ -73,6 +73,18 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // M7.11: Auto-provision Customer profile if created user is Customer
+            if (user.UserType == UserType.Customer)
+            {
+                var customerRepo = _unitOfWork.Repository<Customer>();
+                if (customerRepo != null)
+                {
+                    var customer = new Customer { UserId = user.UserId };
+                    await customerRepo.AddAsync(customer, cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+            }
+
             if (request.Addresses?.Any() == true)
             {
                 var addresses = request.Addresses

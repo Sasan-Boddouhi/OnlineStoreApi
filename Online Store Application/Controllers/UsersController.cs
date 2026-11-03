@@ -272,10 +272,10 @@ public class UsersController : ControllerBase
     /// <summary>دریافت نقش‌ها بر اساس نوع کاربر توسط ادمین.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("roles")]
-    [ProducesResponseType(typeof(IEnumerable<RoleDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetRoles([FromQuery] string? userType, CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<string>>> GetRoles([FromQuery] string? userType, CancellationToken cancellationToken)
     {
         var roles = await _userService.GetRolesAsync(userType, cancellationToken);
         return Ok(roles);

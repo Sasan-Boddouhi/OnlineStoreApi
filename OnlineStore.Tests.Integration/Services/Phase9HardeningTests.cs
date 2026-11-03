@@ -485,6 +485,11 @@ public class Phase9HardeningTests : BaseIntegrationTest
         {
             var (sellerUser, _) = await CreateCustomerAsync();
             seller = await CreateSellerAsync(sellerUser.UserId);
+            SetCurrentUser(sellerUser.UserId, "Seller");
+        }
+        else
+        {
+            SetCurrentUser(seller.UserId, "Seller");
         }
 
         var product = await ProductService.CreateAsync(new CreateProductDto

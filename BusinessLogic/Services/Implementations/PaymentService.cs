@@ -631,6 +631,11 @@ public sealed class PaymentService : IPaymentService
 
             return _mapper.Map<PaymentDto>(payment);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+        }
         catch
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);

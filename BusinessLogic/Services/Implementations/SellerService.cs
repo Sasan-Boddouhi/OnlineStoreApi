@@ -132,6 +132,35 @@ public sealed class SellerService : ISellerService
         return dtos;
     }
 
+    public async Task<SellerDto> UpdateProfileAsync(int sellerId, UpdateSellerProfileDto dto, CancellationToken cancellationToken = default)
+    {
+        var entity = await _unitOfWork.Repository<Seller>().GetByIdAsync(sellerId, cancellationToken);
+        if (entity == null)
+            throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
+
+        var nameTaken = await _unitOfWork.Repository<Seller>()
+            .AnyAsync(s => s.StoreName == dto.StoreName && s.SellerId != sellerId, cancellationToken);
+        if (nameTaken)
+            throw new BusinessException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
+
+        if (!string.IsNullOrWhiteSpace(dto.Slug))
+        {
+            var slugTaken = await _unitOfWork.Repository<Seller>()
+                .AnyAsync(s => s.Slug == dto.Slug && s.SellerId != sellerId, cancellationToken);
+            if (slugTaken)
+                throw new BusinessException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
+        }
+
+        _mapper.Map(dto, entity);
+
+        _unitOfWork.Repository<Seller>().Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Seller profile {SellerId} updated", sellerId);
+
+        return _mapper.Map<SellerDto>(entity);
+    }
+
     public async Task<SellerDto> UpdateAsync(int sellerId, UpdateSellerDto dto, CancellationToken cancellationToken = default)
     {
         var entity = await _unitOfWork.Repository<Seller>().GetByIdAsync(sellerId, cancellationToken);
@@ -152,6 +181,18 @@ public sealed class SellerService : ISellerService
         }
 
         _mapper.Map(dto, entity);
+
+        // M7.11: Cascade seller suspension or deactivation to all active listings
+        if (entity.Status == SellerStatus.Suspended || entity.Status == SellerStatus.Rejected || !entity.IsActive)
+        {
+            var activeListings = await _unitOfWork.Repository<SellerProduct>()
+                .ListAsync(new Spec<SellerProduct>().Where(l => l.SellerId == sellerId && l.Status == SellerProductStatus.Active).AsTracking(), cancellationToken);
+            foreach (var listing in activeListings)
+            {
+                listing.Status = SellerProductStatus.Inactive;
+                _unitOfWork.Repository<SellerProduct>().Update(listing);
+            }
+        }
 
         _unitOfWork.Repository<Seller>().Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -200,22 +241,21 @@ public sealed class SellerService : ISellerService
                           string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
 
             var userId = _currentUserService.TryGetCurrentUserId();
-            if (!isAdmin && userId.HasValue)
+            if (!isAdmin)
             {
+                if (!userId.HasValue)
+                    throw new ForbiddenException("کاربر احراز هویت نشده است.", "UNAUTHENTICATED");
+
                 var currentSeller = await _unitOfWork.Repository<Seller>()
                     .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
 
-                if (currentSeller != null)
-                {
-                    if (dto.SellerId != 0 && dto.SellerId != currentSeller.SellerId)
-                        throw new ForbiddenException("شما مجاز به ایجاد پیشنهاد فروش برای فروشنده دیگر نیستید.", "SELLER_FORBIDDEN");
-
-                    dto.SellerId = currentSeller.SellerId;
-                }
-                else if (dto.SellerId == 0)
-                {
+                if (currentSeller == null)
                     throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
-                }
+
+                if (dto.SellerId != 0 && dto.SellerId != currentSeller.SellerId)
+                    throw new ForbiddenException("شما مجاز به ایجاد پیشنهاد فروش برای فروشنده دیگر نیستید.", "SELLER_FORBIDDEN");
+
+                dto.SellerId = currentSeller.SellerId;
             }
         }
 
@@ -401,7 +441,7 @@ public sealed class SellerService : ISellerService
         catch (DbUpdateConcurrencyException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw new BusinessException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
         catch (BusinessException)
         {

@@ -15,6 +15,7 @@ namespace BusinessLogic.Services.Interfaces
     /// </summary>
     Task<SellerDto?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<SellerDto>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task<SellerDto> UpdateProfileAsync(int sellerId, UpdateSellerProfileDto dto, CancellationToken cancellationToken = default);
         Task<SellerDto> UpdateAsync(int sellerId, UpdateSellerDto dto, CancellationToken cancellationToken = default);
         Task DeleteAsync(int sellerId, CancellationToken cancellationToken = default);
 

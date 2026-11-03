@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace BusinessLogic.DTOs.Order
 {
@@ -11,5 +11,7 @@ namespace BusinessLogic.DTOs.Order
         public string ShippingFullName { get; set; } = null!;
         public string ShippingAddress { get; set; } = null!;
         public string ShippingPhoneNumber { get; set; } = null!;
+        public decimal ShippingCost { get; set; }
+        public decimal DiscountAmount { get; set; }
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using Application.Entities;
 using BusinessLogic.DTOs.Product;
@@ -21,7 +21,10 @@ public class ProductQueryConfigTests
             "description",
             "subcategory.subcategoryname",
             "isactive",
-            "ExpirationDate"
+            "ExpirationDate",
+            "brandid",
+            "brand.name",
+            "brand.slug"
         };
 
         // Act

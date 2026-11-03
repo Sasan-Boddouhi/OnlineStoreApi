@@ -1,4 +1,4 @@
-﻿// BusinessLogic/Specifications/Cities/CityQueryConfig.cs
+// BusinessLogic/Specifications/Cities/CityQueryConfig.cs
 using Application.Entities;
 using BusinessLogic.DTOs.City;
 using System;
@@ -11,6 +11,8 @@ public static class CityQueryConfig
     public static readonly string[] AllowedFields =
     {
         "cityname",
+        "provinceid",
+        "province.provincename",
         "province.name",
         "isactive"
     };

@@ -520,6 +520,7 @@ public class Phase8PaymentTests : BaseIntegrationTest
     {
         var (sellerUser, _) = await CreateCustomerAsync();
         var seller = await CreateSellerAsync(sellerUser.UserId);
+        SetCurrentUser(sellerUser.UserId, "Seller");
 
         var product = await ProductService.CreateAsync(new CreateProductDto
         {

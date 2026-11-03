@@ -159,12 +159,19 @@ namespace BusinessLogic.Services.Implementations
         private async Task<SellerProduct> LoadActiveListingAsync(int listingId, CancellationToken cancellationToken)
         {
             var listing = await _unitOfWork.Repository<SellerProduct>()
-                .GetByIdAsync(listingId, cancellationToken);
+                .FirstOrDefaultAsync(
+                    new Spec<SellerProduct>()
+                        .Where(l => l.ListingId == listingId)
+                        .Include(l => l.Seller),
+                    cancellationToken);
 
             if (listing is null)
                 throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
-            if (listing.Status != SellerProductStatus.Active)
+            if (listing.Status != SellerProductStatus.Active ||
+                listing.Seller == null ||
+                listing.Seller.Status != SellerStatus.Approved ||
+                !listing.Seller.IsActive)
                 throw new BusinessException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
 
             return listing;
@@ -172,6 +179,22 @@ namespace BusinessLogic.Services.Implementations
 
         private async Task EnsureStockAsync(int listingId, decimal quantity, CancellationToken cancellationToken)
         {
+            var listing = await _unitOfWork.Repository<SellerProduct>()
+                .FirstOrDefaultAsync(
+                    new Spec<SellerProduct>()
+                        .Where(l => l.ListingId == listingId)
+                        .Include(l => l.Seller),
+                    cancellationToken);
+
+            if (listing is null ||
+                listing.Status != SellerProductStatus.Active ||
+                listing.Seller == null ||
+                listing.Seller.Status != SellerStatus.Approved ||
+                !listing.Seller.IsActive)
+            {
+                throw new BusinessException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
+            }
+
             var available = await _inventoryService.GetAvailableAsync(listingId, cancellationToken);
             if (available < quantity)
                 throw new BusinessException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
@@ -455,11 +478,56 @@ namespace BusinessLogic.Services.Implementations
                     throw new BusinessException(
                         $"پیشنهاد فروش {item.ListingId} دیگر موجود نیست.", "LISTING_NOT_FOUND");
 
-                if (listing.Status != SellerProductStatus.Active)
+                if (listing.Status != SellerProductStatus.Active ||
+                    listing.Seller == null ||
+                    listing.Seller.Status != SellerStatus.Approved ||
+                    !listing.Seller.IsActive)
                     throw new BusinessException(
                         $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.", "LISTING_NOT_ACTIVE");
 
                 await EnsureStockAsync(item.ListingId, item.Quantity, cancellationToken);
+            }
+
+            // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11) ----
+            decimal shippingCost = 0;
+            if (dto.ShippingMethodId.HasValue)
+            {
+                var shippingMethod = await _unitOfWork.Repository<ShippingMethod>()
+                    .GetByIdAsync(dto.ShippingMethodId.Value, cancellationToken);
+                if (shippingMethod is null || !shippingMethod.IsActive)
+                    throw new BusinessException("روش ارسال نامعتبر یا غیرفعال است.", "INVALID_SHIPPING_METHOD");
+
+                shippingCost = shippingMethod.BaseCost;
+            }
+
+            decimal discountAmount = 0;
+            int? couponId = null;
+            if (!string.IsNullOrWhiteSpace(dto.CouponCode))
+            {
+                var normalizedCode = dto.CouponCode.Trim().ToUpperInvariant();
+                var coupon = await _unitOfWork.Repository<Coupon>()
+                    .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode && c.IsActive), cancellationToken);
+
+                if (coupon is null)
+                    throw new BusinessException("کد تخفیف معتبر نیست.", "INVALID_COUPON");
+
+                if (coupon.ExpiresAtUtc.HasValue && coupon.ExpiresAtUtc.Value < DateTime.UtcNow)
+                    throw new BusinessException("کد تخفیف منقضی شده است.", "COUPON_EXPIRED");
+
+                var itemsTotal = cart.Items.Sum(i =>
+                {
+                    listings.TryGetValue(i.ListingId, out var l);
+                    return (l?.Price ?? i.UnitPrice) * i.Quantity;
+                });
+
+                if (coupon.MinOrderAmount.HasValue && itemsTotal < coupon.MinOrderAmount.Value)
+                    throw new BusinessException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {coupon.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
+
+                discountAmount = Math.Round(itemsTotal * (coupon.DiscountPercentage / 100m), 2);
+                if (coupon.MaxDiscountAmount.HasValue && discountAmount > coupon.MaxDiscountAmount.Value)
+                    discountAmount = coupon.MaxDiscountAmount.Value;
+
+                couponId = coupon.CouponId;
             }
 
             var customer = await _unitOfWork.Repository<Customer>()
@@ -468,7 +536,12 @@ namespace BusinessLogic.Services.Implementations
                     cancellationToken);
 
             if (customer is null)
-                throw new BusinessException("پروفایل مشتری برای این کاربر یافت نشد.", "CUSTOMER_NOT_FOUND");
+            {
+                // M7.11: Fallback auto-provision Customer profile for legacy users
+                customer = new Customer { UserId = userId.Value };
+                await _unitOfWork.Repository<Customer>().AddAsync(customer, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
 
             // ---- ساخت سفارش در یک تراکنش (R9) ----
             // بدون تراکنش، شکست در وسط کار یک سفارش نیمه‌کاره با موجودی رزروشده
@@ -494,6 +567,27 @@ namespace BusinessLogic.Services.Implementations
                     .Select(item => new AddOrderItemDto { ListingId = item.ListingId, Quantity = item.Quantity });
 
                 result = await _orderService.AddItemsToOrderAsync(orderId, itemsDto, cancellationToken);
+
+                // اعمال تخفیف و هزینه ارسال به سفارش
+                var orderEntity = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
+                if (orderEntity != null)
+                {
+                    orderEntity.ApplyDiscountsAndShipping(discountAmount, shippingCost, couponId, dto.ShippingMethodId);
+                    _unitOfWork.Repository<Order>().Update(orderEntity);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    result = _mapper != null ? _mapper.Map<OrderDto>(orderEntity) : new OrderDto
+                    {
+                        OrderId = orderEntity.OrderId,
+                        OrderDate = orderEntity.OrderDate,
+                        TotalAmount = orderEntity.TotalAmount,
+                        Status = orderEntity.Status.ToString(),
+                        ShippingFullName = orderEntity.ShippingFullName,
+                        ShippingAddress = orderEntity.ShippingAddress,
+                        ShippingPhoneNumber = orderEntity.ShippingPhoneNumber,
+                        ShippingCost = orderEntity.ShippingCost,
+                        DiscountAmount = orderEntity.DiscountAmount
+                    };
+                }
 
                 // ---- پاک‌سازی سبد ----
                 foreach (var item in cart.Items.ToList())

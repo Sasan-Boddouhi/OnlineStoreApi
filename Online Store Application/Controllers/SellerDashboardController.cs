@@ -91,4 +91,17 @@ public class SellerDashboardController : ControllerBase
         [FromBody] ShipSellerGroupRequest request,
         CancellationToken cancellationToken)
         => Ok(await _dashboardService.ShipSellerGroupAsync(orderId, groupId, request, cancellationToken));
+
+    /// <summary>M7.11 — ثبت تحویل بسته سفارش توسط فروشنده یا ادمین و ایجاد فوری تسویه مالی برای این بسته.</summary>
+    [HttpPost("/api/v{version:apiVersion}/sellers/orders/{orderId:int}/groups/{groupId:int}/deliver")]
+    [ProducesResponseType(typeof(SellerOrderDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SellerOrderDetailsDto>> DeliverSellerGroup(
+        int orderId,
+        int groupId,
+        CancellationToken cancellationToken)
+        => Ok(await _dashboardService.DeliverSellerGroupAsync(orderId, groupId, cancellationToken));
 }

@@ -688,6 +688,19 @@ namespace DataLayer.Context
                 .WithMany(b => b.Products)
                 .HasForeignKey(p => p.BrandId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // M7.11 Order ShippingMethod & Coupon relations
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.ShippingMethod)
+                .WithMany()
+                .HasForeignKey(o => o.ShippingMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Coupon)
+                .WithMany()
+                .HasForeignKey(o => o.CouponId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

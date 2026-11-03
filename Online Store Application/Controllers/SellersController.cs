@@ -88,7 +88,7 @@ public class SellersController : ControllerBase
     public async Task<ActionResult<SellerDto>> GetById(int id, CancellationToken cancellationToken)
         => Ok(await _sellerService.GetByIdAsync(id, cancellationToken));
 
-    /// <summary>ویرایش مشخصات فروشگاه.</summary>
+    /// <summary>ویرایش مشخصات عمومی فروشگاه توسط فروشنده مالک.</summary>
     [HttpPut("{id:int}")]
     [Authorize]
     [ProducesResponseType(typeof(SellerDto), StatusCodes.Status200OK)]
@@ -99,7 +99,7 @@ public class SellersController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<SellerDto>> Update(
         int id,
-        [FromBody] UpdateSellerDto dto,
+        [FromBody] UpdateSellerProfileDto dto,
         CancellationToken cancellationToken)
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("SuperAdmin"))
@@ -111,6 +111,23 @@ public class SellersController : ControllerBase
                 return Forbid();
         }
 
+        return Ok(await _sellerService.UpdateProfileAsync(id, dto, cancellationToken));
+    }
+
+    /// <summary>ویرایش کامل مشخصات و وضعیت فروشگاه توسط ادمین.</summary>
+    [HttpPut("{id:int}/admin")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(SellerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<SellerDto>> UpdateByAdmin(
+        int id,
+        [FromBody] UpdateSellerDto dto,
+        CancellationToken cancellationToken)
+    {
         return Ok(await _sellerService.UpdateAsync(id, dto, cancellationToken));
     }
 

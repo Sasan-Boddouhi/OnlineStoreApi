@@ -654,6 +654,9 @@ namespace DataLayer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderId"));
 
+                    b.Property<int?>("CouponId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");
 
@@ -662,6 +665,9 @@ namespace DataLayer.Migrations
 
                     b.Property<int>("CustomerId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
@@ -683,10 +689,16 @@ namespace DataLayer.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<decimal>("ShippingCost")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("ShippingFullName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("ShippingMethodId")
+                        .HasColumnType("int");
 
                     b.Property<string>("ShippingPhoneNumber")
                         .IsRequired()
@@ -701,9 +713,13 @@ namespace DataLayer.Migrations
 
                     b.HasKey("OrderId");
 
+                    b.HasIndex("CouponId");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("OrderDate");
+
+                    b.HasIndex("ShippingMethodId");
 
                     b.HasIndex("Status");
 
@@ -2153,13 +2169,27 @@ namespace DataLayer.Migrations
 
             modelBuilder.Entity("Application.Entities.Order", b =>
                 {
+                    b.HasOne("Application.Entities.Coupon", "Coupon")
+                        .WithMany()
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Application.Entities.Customer", "Customer")
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Application.Entities.ShippingMethod", "ShippingMethod")
+                        .WithMany()
+                        .HasForeignKey("ShippingMethodId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Coupon");
+
                     b.Navigation("Customer");
+
+                    b.Navigation("ShippingMethod");
                 });
 
             modelBuilder.Entity("Application.Entities.OrderItem", b =>

@@ -416,4 +416,112 @@ public sealed class SellerDashboardService : ISellerDashboardService
             }).ToList()
         };
     }
+
+    public async Task<SellerOrderDetailsDto> DeliverSellerGroupAsync(
+        int orderId,
+        int groupId,
+        CancellationToken cancellationToken = default)
+    {
+        var role = _currentUser.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+        var userId = _currentUser.TryGetCurrentUserId();
+        if (userId is null)
+            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+
+        Seller? seller = null;
+        if (!isAdmin)
+        {
+            seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
+
+            if (seller is null)
+                throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
+        }
+
+        var spec = new Spec<OrderSellerGroup>()
+            .Where(g => g.OrderId == orderId && g.OrderSellerGroupId == groupId)
+            .Include(g => g.Order)
+            .Include(g => g.Items)
+            .AsTracking();
+
+        if (!isAdmin)
+            spec.Where(g => g.SellerId == seller!.SellerId);
+
+        var group = await _unitOfWork.Repository<OrderSellerGroup>().FirstOrDefaultAsync(spec, cancellationToken);
+        if (group is null)
+            throw new NotFoundException("گروه سفارش یافت نشد.", "GROUP_NOT_FOUND");
+
+        if (group.Status == SellerGroupStatus.Delivered)
+            throw new BusinessException("این بسته قبلاً تحویل شده است.", "GROUP_ALREADY_DELIVERED");
+
+        if (group.Status == SellerGroupStatus.Cancelled)
+            throw new BusinessException("بسته لغوشده قابل تحویل نیست.", "GROUP_CANCELLED");
+
+        var now = DateTime.UtcNow;
+        group.MarkDelivered(now);
+        _unitOfWork.Repository<OrderSellerGroup>().Update(group);
+
+        // Check if SellerPayout already exists for this group
+        var existingPayout = await _unitOfWork.Repository<SellerPayout>()
+            .FirstOrDefaultAsync(new Spec<SellerPayout>().Where(p => p.OrderSellerGroupId == group.OrderSellerGroupId), cancellationToken);
+
+        if (existingPayout == null)
+        {
+            var payout = new SellerPayout(
+                group.SellerId,
+                group.OrderSellerGroupId,
+                group.SellerPayable,
+                group.Order.OrderDate,
+                now);
+
+            await _unitOfWork.Repository<SellerPayout>().AddAsync(payout, cancellationToken);
+        }
+
+        var orderSpec = new Spec<Order>()
+            .Where(o => o.OrderId == orderId)
+            .Include(o => o.SellerGroups)
+            .AsTracking();
+
+        var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(orderSpec, cancellationToken);
+        if (order != null && order.SellerGroups.All(g => g.Status == SellerGroupStatus.Delivered))
+        {
+            order.MarkDelivered();
+            _unitOfWork.Repository<Order>().Update(order);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new SellerOrderDetailsDto
+        {
+            OrderId = group.OrderId,
+            OrderSellerGroupId = group.OrderSellerGroupId,
+            OrderDate = group.Order.OrderDate,
+            OrderStatus = group.Order.Status.ToString(),
+            GroupStatus = group.Status.ToString(),
+            ShippingFullName = group.Order.ShippingFullName,
+            ShippingAddress = group.Order.ShippingAddress,
+            ShippingPhoneNumber = group.Order.ShippingPhoneNumber,
+            SubTotal = group.SubTotal,
+            CommissionAmount = group.CommissionAmount,
+            SellerPayable = group.SellerPayable,
+            TrackingNumber = group.TrackingNumber,
+            CarrierName = group.CarrierName,
+            ShippedAtUtc = group.ShippedAtUtc,
+            Items = group.Items.Select(i => new SellerOrderItemDto
+            {
+                OrderItemId = i.OrderItemId,
+                ProductId = i.ProductId,
+                VariantId = i.VariantId,
+                ListingId = i.ListingId,
+                ProductName = i.ProductName ?? string.Empty,
+                VariantName = i.VariantName,
+                ProductImageUrl = i.ProductImageUrl,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                TotalPrice = i.TotalPrice
+            }).ToList()
+        };
+    }
 }

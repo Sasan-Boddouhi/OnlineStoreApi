@@ -19,6 +19,22 @@ namespace Application.Entities
 
         public OrderStatus Status { get; private set; } = OrderStatus.Pending;
 
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal ShippingCost { get; set; } = 0;
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DiscountAmount { get; set; } = 0;
+
+        public int? ShippingMethodId { get; set; }
+
+        [ForeignKey(nameof(ShippingMethodId))]
+        public virtual ShippingMethod? ShippingMethod { get; set; }
+
+        public int? CouponId { get; set; }
+
+        [ForeignKey(nameof(CouponId))]
+        public virtual Coupon? Coupon { get; set; }
+
         // Shipping Snapshot
         [Required, MaxLength(200)]
         public string ShippingFullName { get; set; } = null!;
@@ -101,9 +117,19 @@ namespace Application.Entities
             Status = OrderStatus.Returned;
         }
 
+        public void ApplyDiscountsAndShipping(decimal discount, decimal shippingCost, int? couponId, int? shippingMethodId)
+        {
+            DiscountAmount = discount;
+            ShippingCost = shippingCost;
+            CouponId = couponId;
+            ShippingMethodId = shippingMethodId;
+            RecalculateTotal();
+        }
+
         private void RecalculateTotal()
         {
-            TotalAmount = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
+            var itemsTotal = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
+            TotalAmount = Math.Max(0, itemsTotal - DiscountAmount + ShippingCost);
         }
     }
 

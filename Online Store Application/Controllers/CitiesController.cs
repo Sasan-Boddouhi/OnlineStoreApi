@@ -88,6 +88,16 @@ public class CitiesController : ControllerBase
         return result == null ? NotFound() : Ok(result);
     }
 
+    /// <summary>دریافت فهرست شهرهای یک استان بر اساس شناسه استان (جهت لیست‌های آبشاری فرانت‌اند).</summary>
+    [HttpGet("by-province/{provinceId:int}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<CityDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<CityDto>>> GetByProvince(int provinceId, CancellationToken cancellationToken)
+    {
+        var result = await _cityService.GetByProvinceIdAsync(provinceId, cancellationToken);
+        return Ok(result);
+    }
+
     /// <summary>ایجاد شهر جدید توسط ادمین.</summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]

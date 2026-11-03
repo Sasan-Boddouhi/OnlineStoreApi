@@ -81,6 +81,15 @@ public sealed class AuthService : IAuthService
             await _unitOfWork.Repository<User>().AddAsync(user, ct);
             await _unitOfWork.SaveChangesAsync(ct);
 
+            // M7.11: Auto-provision Customer profile for newly registered users
+            var customerRepo = _unitOfWork.Repository<Customer>();
+            if (customerRepo != null)
+            {
+                var customer = new Customer { UserId = user.UserId };
+                await customerRepo.AddAsync(customer, ct);
+                await _unitOfWork.SaveChangesAsync(ct);
+            }
+
             // NOTE: do NOT call LimitActiveSessionsAsync here (no active sessions yet)
 
             var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
@@ -245,6 +254,17 @@ public sealed class AuthService : IAuthService
         {
             activity?.SetStatus(ActivityStatusCode.Error, "Token not found");
             return null;
+        }
+
+        // M7.11: Validate user active status. Deactivated/suspended users must not refresh tokens.
+        if (token.User is null || !token.User.IsActive)
+        {
+            if (token.Session != null)
+            {
+                await RevokeSessionAndTokensAsync(token.Session, "User account is inactive", ct, useTransaction: false);
+            }
+            activity?.SetStatus(ActivityStatusCode.Error, "User inactive");
+            throw new UnauthorizedException("حساب کاربری غیرفعال است.", "USER_INACTIVE");
         }
 
         // If expired by expiry date -> revoke and return null

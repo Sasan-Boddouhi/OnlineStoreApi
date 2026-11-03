@@ -1,4 +1,4 @@
-﻿using Application.Entities;
+using Application.Entities;
 using System.ComponentModel.DataAnnotations;
 
 namespace BusinessLogic.DTOs.Product
@@ -27,5 +27,6 @@ namespace BusinessLogic.DTOs.Product
 
         public string? ImageUrl { get; set; }
         public DateTime? ExpirationDate { get; set; }
+        public int? BrandId { get; set; }
     }
 }

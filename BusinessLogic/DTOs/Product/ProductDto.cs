@@ -23,6 +23,8 @@ namespace BusinessLogic.DTOs.Product
         public string? ImageUrl { get; set; }
         public DateTime? ExpirationDate { get; set; }
         public UnitOfMeasurement Unit { get; set; }
+        public int? BrandId { get; set; }
+        public string? BrandName { get; set; }
 
         /// <summary>Phase 5: گالری تصاویر، مرتب‌شده بر اساس SortOrder.</summary>
         public List<ProductImageDto> Images { get; set; } = new();

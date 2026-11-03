@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Application.Entities;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,5 +20,6 @@ namespace BusinessLogic.DTOs.Product
         public UnitOfMeasurement? Unit { get; set; }
         public DateTime? ExpirationDate { get; set; }
         public bool? IsActive { get; set; }
+        public int? BrandId { get; set; }
     }
 }

@@ -37,4 +37,9 @@ public interface ISellerDashboardService
         int groupId,
         ShipSellerGroupRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<SellerOrderDetailsDto> DeliverSellerGroupAsync(
+        int orderId,
+        int groupId,
+        CancellationToken cancellationToken = default);
 }
