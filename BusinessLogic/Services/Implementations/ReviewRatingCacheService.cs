@@ -3,6 +3,7 @@ using Application.Entities;
 using Application.Interfaces;
 using Application.Interfaces.Services;
 using BusinessLogic.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
@@ -31,13 +32,14 @@ public sealed class ReviewRatingCacheService : IReviewRatingCacheService
 
     public async Task RecalculateProductAsync(int productId, CancellationToken cancellationToken = default)
     {
-        var reviews = await _unitOfWork.Repository<ProductReview>()
-            .ListAsync(
-                new Spec<ProductReview>().Where(r => r.ProductId == productId && r.IsApproved),
-                cancellationToken);
+        var query = _unitOfWork.Repository<ProductReview>()
+            .Query()
+            .Where(r => r.ProductId == productId && r.IsApproved);
 
-        var count = reviews.Count;
-        var average = count == 0 ? 0d : Math.Round(reviews.Average(r => (double)r.Rating), 2);
+        var count = await query.CountAsync(cancellationToken);
+        var average = count == 0
+            ? 0d
+            : Math.Round(await query.AverageAsync(r => (double)r.Rating, cancellationToken), 2);
 
         var product = await _unitOfWork.Repository<Product>().GetByIdAsync(productId, cancellationToken);
         if (product is null)
@@ -52,6 +54,7 @@ public sealed class ReviewRatingCacheService : IReviewRatingCacheService
         if (_cacheService != null)
         {
             await _cacheService.RemoveAsync($"products:{productId}", cancellationToken);
+            await _cacheService.SetAsync("products:version", Guid.NewGuid().ToString("N"), TimeSpan.FromDays(7), cancellationToken);
         }
 
         _logger.LogInformation(
@@ -61,13 +64,14 @@ public sealed class ReviewRatingCacheService : IReviewRatingCacheService
 
     public async Task RecalculateSellerAsync(int sellerId, CancellationToken cancellationToken = default)
     {
-        var reviews = await _unitOfWork.Repository<SellerReview>()
-            .ListAsync(
-                new Spec<SellerReview>().Where(r => r.SellerId == sellerId && r.IsApproved),
-                cancellationToken);
+        var query = _unitOfWork.Repository<SellerReview>()
+            .Query()
+            .Where(r => r.SellerId == sellerId && r.IsApproved);
 
-        var count = reviews.Count;
-        var average = count == 0 ? 0d : Math.Round(reviews.Average(r => (double)r.Rating), 2);
+        var count = await query.CountAsync(cancellationToken);
+        var average = count == 0
+            ? 0d
+            : Math.Round(await query.AverageAsync(r => (double)r.Rating, cancellationToken), 2);
 
         var seller = await _unitOfWork.Repository<Seller>().GetByIdAsync(sellerId, cancellationToken);
         if (seller is null)

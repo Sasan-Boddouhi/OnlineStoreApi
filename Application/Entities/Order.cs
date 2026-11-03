@@ -80,8 +80,8 @@ namespace Application.Entities
 
         public void MarkShipped()
         {
-            if (Status != OrderStatus.Processing && Status != OrderStatus.Pending)
-                throw new InvalidOperationException("Only pending or processing orders can be marked as shipped.");
+            if (Status != OrderStatus.Processing)
+                throw new InvalidOperationException("Only processing orders can be marked as shipped.");
 
             Status = OrderStatus.Shipped;
         }
@@ -97,8 +97,8 @@ namespace Application.Entities
 
         public void Cancel()
         {
-            if (Status == OrderStatus.Shipped || Status == OrderStatus.Delivered)
-                throw new InvalidOperationException("Cannot cancel shipped or delivered orders.");
+            if (Status == OrderStatus.Shipped || Status == OrderStatus.Delivered || Status == OrderStatus.Returned)
+                throw new InvalidOperationException("Cannot cancel shipped, delivered, or returned orders.");
             Status = OrderStatus.Cancelled;
         }
 

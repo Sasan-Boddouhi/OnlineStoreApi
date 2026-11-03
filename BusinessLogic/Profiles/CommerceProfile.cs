@@ -22,10 +22,12 @@ public class CommerceProfile : Profile
         CreateMap<Coupon, CouponDto>();
         CreateMap<CreateCouponDto, Coupon>()
             .ConfigureDbDestination()
-            .ForMember(d => d.CouponId, opt => opt.Ignore());
+            .ForMember(d => d.CouponId, opt => opt.Ignore())
+            .ForMember(d => d.UsedCount, opt => opt.Ignore());
         CreateMap<UpdateCouponDto, Coupon>()
             .ConfigureDbDestination()
-            .ForMember(d => d.CouponId, opt => opt.Ignore());
+            .ForMember(d => d.CouponId, opt => opt.Ignore())
+            .ForMember(d => d.UsedCount, opt => opt.Ignore());
 
         CreateMap<Brand, BrandDto>();
         CreateMap<CreateBrandDto, Brand>()

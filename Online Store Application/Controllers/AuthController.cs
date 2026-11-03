@@ -64,12 +64,12 @@ namespace WebApi.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public IActionResult Me()
         {
-            var profile = new UserProfileDto(
-                User.FindFirstValue(ClaimTypes.NameIdentifier)!,
-                User.FindFirstValue("FullName")!,
-                User.FindFirstValue(ClaimTypes.Role)!,
-                User.FindFirstValue("PhoneNumber")!
-            );
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+            var fullName = User.FindFirstValue("FullName") ?? string.Empty;
+            var role = User.FindFirstValue(ClaimTypes.Role) ?? "Customer";
+            var phone = User.FindFirstValue("PhoneNumber") ?? string.Empty;
+
+            var profile = new UserProfileDto(userId, fullName, role, phone);
             return Ok(profile);
         }
 

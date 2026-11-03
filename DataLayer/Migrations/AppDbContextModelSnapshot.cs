@@ -347,6 +347,15 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("ModifiedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("UsageLimit")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UsageLimitPerUser")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UsedCount")
+                        .HasColumnType("int");
+
                     b.HasKey("CouponId");
 
                     b.HasIndex("Code")
@@ -832,6 +841,9 @@ namespace DataLayer.Migrations
                     b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
 
@@ -855,6 +867,9 @@ namespace DataLayer.Migrations
 
                     b.Property<DateTime?>("ShippedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ShippingCostShare")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -1628,6 +1643,50 @@ namespace DataLayer.Migrations
                     b.ToTable("Seller");
                 });
 
+            modelBuilder.Entity("Application.Entities.SellerDebt", b =>
+                {
+                    b.Property<int>("SellerDebtId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SellerDebtId"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsSettled")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ModifiedById")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("SellerId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SellerDebtId");
+
+                    b.HasIndex("SellerId");
+
+                    b.ToTable("SellerDebt");
+                });
+
             modelBuilder.Entity("Application.Entities.SellerPayout", b =>
                 {
                     b.Property<int>("SellerPayoutId")
@@ -2214,7 +2273,7 @@ namespace DataLayer.Migrations
                     b.HasOne("Application.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Application.Entities.ProductVariant", "Variant")
@@ -2432,6 +2491,17 @@ namespace DataLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Application.Entities.SellerDebt", b =>
+                {
+                    b.HasOne("Application.Entities.Seller", "Seller")
+                        .WithMany()
+                        .HasForeignKey("SellerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Seller");
                 });
 
             modelBuilder.Entity("Application.Entities.SellerPayout", b =>

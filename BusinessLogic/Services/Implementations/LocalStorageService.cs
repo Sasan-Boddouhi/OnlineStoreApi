@@ -1,4 +1,4 @@
-﻿using Application.Exceptions;
+using Application.Exceptions;
 using Application.Interfaces;
 using Application.Options;
 using Microsoft.Extensions.Logging;
@@ -51,6 +51,25 @@ namespace BusinessLogic.Services.Implementations
                     $"حجم فایل حداکثر {_settings.MaxFileSizeBytes / 1024 / 1024} مگابایت است.",
                     "FILE_TOO_LARGE");
 
+            // M7.12: Magic byte validation against executable/malicious uploads disguised as images
+            var header = new byte[12];
+            var bytesRead = await content.ReadAsync(header.AsMemory(0, header.Length), cancellationToken);
+            if (!ValidateImageSignature(header, extension))
+                throw new BusinessException("محتوای فایل با پسوند تصویر هم‌خوانی ندارد.", "INVALID_FILE_CONTENT");
+
+            if (content.CanSeek)
+            {
+                content.Seek(0, SeekOrigin.Begin);
+            }
+            else
+            {
+                var memoryStream = new MemoryStream();
+                await memoryStream.WriteAsync(header.AsMemory(0, bytesRead), cancellationToken);
+                await content.CopyToAsync(memoryStream, cancellationToken);
+                memoryStream.Seek(0, SeekOrigin.Begin);
+                content = memoryStream;
+            }
+
             var safeName = $"{Guid.NewGuid():N}{extension}";
             var targetPath = Path.Combine(_rootPath, safeName);
 
@@ -62,6 +81,20 @@ namespace BusinessLogic.Services.Implementations
             _logger.LogInformation("File stored as {FileName} ({ContentType})", safeName, contentType);
 
             return $"{_settings.PublicBaseUrl.TrimEnd('/')}/{safeName}";
+        }
+
+        private static bool ValidateImageSignature(byte[] header, string extension)
+        {
+            if (header.Length < 4)
+                return false;
+
+            return extension switch
+            {
+                ".jpg" or ".jpeg" => header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF,
+                ".png" => header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47,
+                ".webp" => header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46,
+                _ => false
+            };
         }
 
         public Task DeleteAsync(string url, CancellationToken cancellationToken = default)

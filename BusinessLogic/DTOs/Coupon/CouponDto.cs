@@ -11,6 +11,9 @@ public class CouponDto
     public decimal? MinOrderAmount { get; set; }
     public DateTime? ExpiresAtUtc { get; set; }
     public bool IsActive { get; set; }
+    public int? UsageLimit { get; set; }
+    public int? UsageLimitPerUser { get; set; }
+    public int UsedCount { get; set; }
 }
 
 public class CreateCouponDto
@@ -21,6 +24,8 @@ public class CreateCouponDto
     public decimal? MinOrderAmount { get; set; }
     public DateTime? ExpiresAtUtc { get; set; }
     public bool IsActive { get; set; } = true;
+    public int? UsageLimit { get; set; }
+    public int? UsageLimitPerUser { get; set; }
 }
 
 public class UpdateCouponDto
@@ -31,4 +36,6 @@ public class UpdateCouponDto
     public decimal? MinOrderAmount { get; set; }
     public DateTime? ExpiresAtUtc { get; set; }
     public bool IsActive { get; set; }
+    public int? UsageLimit { get; set; }
+    public int? UsageLimitPerUser { get; set; }
 }

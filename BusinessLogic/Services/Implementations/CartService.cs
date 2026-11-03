@@ -488,7 +488,20 @@ namespace BusinessLogic.Services.Implementations
                 await EnsureStockAsync(item.ListingId, item.Quantity, cancellationToken);
             }
 
-            // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11) ----
+            var customer = await _unitOfWork.Repository<Customer>()
+                .FirstOrDefaultAsync(
+                    new Spec<Customer>().Where(c => c.UserId == userId.Value),
+                    cancellationToken);
+
+            if (customer is null)
+            {
+                // M7.11: Fallback auto-provision Customer profile for legacy users
+                customer = new Customer { UserId = userId.Value };
+                await _unitOfWork.Repository<Customer>().AddAsync(customer, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11 & M7.12) ----
             decimal shippingCost = 0;
             if (dto.ShippingMethodId.HasValue)
             {
@@ -502,17 +515,32 @@ namespace BusinessLogic.Services.Implementations
 
             decimal discountAmount = 0;
             int? couponId = null;
+            Coupon? couponEntity = null;
             if (!string.IsNullOrWhiteSpace(dto.CouponCode))
             {
                 var normalizedCode = dto.CouponCode.Trim().ToUpperInvariant();
-                var coupon = await _unitOfWork.Repository<Coupon>()
-                    .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode && c.IsActive), cancellationToken);
+                couponEntity = await _unitOfWork.Repository<Coupon>()
+                    .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode && c.IsActive).AsTracking(), cancellationToken);
 
-                if (coupon is null)
+                if (couponEntity is null)
                     throw new BusinessException("کد تخفیف معتبر نیست.", "INVALID_COUPON");
 
-                if (coupon.ExpiresAtUtc.HasValue && coupon.ExpiresAtUtc.Value < DateTime.UtcNow)
+                if (couponEntity.ExpiresAtUtc.HasValue && couponEntity.ExpiresAtUtc.Value < DateTime.UtcNow)
                     throw new BusinessException("کد تخفیف منقضی شده است.", "COUPON_EXPIRED");
+
+                // بررسی سقف استفاده کلی کوپن (M7.12)
+                if (couponEntity.UsageLimit.HasValue && couponEntity.UsedCount >= couponEntity.UsageLimit.Value)
+                    throw new BusinessException("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.", "COUPON_LIMIT_REACHED");
+
+                // بررسی سقف استفاده به ازای هر کاربر (M7.12)
+                if (couponEntity.UsageLimitPerUser.HasValue)
+                {
+                    var userUsageCount = await _unitOfWork.Repository<Order>()
+                        .CountAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.CouponId == couponEntity.CouponId), cancellationToken);
+
+                    if (userUsageCount >= couponEntity.UsageLimitPerUser.Value)
+                        throw new BusinessException("شما به سقف مجاز استفاده از این کد تخفیف رسیده‌اید.", "COUPON_LIMIT_REACHED");
+                }
 
                 var itemsTotal = cart.Items.Sum(i =>
                 {
@@ -520,27 +548,14 @@ namespace BusinessLogic.Services.Implementations
                     return (l?.Price ?? i.UnitPrice) * i.Quantity;
                 });
 
-                if (coupon.MinOrderAmount.HasValue && itemsTotal < coupon.MinOrderAmount.Value)
-                    throw new BusinessException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {coupon.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
+                if (couponEntity.MinOrderAmount.HasValue && itemsTotal < couponEntity.MinOrderAmount.Value)
+                    throw new BusinessException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {couponEntity.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
 
-                discountAmount = Math.Round(itemsTotal * (coupon.DiscountPercentage / 100m), 2);
-                if (coupon.MaxDiscountAmount.HasValue && discountAmount > coupon.MaxDiscountAmount.Value)
-                    discountAmount = coupon.MaxDiscountAmount.Value;
+                discountAmount = Math.Round(itemsTotal * (couponEntity.DiscountPercentage / 100m), 2);
+                if (couponEntity.MaxDiscountAmount.HasValue && discountAmount > couponEntity.MaxDiscountAmount.Value)
+                    discountAmount = couponEntity.MaxDiscountAmount.Value;
 
-                couponId = coupon.CouponId;
-            }
-
-            var customer = await _unitOfWork.Repository<Customer>()
-                .FirstOrDefaultAsync(
-                    new Spec<Customer>().Where(c => c.UserId == userId.Value),
-                    cancellationToken);
-
-            if (customer is null)
-            {
-                // M7.11: Fallback auto-provision Customer profile for legacy users
-                customer = new Customer { UserId = userId.Value };
-                await _unitOfWork.Repository<Customer>().AddAsync(customer, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                couponId = couponEntity.CouponId;
             }
 
             // ---- ساخت سفارش در یک تراکنش (R9) ----
@@ -568,11 +583,46 @@ namespace BusinessLogic.Services.Implementations
 
                 result = await _orderService.AddItemsToOrderAsync(orderId, itemsDto, cancellationToken);
 
-                // اعمال تخفیف و هزینه ارسال به سفارش
-                var orderEntity = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
+                // اعمال تخفیف و هزینه ارسال به سفارش و تسهیم بین گروه‌های فروشنده (M7.12)
+                var orderEntity = await _unitOfWork.Repository<Order>()
+                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.OrderId == orderId).Include(o => o.SellerGroups).AsTracking(), cancellationToken);
+
                 if (orderEntity != null)
                 {
                     orderEntity.ApplyDiscountsAndShipping(discountAmount, shippingCost, couponId, dto.ShippingMethodId);
+
+                    var totalItemsSubTotal = orderEntity.SellerGroups.Sum(g => g.SubTotal);
+                    var groupCount = orderEntity.SellerGroups.Count;
+
+                    decimal allocatedDiscount = 0;
+                    decimal allocatedShipping = 0;
+                    var groupsList = orderEntity.SellerGroups.ToList();
+
+                    for (int i = 0; i < groupsList.Count; i++)
+                    {
+                        var group = groupsList[i];
+                        decimal groupDiscount;
+                        decimal groupShipping;
+
+                        if (i == groupsList.Count - 1)
+                        {
+                            groupDiscount = Math.Max(0, discountAmount - allocatedDiscount);
+                            groupShipping = Math.Max(0, shippingCost - allocatedShipping);
+                        }
+                        else
+                        {
+                            decimal ratio = totalItemsSubTotal > 0 ? group.SubTotal / totalItemsSubTotal : (1m / groupCount);
+                            groupDiscount = Math.Round(discountAmount * ratio, 2, MidpointRounding.AwayFromZero);
+                            groupShipping = Math.Round(shippingCost / groupCount, 2, MidpointRounding.AwayFromZero);
+
+                            allocatedDiscount += groupDiscount;
+                            allocatedShipping += groupShipping;
+                        }
+
+                        group.SetDiscountAndShippingShare(groupDiscount, groupShipping);
+                        _unitOfWork.Repository<OrderSellerGroup>().Update(group);
+                    }
+
                     _unitOfWork.Repository<Order>().Update(orderEntity);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
                     result = _mapper != null ? _mapper.Map<OrderDto>(orderEntity) : new OrderDto
@@ -587,6 +637,13 @@ namespace BusinessLogic.Services.Implementations
                         ShippingCost = orderEntity.ShippingCost,
                         DiscountAmount = orderEntity.DiscountAmount
                     };
+                }
+
+                // افزایش شمارنده استفاده از کوپن (M7.12)
+                if (couponEntity != null)
+                {
+                    couponEntity.UsedCount++;
+                    _unitOfWork.Repository<Coupon>().Update(couponEntity);
                 }
 
                 // ---- پاک‌سازی سبد ----

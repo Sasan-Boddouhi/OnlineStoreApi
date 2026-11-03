@@ -394,8 +394,17 @@ public sealed class PaymentService : IPaymentService
             await AuditAsync("Payment.Failed", payment.PaymentId, parsed.Status, cancellationToken);
         }
 
-        _unitOfWork.Repository<Payment>().Update(payment);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Concurrency conflict on webhook for payment {PaymentId}. Likely already processed by redirect verification.", payment.PaymentId);
+            var reloaded = await GetByAuthorityAsync(parsed.Authority, cancellationToken);
+            return _mapper.Map<PaymentDto>(reloaded);
+        }
 
         return _mapper.Map<PaymentDto>(payment);
     }

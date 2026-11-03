@@ -267,6 +267,37 @@ public sealed class UserService : IUserService
             return false;
         }
 
+        // M7.12: Explicitly delete user's RefreshTokens and Sessions first to avoid FK Restrict violation
+        var tokenRepo = _unitOfWork.Repository<RefreshTokenEntity>();
+        if (tokenRepo != null)
+        {
+            var refreshTokens = await tokenRepo
+                .ListAsync(new Spec<RefreshTokenEntity>().Where(r => r.UserId == id).AsTracking(), cancellationToken);
+            if (refreshTokens != null)
+            {
+                foreach (var token in refreshTokens)
+                {
+                    tokenRepo.Delete(token);
+                }
+            }
+        }
+
+        var sessionRepo = _unitOfWork.Repository<UserSession>();
+        if (sessionRepo != null)
+        {
+            var sessions = await sessionRepo
+                .ListAsync(new Spec<UserSession>().Where(s => s.UserId == id).AsTracking(), cancellationToken);
+            if (sessions != null)
+            {
+                foreach (var session in sessions)
+                {
+                    sessionRepo.Delete(session);
+                }
+            }
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         _unitOfWork.Repository<User>().Delete(user);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

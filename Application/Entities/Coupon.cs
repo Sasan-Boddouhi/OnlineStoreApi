@@ -27,5 +27,11 @@ namespace Application.Entities
         public DateTime? ExpiresAtUtc { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        public int? UsageLimit { get; set; }
+
+        public int? UsageLimitPerUser { get; set; }
+
+        public int UsedCount { get; set; } = 0;
     }
 }

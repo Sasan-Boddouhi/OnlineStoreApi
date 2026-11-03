@@ -268,26 +268,51 @@ public sealed class OrderService : IOrderService
         if (order.Status != OrderStatus.Pending)
             throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
 
-        foreach (var itemDto in itemsDto)
-        {
-            var listing = await _unitOfWork.Repository<SellerProduct>()
-                .FirstOrDefaultAsync(
-                    new Spec<SellerProduct>()
-                        .Where(l => l.ListingId == itemDto.ListingId)
-                        .Include(l => l.Variant)
-                        .Include(l => l.Seller),
-                    cancellationToken);
+        var itemsList = itemsDto.ToList();
+        var listingIds = itemsList.Select(i => i.ListingId).Distinct().ToList();
 
-            if (listing == null)
+        // M7.12: Batch pre-fetch all listings, variants, sellers, and products to eliminate N+1 queries
+        var listings = (await _unitOfWork.Repository<SellerProduct>()
+            .ListAsync(
+                new Spec<SellerProduct>()
+                    .Where(l => listingIds.Contains(l.ListingId))
+                    .Include(l => l.Variant)
+                    .Include(l => l.Seller),
+                cancellationToken))
+            .ToDictionary(l => l.ListingId);
+
+        var productIds = listings.Values
+            .Where(l => l.Variant != null && l.Variant.ProductId > 0)
+            .Select(l => l.Variant!.ProductId)
+            .Distinct()
+            .ToList();
+
+        var products = productIds.Count > 0
+            ? (await _unitOfWork.Repository<Product>()
+                .ListAsync(new Spec<Product>().Where(p => productIds.Contains(p.ProductId)), cancellationToken))
+                .ToDictionary(p => p.ProductId)
+            : new Dictionary<int, Product>();
+
+        var sellerIds = listings.Values.Select(l => l.SellerId).Distinct().ToList();
+        var sellers = (await _unitOfWork.Repository<Seller>()
+            .ListAsync(new Spec<Seller>().Where(s => sellerIds.Contains(s.SellerId)), cancellationToken))
+            .ToDictionary(s => s.SellerId);
+
+        foreach (var itemDto in itemsList)
+        {
+            if (!listings.TryGetValue(itemDto.ListingId, out var listing))
                 throw new BusinessException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
-            if (listing.Status != SellerProductStatus.Active)
+            if (listing.Status != SellerProductStatus.Active ||
+                listing.Seller == null ||
+                listing.Seller.Status != SellerStatus.Approved ||
+                !listing.Seller.IsActive)
                 throw new BusinessException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
 
             await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
-            var product = listing.Variant != null && listing.Variant.ProductId > 0
-                ? await _unitOfWork.Repository<Product>().GetByIdAsync(listing.Variant.ProductId, cancellationToken)
+            var product = (listing.Variant != null && listing.Variant.ProductId > 0 && products.TryGetValue(listing.Variant.ProductId, out var prod))
+                ? prod
                 : null;
 
             var item = new OrderItem(
@@ -308,10 +333,11 @@ public sealed class OrderService : IOrderService
             var group = order.SellerGroups.FirstOrDefault(g => g.SellerId == listing.SellerId);
             if (group is null)
             {
-                group = new OrderSellerGroup(
-                    listing.SellerId,
-                    await ResolveCommissionRateAsync(listing.SellerId, cancellationToken));
+                var commissionRate = sellers.TryGetValue(listing.SellerId, out var sellerEntity) && sellerEntity.CommissionRate.HasValue
+                    ? sellerEntity.CommissionRate.Value
+                    : _commissionSettings.DefaultRate;
 
+                group = new OrderSellerGroup(listing.SellerId, commissionRate);
                 order.SellerGroups.Add(group);
             }
 
@@ -677,19 +703,48 @@ public sealed class OrderService : IOrderService
         order.MarkReturned();
 
         foreach (var group in order.SellerGroups)
-            group.Cancel();
+        {
+            if (group.Status == SellerGroupStatus.Delivered)
+                group.MarkReturned();
+            else
+                group.Cancel();
+        }
 
         foreach (var item in order.OrderItems)
             await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
 
         var payouts = await _unitOfWork.Repository<SellerPayout>()
             .ListAsync(new Spec<SellerPayout>()
-                .Where(p => p.OrderSellerGroup != null && p.OrderSellerGroup.OrderId == orderId && p.Status == PayoutStatus.Pending)
+                .Where(p => p.OrderSellerGroup != null && p.OrderSellerGroup.OrderId == orderId)
                 .AsTracking(),
                 cancellationToken);
 
         foreach (var payout in payouts)
-            payout.Cancel();
+        {
+            if (payout.Status == PayoutStatus.Pending)
+            {
+                payout.Cancel();
+            }
+            else if (payout.Status == PayoutStatus.Paid)
+            {
+                // M7.12: Clawback debt creation for already-paid payouts on returned orders
+                var debt = new SellerDebt
+                {
+                    SellerId = payout.SellerId,
+                    Amount = payout.Amount,
+                    Reason = $"Clawback for returned order {orderId} (Payout {payout.SellerPayoutId})",
+                    CreatedAtUtc = DateTime.UtcNow,
+                    IsSettled = false
+                };
+                await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
+                await _auditService.RecordAsync(
+                    "SellerDebt.Created",
+                    nameof(SellerDebt),
+                    payout.SellerId.ToString(),
+                    $"order={orderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
+                    cancellationToken);
+            }
+        }
 
         await _auditService.RecordAsync(
             "Order.Returned",

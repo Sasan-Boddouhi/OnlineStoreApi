@@ -40,7 +40,13 @@ namespace Application.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal CommissionAmount { get; private set; }
 
-        /// <summary>SubTotal − CommissionAmount؛ همان چیزی که به فروشنده می‌رسد.</summary>
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DiscountAmount { get; private set; } = 0;
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal ShippingCostShare { get; private set; } = 0;
+
+        /// <summary>SubTotal − DiscountAmount − ShippingCostShare − CommissionAmount؛ همان چیزی که به فروشنده می‌رسد.</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal SellerPayable { get; private set; }
 
@@ -89,6 +95,13 @@ namespace Application.Entities
                 .Sum(i => i.TotalPrice);
         }
 
+        public void SetDiscountAndShippingShare(decimal discountAmount, decimal shippingCostShare)
+        {
+            DiscountAmount = Math.Max(0, discountAmount);
+            ShippingCostShare = Math.Max(0, shippingCostShare);
+            SellerPayable = Math.Max(0, SubTotal - DiscountAmount - ShippingCostShare - CommissionAmount);
+        }
+
         /// <summary>
         /// کمیسیون را قفل می‌کند. فقط یک بار در چرخهٔ سفارش (هنگام تأیید) صدا زده می‌شود.
         /// </summary>
@@ -98,7 +111,7 @@ namespace Application.Entities
                 throw new InvalidOperationException("Commission rate is out of range.");
 
             CommissionAmount = Math.Round(SubTotal * CommissionRate / 100m, 2, MidpointRounding.AwayFromZero);
-            SellerPayable = SubTotal - CommissionAmount;
+            SellerPayable = Math.Max(0, SubTotal - DiscountAmount - ShippingCostShare - CommissionAmount);
             Status = SellerGroupStatus.Processing;
         }
 
@@ -129,6 +142,14 @@ namespace Application.Entities
 
             Status = SellerGroupStatus.Cancelled;
         }
+
+        public void MarkReturned()
+        {
+            if (Status != SellerGroupStatus.Delivered)
+                throw new InvalidOperationException("Only delivered groups can be returned.");
+
+            Status = SellerGroupStatus.Returned;
+        }
     }
 
     public enum SellerGroupStatus
@@ -137,6 +158,7 @@ namespace Application.Entities
         Processing = 1,
         Shipped = 2,
         Delivered = 3,
-        Cancelled = 4
+        Cancelled = 4,
+        Returned = 5
     }
 }

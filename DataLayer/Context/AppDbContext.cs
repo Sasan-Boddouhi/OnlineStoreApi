@@ -70,6 +70,9 @@ namespace DataLayer.Context
         public DbSet<Coupon> Coupon { get; set; }
         public DbSet<Brand> Brand { get; set; }
 
+        // M7.12 — بدهی و مطالبات فروشنده
+        public DbSet<SellerDebt> SellerDebt { get; set; }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             foreach (var interceptor in _interceptors)
@@ -700,6 +703,21 @@ namespace DataLayer.Context
                 .HasOne(o => o.Coupon)
                 .WithMany()
                 .HasForeignKey(o => o.CouponId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // M7.12 OrderItem Product Restrict
+            modelBuilder.Entity<OrderItem>()
+                .HasOne(oi => oi.Product)
+                .WithMany()
+                .HasForeignKey(oi => oi.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // M7.12 SellerDebt Config
+            modelBuilder.Entity<SellerDebt>().HasIndex(d => d.SellerId);
+            modelBuilder.Entity<SellerDebt>()
+                .HasOne(d => d.Seller)
+                .WithMany()
+                .HasForeignKey(d => d.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

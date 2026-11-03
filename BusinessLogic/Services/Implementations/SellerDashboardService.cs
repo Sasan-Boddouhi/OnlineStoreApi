@@ -118,26 +118,25 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var (page, size) = NormalizePaging(pageNumber, pageSize);
 
-        var items = await _unitOfWork.Repository<OrderItem>()
+        var query = _unitOfWork.Repository<OrderItem>()
             .Query()
             .Where(i => i.Listing.SellerId == sellerId && i.Order.Status == OrderStatus.Delivered)
-            .Select(i => new { VariantId = i.VariantId ?? 0, i.Quantity, i.TotalPrice })
-            .ToListAsync(cancellationToken);
-
-        var ranked = items
-            .GroupBy(i => i.VariantId)
+            .GroupBy(i => i.VariantId ?? 0)
             .Select(g => new
             {
                 VariantId = g.Key,
-                QuantitySold = g.Sum(x => x.Quantity),
-                Revenue = g.Sum(x => x.TotalPrice)
+                QuantitySold = g.Sum(x => (double)x.Quantity),
+                Revenue = g.Sum(x => (double)x.TotalPrice)
             })
             .OrderByDescending(x => x.QuantitySold)
-            .ThenByDescending(x => x.Revenue)
-            .ToList();
+            .ThenByDescending(x => x.Revenue);
 
-        var totalCount = ranked.Count;
-        var pageRows = ranked.Skip((page - 1) * size).Take(size).ToList();
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var pageRows = await query
+            .Skip((page - 1) * size)
+            .Take(size)
+            .ToListAsync(cancellationToken);
 
         if (pageRows.Count == 0)
             return new PagedResult<TopProductDto> { Items = Array.Empty<TopProductDto>(), PageNumber = page, PageSize = size, TotalCount = totalCount };
@@ -165,8 +164,8 @@ public sealed class SellerDashboardService : ISellerDashboardService
                     ProductId = variant?.ProductId ?? 0,
                     ProductName = variant?.Product?.Name ?? string.Empty,
                     VariantName = variant?.Name,
-                    QuantitySold = r.QuantitySold,
-                    Revenue = r.Revenue
+                    QuantitySold = (decimal)r.QuantitySold,
+                    Revenue = (decimal)r.Revenue
                 };
             })
             .ToList();

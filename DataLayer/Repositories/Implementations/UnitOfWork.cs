@@ -1,4 +1,4 @@
-﻿using Application.Interfaces;
+using Application.Interfaces;
 using DataLayer.Context;
 using DataLayer.Repositories.Implementations;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -83,6 +83,8 @@ namespace DataLayer.Repositories
             }
             finally
             {
+                // M7.12: Clear in-memory ChangeTracker state so dirty entities do not leak
+                _context.ChangeTracker.Clear();
                 await _transaction.DisposeAsync();
                 _transaction = null;
             }
