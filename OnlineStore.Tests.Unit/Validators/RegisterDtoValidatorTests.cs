@@ -1,4 +1,4 @@
-﻿using BusinessLogic.DTOs.Auth;
+using BusinessLogic.DTOs.Auth;
 using BusinessLogic.Validators.Auth;
 using BusinessLogic.DTOs.Product;
 using BusinessLogic.Validators.Products;
@@ -24,6 +24,36 @@ public class RegisterDtoValidatorTests
         };
         var result = _validator.TestValidate(dto);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void ValidRegisterDto_WithoutDateOfBirth_PassesValidation()
+    {
+        var dto = new RegisterDto
+        {
+            FirstName = "John",
+            LastName = "Doe",
+            PhoneNumber = "09123456789",
+            Password = "123456",
+            DateOfBirth = null
+        };
+        var result = _validator.TestValidate(dto);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void InvalidDateOfBirth_FailsValidation()
+    {
+        var dto = new RegisterDto
+        {
+            FirstName = "John",
+            LastName = "Doe",
+            PhoneNumber = "09123456789",
+            Password = "123456",
+            DateOfBirth = "invalid-date"
+        };
+        var result = _validator.TestValidate(dto);
+        result.ShouldHaveValidationErrorFor(x => x.DateOfBirth);
     }
 
     [Fact]

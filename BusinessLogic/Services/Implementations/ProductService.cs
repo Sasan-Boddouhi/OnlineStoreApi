@@ -726,6 +726,26 @@ public sealed class ProductService : IProductService
             })
             .ToList();
 
+        var listings = await _unitOfWork.Repository<SellerProduct>()
+            .ListAsync(new Spec<SellerProduct>()
+                .Where(l => l.VariantId == variant.VariantId && l.Status == SellerProductStatus.Active)
+                .Include(l => l.Seller)
+                .Include(l => l.Inventories),
+                cancellationToken);
+
+        dto.Listings = listings
+            .Select(l => new VariantListingDto
+            {
+                ListingId = l.ListingId,
+                SellerId = l.SellerId,
+                SellerStoreName = l.Seller?.StoreName ?? string.Empty,
+                Price = l.Price,
+                AvailableQuantity = l.Inventories.Where(inv => inv.IsActive).Sum(inv => inv.Quantity)
+            })
+            .Where(l => l.AvailableQuantity > 0)
+            .OrderBy(l => l.Price)
+            .ToList();
+
         return dto;
     }
 

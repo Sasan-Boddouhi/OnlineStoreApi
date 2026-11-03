@@ -1,9 +1,13 @@
-﻿namespace BusinessLogic.DTOs.ProductCategory
+using System.Collections.Generic;
+using BusinessLogic.DTOs.ProductSubcategory;
+
+namespace BusinessLogic.DTOs.ProductCategory
 {
     public class ProductCategoryDto
     {
-        public int ProductCategoryId { get; internal set; }
-        public string Name { get; internal set; } = null!;
-        public bool IsActive { get; internal set; }
+        public int ProductCategoryId { get; set; }
+        public string Name { get; set; } = null!;
+        public bool IsActive { get; set; }
+        public List<ProductSubcategoryDto> Subcategories { get; set; } = new();
     }
 }

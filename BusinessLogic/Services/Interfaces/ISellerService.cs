@@ -1,4 +1,5 @@
 using BusinessLogic.DTOs.Listing;
+using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.Seller;
 
 namespace BusinessLogic.Services.Interfaces
@@ -20,6 +21,7 @@ namespace BusinessLogic.Services.Interfaces
         Task<SellerProductDto> CreateListingAsync(CreateSellerProductDto dto, CancellationToken cancellationToken = default);
         Task<SellerProductDto> GetListingAsync(int listingId, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<SellerProductDto>> GetListingsAsync(int? sellerId = null, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<VariantListingDto>> GetListingsByVariantIdAsync(int variantId, CancellationToken cancellationToken = default);
         Task<SellerProductDto> UpdateListingAsync(int sellerId, int listingId, UpdateSellerProductDto dto, CancellationToken cancellationToken = default);
 
         // M7.1: Listing CRUD completion

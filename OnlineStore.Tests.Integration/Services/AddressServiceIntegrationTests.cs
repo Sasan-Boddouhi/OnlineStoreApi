@@ -48,6 +48,7 @@ public class AddressServiceIntegrationTests : BaseIntegrationTest
 
     private CreateAddressDto CreateValidDto(int cityId) => new()
     {
+        StreetAddress = "خیابان ولیعصر",
         Plaque = "12",
         Unit = "1",
         PostalCode = "1234567890",
@@ -133,6 +134,7 @@ public class AddressServiceIntegrationTests : BaseIntegrationTest
         var updateDto = new UpdateAddressDto
         {
             CityId = cityId,
+            StreetAddress = "خیابان انقلاب",
             Plaque = "99",
             Unit = "2",
             PostalCode = "0987654321",

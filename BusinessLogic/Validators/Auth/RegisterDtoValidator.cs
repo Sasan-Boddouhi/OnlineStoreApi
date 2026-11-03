@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using BusinessLogic.DTOs.Auth;
 
 namespace BusinessLogic.Validators.Auth
@@ -28,8 +28,8 @@ namespace BusinessLogic.Validators.Auth
                 .WithMessage("ایمیل معتبر نیست");
 
             RuleFor(x => x.DateOfBirth)
-                .NotEmpty().WithMessage("تاریخ تولد الزامی است")
-                .Matches(@"^\d{4}/\d{2}/\d{2}$").WithMessage("فرمت تاریخ تولد باید YYYY/MM/DD باشد");
+                .Matches(@"^\d{4}/\d{2}/\d{2}$").When(x => !string.IsNullOrEmpty(x.DateOfBirth))
+                .WithMessage("فرمت تاریخ تولد باید YYYY/MM/DD باشد");
         }
     }
 }

@@ -7,6 +7,7 @@ namespace BusinessLogic.DTOs.Cart
         public int SellerId { get; set; }
         public string SellerStoreName { get; set; } = null!;
         public string ProductName { get; set; } = null!;
+        public string? ProductImageUrl { get; set; }
 
         /// <summary>
         /// Phase 7: نام واریانت انتخاب‌شده. بدون آن، دو تنوع از یک محصول

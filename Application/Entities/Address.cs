@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
@@ -20,6 +20,9 @@ namespace Application.Entities
 
         [ForeignKey("CityId")]
         public virtual City City { get; set; } = null!;
+
+        [Required, MaxLength(300)]
+        public string StreetAddress { get; set; } = string.Empty;
 
         [Required, MaxLength(10)]
         public required string Plaque { get; set; }

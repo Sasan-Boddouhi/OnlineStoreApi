@@ -1,4 +1,4 @@
-﻿using BusinessLogic.DTOs.ProductCategory;
+using BusinessLogic.DTOs.ProductCategory;
 
 namespace BusinessLogic.Services.Interfaces;
 
@@ -17,6 +17,9 @@ public interface IProductCategoryService
         CancellationToken cancellationToken = default);
 
     Task<IEnumerable<ProductCategoryDto>> GetAllAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CategoryTreeDto>> GetTreeAsync(
         CancellationToken cancellationToken = default);
 
     Task<ProductCategoryDto?> UpdateAsync(

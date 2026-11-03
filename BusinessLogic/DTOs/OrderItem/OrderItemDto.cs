@@ -16,6 +16,10 @@ namespace BusinessLogic.DTOs.OrderItem
 
         /// <summary>Phase 2/D5: پیشنهاد فروشی که سفارش از آن ثبت شده است.</summary>
         public int ListingId { get; set; }
+        public string? ProductName { get; set; }
+        public string? VariantName { get; set; }
+        public string? ProductImageUrl { get; set; }
+        public string? SellerStoreName { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal TotalPrice { get; set; } 

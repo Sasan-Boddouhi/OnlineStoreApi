@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BusinessLogic.DTOs.Auth;
@@ -116,15 +116,14 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
     [Fact]
     public async Task Register_MissingRequiredField_ReturnsValidationError()
     {
-        // مثلاً بدون DateOfBirth که اجباری است
+        // بدون FirstName که اجباری است
         var registerDto = new
         {
             PhoneNumber = "09120009999",
             Password = "Test@123",
-            FirstName = "ناقص",
+            FirstName = "",
             LastName = "کاربر",
             DeviceId = "test-device"
-            // DateOfBirth حذف شده
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);

@@ -23,6 +23,10 @@ public class ProductProfile : Profile
         CreateMap<ProductVariant, ProductVariantDto>()
             .ForMember(dest => dest.Attributes, opt => opt.MapFrom(src => src.AttributeValues));
 
+        CreateMap<SellerProduct, VariantListingDto>()
+            .ForMember(dest => dest.SellerStoreName, opt => opt.MapFrom(src => src.Seller != null ? src.Seller.StoreName : string.Empty))
+            .ForMember(dest => dest.AvailableQuantity, opt => opt.MapFrom(src => src.Inventories != null ? src.Inventories.Where(inv => inv.IsActive).Sum(inv => inv.Quantity) : 0m));
+
         CreateMap<ProductAttributeValue, VariantAttributeDto>()
             .ForMember(dest => dest.Name,
                 opt => opt.MapFrom(src => src.Attribute != null ? src.Attribute.Name : string.Empty))

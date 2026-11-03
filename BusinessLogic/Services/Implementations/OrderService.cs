@@ -48,6 +48,12 @@ public sealed class OrderService : IOrderService
         {
             OrderItemId = i.OrderItemId,
             ProductId = i.ProductId,
+            VariantId = i.VariantId,
+            ListingId = i.ListingId,
+            ProductName = i.ProductName,
+            VariantName = i.VariantName,
+            ProductImageUrl = i.ProductImageUrl,
+            SellerStoreName = i.SellerStoreName,
             Quantity = i.Quantity,
             UnitPrice = i.UnitPrice,
             TotalPrice = i.TotalPrice,
@@ -182,7 +188,8 @@ public sealed class OrderService : IOrderService
             .FirstOrDefaultAsync(
                 new Spec<SellerProduct>()
                     .Where(l => l.ListingId == itemDto.ListingId)
-                    .Include(l => l.Variant),
+                    .Include(l => l.Variant)
+                    .Include(l => l.Seller),
                 cancellationToken);
 
         if (listing == null)
@@ -193,7 +200,11 @@ public sealed class OrderService : IOrderService
 
         await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
-        // Phase 6: ProductId از مسیر واریانت گرفته می‌شود و VariantId هم snapshot می‌شود.
+        var product = listing.Variant != null && listing.Variant.ProductId > 0
+            ? await _unitOfWork.Repository<Product>().GetByIdAsync(listing.Variant.ProductId, cancellationToken)
+            : null;
+
+        // Phase 6 & M7.9: ProductId از مسیر واریانت گرفته می‌شود و مشخصات هم snapshot می‌شود.
         var item = new OrderItem(
             productId: listing.Variant?.ProductId ?? 0,
             quantity: itemDto.Quantity,
@@ -202,7 +213,11 @@ public sealed class OrderService : IOrderService
         )
         {
             ListingId = listing.ListingId,
-            VariantId = listing.VariantId
+            VariantId = listing.VariantId,
+            ProductName = product?.Name,
+            VariantName = listing.Variant?.Name ?? listing.Variant?.Sku,
+            ProductImageUrl = product?.ImageUrl,
+            SellerStoreName = listing.Seller?.StoreName
         };
 
         // Phase 3: آیتم‌های یک فروشنده در یک گروه جمع می‌شوند.
@@ -253,7 +268,8 @@ public sealed class OrderService : IOrderService
                 .FirstOrDefaultAsync(
                     new Spec<SellerProduct>()
                         .Where(l => l.ListingId == itemDto.ListingId)
-                        .Include(l => l.Variant),
+                        .Include(l => l.Variant)
+                        .Include(l => l.Seller),
                     cancellationToken);
 
             if (listing == null)
@@ -264,6 +280,10 @@ public sealed class OrderService : IOrderService
 
             await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
+            var product = listing.Variant != null && listing.Variant.ProductId > 0
+                ? await _unitOfWork.Repository<Product>().GetByIdAsync(listing.Variant.ProductId, cancellationToken)
+                : null;
+
             var item = new OrderItem(
                 productId: listing.Variant?.ProductId ?? 0,
                 quantity: itemDto.Quantity,
@@ -272,7 +292,11 @@ public sealed class OrderService : IOrderService
             )
             {
                 ListingId = listing.ListingId,
-                VariantId = listing.VariantId
+                VariantId = listing.VariantId,
+                ProductName = product?.Name,
+                VariantName = listing.Variant?.Name ?? listing.Variant?.Sku,
+                ProductImageUrl = product?.ImageUrl,
+                SellerStoreName = listing.Seller?.StoreName
             };
 
             var group = order.SellerGroups.FirstOrDefault(g => g.SellerId == listing.SellerId);

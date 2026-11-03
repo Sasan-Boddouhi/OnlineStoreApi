@@ -18,6 +18,7 @@ public class CartProfile : Profile
             .ForMember(d => d.SellerId, opt => opt.MapFrom(s => s.Listing != null ? s.Listing.SellerId : 0))
             .ForMember(d => d.SellerStoreName, opt => opt.MapFrom(s => s.Listing != null && s.Listing.Seller != null ? s.Listing.Seller.StoreName : string.Empty))
             .ForMember(d => d.ProductName, opt => opt.MapFrom(s => s.Listing != null && s.Listing.Variant != null && s.Listing.Variant.Product != null ? s.Listing.Variant.Product.Name : string.Empty))
+            .ForMember(d => d.ProductImageUrl, opt => opt.MapFrom(s => s.Listing != null && s.Listing.Variant != null && s.Listing.Variant.Product != null ? s.Listing.Variant.Product.ImageUrl : null))
             .ForMember(d => d.VariantName, opt => opt.MapFrom(s => s.Variant != null ? s.Variant.Name : (s.Listing != null && s.Listing.Variant != null ? s.Listing.Variant.Name : null)))
             .ForMember(d => d.LineTotal, opt => opt.MapFrom(s => s.LineTotal));
 

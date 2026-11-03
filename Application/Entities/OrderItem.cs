@@ -57,6 +57,18 @@ namespace Application.Entities
         public decimal TotalPrice { get; private set; }
 
         [MaxLength(200)]
+        public string? ProductName { get; set; }
+
+        [MaxLength(200)]
+        public string? VariantName { get; set; }
+
+        [MaxLength(500)]
+        public string? ProductImageUrl { get; set; }
+
+        [MaxLength(150)]
+        public string? SellerStoreName { get; set; }
+
+        [MaxLength(200)]
         public string? Description { get; set; }
 
         public virtual ProductReview? Review { get; set; }

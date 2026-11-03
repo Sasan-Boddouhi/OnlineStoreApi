@@ -129,7 +129,7 @@ namespace BusinessLogic.Services.Implementations
         /// <summary>
         /// نام محصول از واریانتِ هر Listing استخراج و در یک کوئری جدا خوانده می‌شود.
         /// </summary>
-        private async Task<Dictionary<int, string>> LoadProductNamesAsync(
+        private async Task<Dictionary<int, (string Name, string? ImageUrl)>> LoadProductInfoAsync(
             Dictionary<int, SellerProduct> listings,
             CancellationToken cancellationToken)
         {
@@ -140,12 +140,20 @@ namespace BusinessLogic.Services.Implementations
                 .ToList();
 
             if (productIds.Count == 0)
-                return new Dictionary<int, string>();
+                return new Dictionary<int, (string Name, string? ImageUrl)>();
 
             var spec = new Spec<Product>().Where(p => productIds.Contains(p.ProductId));
             var products = await _unitOfWork.Repository<Product>().ListAsync(spec, cancellationToken);
 
-            return products.ToDictionary(p => p.ProductId, p => p.Name);
+            return products.ToDictionary(p => p.ProductId, p => (p.Name, p.ImageUrl));
+        }
+
+        private async Task<Dictionary<int, string>> LoadProductNamesAsync(
+            Dictionary<int, SellerProduct> listings,
+            CancellationToken cancellationToken)
+        {
+            var info = await LoadProductInfoAsync(listings, cancellationToken);
+            return info.ToDictionary(k => k.Key, v => v.Value.Name);
         }
 
         private async Task<SellerProduct> LoadActiveListingAsync(int listingId, CancellationToken cancellationToken)
@@ -177,7 +185,7 @@ namespace BusinessLogic.Services.Implementations
         private async Task<CartDto> MapCartAsync(Cart cart, CancellationToken cancellationToken)
         {
             var listings = await LoadListingsAsync(cart.Items.Select(i => i.ListingId), cancellationToken);
-            var productNames = await LoadProductNamesAsync(listings, cancellationToken);
+            var productInfo = await LoadProductInfoAsync(listings, cancellationToken);
 
             var items = cart.Items
                 .OrderBy(i => i.CartItemId)
@@ -185,6 +193,8 @@ namespace BusinessLogic.Services.Implementations
                 {
                     listings.TryGetValue(i.ListingId, out var listing);
                     var unitPrice = listing?.Price ?? i.UnitPrice;
+                    var prodId = listing?.Variant?.ProductId ?? 0;
+                    productInfo.TryGetValue(prodId, out var pInfo);
 
                     return new CartItemDto
                     {
@@ -192,9 +202,8 @@ namespace BusinessLogic.Services.Implementations
                         ListingId = i.ListingId,
                         SellerId = listing?.SellerId ?? 0,
                         SellerStoreName = listing?.Seller?.StoreName ?? string.Empty,
-                        ProductName = productNames.TryGetValue(listing?.Variant?.ProductId ?? 0, out var productName)
-                            ? productName
-                            : string.Empty,
+                        ProductName = pInfo.Name ?? string.Empty,
+                        ProductImageUrl = pInfo.ImageUrl,
                         // Phase 7: اگر نام واریانت خالی بود، SKU و در نهایت خالی.
                         VariantName = listing?.Variant?.Name ?? listing?.Variant?.Sku,
                         UnitPrice = unitPrice,

@@ -5,6 +5,7 @@ using Application.Common.Specifications;
 using Application.Exceptions;
 using AutoMapper;
 using BusinessLogic.DTOs.ProductCategory;
+using BusinessLogic.DTOs.ProductSubcategory;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using BusinessLogic.Specifications.ProductCategories;
@@ -14,6 +15,7 @@ namespace BusinessLogic.Services.Implementations;
 public sealed class ProductCategoryService : IProductCategoryService
 {
     private const string AllCategoriesCacheKey = "categories:all";
+    private const string CategoryTreeCacheKey = "categories:tree";
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
@@ -51,7 +53,10 @@ public sealed class ProductCategoryService : IProductCategoryService
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             if (_cacheService != null)
+            {
                 await _cacheService.RemoveAsync(AllCategoriesCacheKey, cancellationToken);
+                await _cacheService.RemoveAsync(CategoryTreeCacheKey, cancellationToken);
+            }
 
             _logger.LogInformation("Category created by {User} at {Time}. Id={Id}, Name={Name}",
                 _currentUserService.GetCurrentUserName(), DateTime.Now, entity.CategoryId, entity.CategoryName);
@@ -92,6 +97,7 @@ public sealed class ProductCategoryService : IProductCategoryService
             if (_cacheService != null)
             {
                 await _cacheService.RemoveAsync(AllCategoriesCacheKey, cancellationToken);
+                await _cacheService.RemoveAsync(CategoryTreeCacheKey, cancellationToken);
                 await _cacheService.RemoveAsync($"categories:{id}", cancellationToken);
             }
 
@@ -142,6 +148,60 @@ public sealed class ProductCategoryService : IProductCategoryService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while fetching categories by {User} at {Time}.",
+                _currentUserService.GetCurrentUserName(), DateTime.Now);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<CategoryTreeDto>> GetTreeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_cacheService != null)
+        {
+            var cached = await _cacheService.GetAsync<List<CategoryTreeDto>>(CategoryTreeCacheKey, cancellationToken);
+            if (cached != null)
+                return cached;
+        }
+
+        try
+        {
+            var spec = new Spec<ProductCategory>()
+                .Where(pc => pc.IsActive)
+                .Include(pc => pc.Subcategories)
+                .OrderBy(pc => pc.CategoryName);
+
+            var categories = await _unitOfWork.Repository<ProductCategory>()
+                .ListAsync(spec, cancellationToken);
+
+            var tree = categories
+                .Select(c => new CategoryTreeDto
+                {
+                    CategoryId = c.CategoryId,
+                    Name = c.CategoryName,
+                    IsActive = c.IsActive,
+                    Subcategories = c.Subcategories
+                        .Where(s => s.IsActive)
+                        .OrderBy(s => s.SubcategoryName)
+                        .Select(s => new ProductSubcategoryDto
+                        {
+                            SubcategoryId = s.SubcategoryId,
+                            SubcategoryName = s.SubcategoryName,
+                            CategoryId = s.CategoryId,
+                            CategoryName = c.CategoryName,
+                            IsActive = s.IsActive,
+                            Description = s.Description
+                        })
+                        .ToList()
+                })
+                .ToList();
+
+            if (_cacheService != null)
+                await _cacheService.SetAsync(CategoryTreeCacheKey, tree, TimeSpan.FromHours(1), cancellationToken);
+
+            return tree;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while fetching category tree by {User} at {Time}.",
                 _currentUserService.GetCurrentUserName(), DateTime.Now);
             throw;
         }
@@ -219,6 +279,7 @@ public sealed class ProductCategoryService : IProductCategoryService
             if (_cacheService != null)
             {
                 await _cacheService.RemoveAsync(AllCategoriesCacheKey, cancellationToken);
+                await _cacheService.RemoveAsync(CategoryTreeCacheKey, cancellationToken);
                 await _cacheService.RemoveAsync($"categories:{entity.CategoryId}", cancellationToken);
             }
 

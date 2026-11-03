@@ -5,6 +5,7 @@ using Application.Exceptions;
 using Application.Interfaces;
 using AutoMapper;
 using BusinessLogic.DTOs.Listing;
+using BusinessLogic.DTOs.Product;
 using BusinessLogic.DTOs.Seller;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -272,6 +273,29 @@ public sealed class SellerService : ISellerService
         var rows = await _unitOfWork.Repository<SellerProduct>().ListAsync(spec, cancellationToken);
 
         return rows.Select(l => _mapper.Map<SellerProductDto>(l)).ToList();
+    }
+
+    public async Task<IReadOnlyList<VariantListingDto>> GetListingsByVariantIdAsync(int variantId, CancellationToken cancellationToken = default)
+    {
+        var spec = new Spec<SellerProduct>()
+            .Where(l => l.VariantId == variantId && l.Status == SellerProductStatus.Active)
+            .Include(l => l.Seller)
+            .Include(l => l.Inventories);
+
+        var rows = await _unitOfWork.Repository<SellerProduct>().ListAsync(spec, cancellationToken);
+
+        return rows
+            .Select(l => new VariantListingDto
+            {
+                ListingId = l.ListingId,
+                SellerId = l.SellerId,
+                SellerStoreName = l.Seller?.StoreName ?? string.Empty,
+                Price = l.Price,
+                AvailableQuantity = l.Inventories.Where(inv => inv.IsActive).Sum(inv => inv.Quantity)
+            })
+            .Where(l => l.AvailableQuantity > 0)
+            .OrderBy(l => l.Price)
+            .ToList();
     }
 
     public async Task<SellerProductDto> UpdateListingAsync(int sellerId, int listingId, UpdateSellerProductDto dto, CancellationToken cancellationToken = default)

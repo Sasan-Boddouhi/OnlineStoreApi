@@ -1,4 +1,4 @@
-﻿namespace BusinessLogic.DTOs.Product
+namespace BusinessLogic.DTOs.Product
 {
     public class ProductVariantDto
     {
@@ -9,6 +9,16 @@
         public string? Barcode { get; set; }
         public bool IsActive { get; set; }
         public List<VariantAttributeDto> Attributes { get; set; } = new();
+        public List<VariantListingDto> Listings { get; set; } = new();
+    }
+
+    public class VariantListingDto
+    {
+        public int ListingId { get; set; }
+        public int SellerId { get; set; }
+        public string SellerStoreName { get; set; } = null!;
+        public decimal Price { get; set; }
+        public decimal AvailableQuantity { get; set; }
     }
 
     public class VariantAttributeDto

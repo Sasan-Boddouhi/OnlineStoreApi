@@ -32,6 +32,16 @@ public class CategoriesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>دریافت ساختار درختی دسته‌بندی‌ها به همراه زیردسته‌ها.</summary>
+    [HttpGet("tree")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<CategoryTreeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTree(CancellationToken cancellationToken)
+    {
+        var result = await _categoryService.GetTreeAsync(cancellationToken);
+        return Ok(result);
+    }
+
     /// <summary>دریافت مشخصات یک دسته‌بندی بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]

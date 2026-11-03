@@ -70,6 +70,18 @@ public static class ProductQueryConfig
                             Type = av.Attribute != null ? av.Attribute.Type.ToString() : "Text",
                             Value = av.Value
                         })
+                        .ToList(),
+                    Listings = v.Listings
+                        .Where(l => l.Status == SellerProductStatus.Active && l.Inventories.Any(inv => inv.IsActive && inv.Quantity > 0))
+                        .Select(l => new VariantListingDto
+                        {
+                            ListingId = l.ListingId,
+                            SellerId = l.SellerId,
+                            SellerStoreName = l.Seller != null ? l.Seller.StoreName : string.Empty,
+                            Price = l.Price,
+                            AvailableQuantity = (decimal)l.Inventories.Where(inv => inv.IsActive).Sum(inv => (double)inv.Quantity)
+                        })
+                        .OrderBy(l => (double)l.Price)
                         .ToList()
                 })
                 .ToList(),

@@ -8,6 +8,10 @@ public class CreateAddressDto
     public int CityId { get; set; }
 
     [Required]
+    [MaxLength(300)]
+    public string StreetAddress { get; set; } = string.Empty;
+
+    [Required]
     [MaxLength(10)]
     public string Plaque { get; set; } = null!;
 

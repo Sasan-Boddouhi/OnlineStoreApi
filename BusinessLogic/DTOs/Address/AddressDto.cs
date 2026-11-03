@@ -1,10 +1,11 @@
-﻿namespace BusinessLogic.DTOs.Address;
+namespace BusinessLogic.DTOs.Address;
 
 public class AddressDto
 {
     public int AddressId { get; set; }
     public int CityId { get; set; }
     public string CityName { get; set; } = null!;
+    public string StreetAddress { get; set; } = null!;
     public int UserId { get; set; }
     public string Plaque { get; set; } = null!;
     public string Unit { get; set; } = null!;

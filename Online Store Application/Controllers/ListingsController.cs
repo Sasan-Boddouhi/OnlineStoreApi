@@ -3,6 +3,7 @@ using Application.Exceptions;
 using Application.Interfaces;
 using Asp.Versioning;
 using BusinessLogic.DTOs.Listing;
+using BusinessLogic.DTOs.Product;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -68,6 +69,15 @@ public class ListingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<SellerProductDto>> GetById(int id, CancellationToken cancellationToken)
         => Ok(await _sellerService.GetListingAsync(id, cancellationToken));
+
+    /// <summary>دریافت فهرست پیشنهادهای فروش یک واریانت مشخص.</summary>
+    [HttpGet("variant/{variantId:int}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<VariantListingDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<VariantListingDto>>> GetByVariant(
+        int variantId,
+        CancellationToken cancellationToken)
+        => Ok(await _sellerService.GetListingsByVariantIdAsync(variantId, cancellationToken));
 
     /// <summary>ایجاد پیشنهاد فروش جدید توسط فروشنده.</summary>
     [HttpPost]

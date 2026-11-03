@@ -233,6 +233,7 @@ builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddHostedService<AbandonedPaymentCleanupService>();
 builder.Services.AddHostedService<CartCleanupService>();
 builder.Services.AddHostedService<ExpiredTokenCleanupService>();
+builder.Services.AddHostedService<AbandonedOrderCleanupService>();
 
 if (!builder.Environment.IsEnvironment("Testing"))
 {
