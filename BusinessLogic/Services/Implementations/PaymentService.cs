@@ -250,6 +250,24 @@ public sealed class PaymentService : IPaymentService
     {
         var payment = await GetByAuthorityAsync(authority, cancellationToken);
 
+        // M7.10 — بررسی مالکیت کاربر روی سفارش جهت جلوگیری از IDOR
+        var role = _currentUser.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+        if (!isAdmin)
+        {
+            var userId = _currentUser.TryGetCurrentUserId();
+            if (userId is null)
+                throw new ForbiddenException("دسترسی به این پرداخت مجاز نیست.", "PAYMENT_FORBIDDEN");
+
+            var customer = await _unitOfWork.Repository<Customer>()
+                .FirstOrDefaultAsync(new Spec<Customer>().Where(c => c.UserId == userId.Value), cancellationToken);
+
+            if (customer is null || (payment.Order != null && payment.Order.CustomerId != customer.CustomerId))
+                throw new ForbiddenException("این پرداخت متعلق به کاربر دیگری است.", "PAYMENT_FORBIDDEN");
+        }
+
         // تأیید دوبارهٔ پرداخت موفق، خطا نیست؛ همان نتیجه را برمی‌گردانیم.
         if (payment.State == PaymentState.Succeeded)
             return _mapper.Map<PaymentDto>(payment);
@@ -415,7 +433,10 @@ public sealed class PaymentService : IPaymentService
 
         var payment = await _unitOfWork.Repository<Payment>()
             .FirstOrDefaultAsync(
-                new Spec<Payment>().Where(p => p.TransactionId == authority).AsTracking(),
+                new Spec<Payment>()
+                    .Where(p => p.TransactionId == authority)
+                    .Include(p => p.Order)
+                    .AsTracking(),
                 cancellationToken);
 
         if (payment is null)

@@ -1,7 +1,9 @@
+using Application.Entities;
 using BusinessLogic.DTOs.Invoice;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
 using BusinessLogic.DTOs.Payment;
+using BusinessLogic.DTOs.Shared;
 
 namespace BusinessLogic.Services.Interfaces
 {
@@ -25,8 +27,11 @@ namespace BusinessLogic.Services.Interfaces
         // دریافت تمام سفارش‌های کاربر جاری
         Task<IEnumerable<OrderDto>> GetOrdersAsync(int userId, CancellationToken cancellationToken = default);
 
-        // دریافت جزئیات یک سفارش متعلق به کاربر جاری
+        // دریافت جزئیات یک سفارش متعلق به کاربر جاری (یا ادمین)
         Task<OrderDetailsDto?> GetOrderDetailsAsync(int userId, int orderId, CancellationToken cancellationToken = default);
+
+        // دریافت فهرست سفارش‌ها برای پنل ادمین با صفحه‌بندی و فیلتر وضعیت
+        Task<PagedResult<OrderDto>> GetAdminOrdersAsync(OrderStatus? status, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         // لغو سفارش (اگر امکان‌پذیر باشد)
         Task<OrderDto> CancelOrderAsync(int orderId, CancellationToken cancellationToken = default);

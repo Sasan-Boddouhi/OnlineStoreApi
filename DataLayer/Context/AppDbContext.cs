@@ -65,6 +65,11 @@ namespace DataLayer.Context
         public DbSet<ProductReview> ProductReview { get; set; }
         public DbSet<SellerReview> SellerReview { get; set; }
 
+        // M7.10 — بازرگانی و تخفیفات
+        public DbSet<ShippingMethod> ShippingMethod { get; set; }
+        public DbSet<Coupon> Coupon { get; set; }
+        public DbSet<Brand> Brand { get; set; }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             foreach (var interceptor in _interceptors)
@@ -652,6 +657,37 @@ namespace DataLayer.Context
                     .IsRowVersion()
                     .IsConcurrencyToken();
             });
+
+            modelBuilder.Entity<Payment>(entity =>
+            {
+                entity.Property(p => p.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<OrderSellerGroup>(entity =>
+            {
+                entity.Property(g => g.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<SellerPayout>(entity =>
+            {
+                entity.Property(p => p.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+            });
+
+            // M7.10 Entities Config
+            modelBuilder.Entity<ShippingMethod>().HasIndex(s => s.Slug).IsUnique();
+            modelBuilder.Entity<Coupon>().HasIndex(c => c.Code).IsUnique();
+            modelBuilder.Entity<Brand>().HasIndex(b => b.Slug).IsUnique();
+            modelBuilder.Entity<Product>()
+                .HasOne(p => p.Brand)
+                .WithMany(b => b.Products)
+                .HasForeignKey(p => p.BrandId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

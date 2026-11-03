@@ -264,4 +264,156 @@ public sealed class SellerDashboardService : ISellerDashboardService
         if (seller.UserId != userId.Value)
             throw new ForbiddenException("این داشبورد متعلق به فروشندهٔ دیگری است.", "DASHBOARD_FORBIDDEN");
     }
+
+    public async Task<SellerOrderDetailsDto> GetSellerOrderDetailsAsync(
+        int orderId,
+        CancellationToken cancellationToken = default)
+    {
+        var role = _currentUser.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+        var userId = _currentUser.TryGetCurrentUserId();
+        if (userId is null)
+            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+
+        Seller? seller = null;
+        if (!isAdmin)
+        {
+            seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
+
+            if (seller is null)
+                throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
+        }
+
+        var spec = new Spec<OrderSellerGroup>()
+            .Where(g => g.OrderId == orderId)
+            .Include(g => g.Order)
+            .Include(g => g.Items);
+
+        if (!isAdmin)
+            spec.Where(g => g.SellerId == seller!.SellerId);
+
+        var group = await _unitOfWork.Repository<OrderSellerGroup>().FirstOrDefaultAsync(spec, cancellationToken);
+        if (group is null)
+            throw new NotFoundException("سفارشی برای این فروشنده یافت نشد.", "ORDER_NOT_FOUND");
+
+        return new SellerOrderDetailsDto
+        {
+            OrderId = group.OrderId,
+            OrderSellerGroupId = group.OrderSellerGroupId,
+            OrderDate = group.Order.OrderDate,
+            OrderStatus = group.Order.Status.ToString(),
+            GroupStatus = group.Status.ToString(),
+            ShippingFullName = group.Order.ShippingFullName,
+            ShippingAddress = group.Order.ShippingAddress,
+            ShippingPhoneNumber = group.Order.ShippingPhoneNumber,
+            SubTotal = group.SubTotal,
+            CommissionAmount = group.CommissionAmount,
+            SellerPayable = group.SellerPayable,
+            TrackingNumber = group.TrackingNumber,
+            CarrierName = group.CarrierName,
+            ShippedAtUtc = group.ShippedAtUtc,
+            Items = group.Items.Select(i => new SellerOrderItemDto
+            {
+                OrderItemId = i.OrderItemId,
+                ProductId = i.ProductId,
+                VariantId = i.VariantId,
+                ListingId = i.ListingId,
+                ProductName = i.ProductName ?? string.Empty,
+                VariantName = i.VariantName,
+                ProductImageUrl = i.ProductImageUrl,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                TotalPrice = i.TotalPrice
+            }).ToList()
+        };
+    }
+
+    public async Task<SellerOrderDetailsDto> ShipSellerGroupAsync(
+        int orderId,
+        int groupId,
+        ShipSellerGroupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var role = _currentUser.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+        var userId = _currentUser.TryGetCurrentUserId();
+        if (userId is null)
+            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+
+        Seller? seller = null;
+        if (!isAdmin)
+        {
+            seller = await _unitOfWork.Repository<Seller>()
+                .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
+
+            if (seller is null)
+                throw new ForbiddenException("کاربر جاری فروشنده نیست.", "NOT_A_SELLER");
+        }
+
+        var spec = new Spec<OrderSellerGroup>()
+            .Where(g => g.OrderId == orderId && g.OrderSellerGroupId == groupId)
+            .Include(g => g.Order)
+            .Include(g => g.Items)
+            .AsTracking();
+
+        if (!isAdmin)
+            spec.Where(g => g.SellerId == seller!.SellerId);
+
+        var group = await _unitOfWork.Repository<OrderSellerGroup>().FirstOrDefaultAsync(spec, cancellationToken);
+        if (group is null)
+            throw new NotFoundException("گروه سفارش یافت نشد.", "GROUP_NOT_FOUND");
+
+        group.MarkShipped(request.CarrierName, request.TrackingNumber, DateTime.UtcNow);
+        _unitOfWork.Repository<OrderSellerGroup>().Update(group);
+
+        var orderSpec = new Spec<Order>()
+            .Where(o => o.OrderId == orderId)
+            .Include(o => o.SellerGroups)
+            .AsTracking();
+
+        var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(orderSpec, cancellationToken);
+        if (order != null && order.SellerGroups.All(g => g.Status == SellerGroupStatus.Shipped))
+        {
+            order.MarkShipped();
+            _unitOfWork.Repository<Order>().Update(order);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new SellerOrderDetailsDto
+        {
+            OrderId = group.OrderId,
+            OrderSellerGroupId = group.OrderSellerGroupId,
+            OrderDate = group.Order.OrderDate,
+            OrderStatus = group.Order.Status.ToString(),
+            GroupStatus = group.Status.ToString(),
+            ShippingFullName = group.Order.ShippingFullName,
+            ShippingAddress = group.Order.ShippingAddress,
+            ShippingPhoneNumber = group.Order.ShippingPhoneNumber,
+            SubTotal = group.SubTotal,
+            CommissionAmount = group.CommissionAmount,
+            SellerPayable = group.SellerPayable,
+            TrackingNumber = group.TrackingNumber,
+            CarrierName = group.CarrierName,
+            ShippedAtUtc = group.ShippedAtUtc,
+            Items = group.Items.Select(i => new SellerOrderItemDto
+            {
+                OrderItemId = i.OrderItemId,
+                ProductId = i.ProductId,
+                VariantId = i.VariantId,
+                ListingId = i.ListingId,
+                ProductName = i.ProductName ?? string.Empty,
+                VariantName = i.VariantName,
+                ProductImageUrl = i.ProductImageUrl,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                TotalPrice = i.TotalPrice
+            }).ToList()
+        };
+    }
 }

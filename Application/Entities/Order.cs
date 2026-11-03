@@ -62,6 +62,14 @@ namespace Application.Entities
             Status = OrderStatus.Processing;
         }
 
+        public void MarkShipped()
+        {
+            if (Status != OrderStatus.Processing && Status != OrderStatus.Pending)
+                throw new InvalidOperationException("Only pending or processing orders can be marked as shipped.");
+
+            Status = OrderStatus.Shipped;
+        }
+
         /// <summary>Phase 3: تحویل سفارش — پیش‌نیاز ساخت SellerPayout.</summary>
         public void MarkDelivered()
         {

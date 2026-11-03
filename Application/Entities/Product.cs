@@ -37,6 +37,11 @@ namespace Application.Entities
         [ForeignKey("SubcategoryId")]
         public virtual ProductSubcategory Subcategory { get; set; } = null!;
 
+        public int? BrandId { get; set; }
+
+        [ForeignKey(nameof(BrandId))]
+        public virtual Brand? Brand { get; set; }
+
         [Required]
         public bool IsActive { get; set; } = true;
 

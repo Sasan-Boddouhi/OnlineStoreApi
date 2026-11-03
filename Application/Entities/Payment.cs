@@ -78,6 +78,9 @@ namespace Application.Entities
         [ForeignKey("InvoiceId")]
         public virtual Invoice Invoice { get; set; } = null!;
 
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = new byte[8];
+
         /// <summary>
         /// انتقال وضعیت با اعتبارسنجی.
         ///

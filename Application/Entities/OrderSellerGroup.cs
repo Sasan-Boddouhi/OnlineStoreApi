@@ -44,7 +44,18 @@ namespace Application.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal SellerPayable { get; private set; }
 
-        public SellerGroupStatus Status { get; private set; } = SellerGroupStatus.Pending;
+        public SellerGroupStatus Status { get; set; } = SellerGroupStatus.Pending;
+
+        [MaxLength(100)]
+        public string? TrackingNumber { get; set; }
+
+        [MaxLength(100)]
+        public string? CarrierName { get; set; }
+
+        public DateTime? ShippedAtUtc { get; set; }
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = new byte[8];
 
         /// <summary>
         /// Phase 8 (R35): لحظهٔ واقعی تحویل.
@@ -89,6 +100,17 @@ namespace Application.Entities
             CommissionAmount = Math.Round(SubTotal * CommissionRate / 100m, 2, MidpointRounding.AwayFromZero);
             SellerPayable = SubTotal - CommissionAmount;
             Status = SellerGroupStatus.Processing;
+        }
+
+        public void MarkShipped(string? carrierName, string? trackingNumber, DateTime shippedAtUtc)
+        {
+            if (Status != SellerGroupStatus.Processing && Status != SellerGroupStatus.Pending)
+                throw new InvalidOperationException("Only pending or processing groups can be shipped.");
+
+            Status = SellerGroupStatus.Shipped;
+            CarrierName = carrierName;
+            TrackingNumber = trackingNumber;
+            ShippedAtUtc = shippedAtUtc;
         }
 
         public void MarkDelivered(DateTime deliveredAt)

@@ -1,6 +1,8 @@
 using Asp.Versioning;
+using Application.Entities;
 using Application.Interfaces;
 using BusinessLogic.DTOs.Order;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +36,22 @@ public class OrdersController : ControllerBase
         var userId = _currentUser.GetCurrentUserId();
         var orders = await _orderService.GetOrdersAsync(userId, cancellationToken);
         return Ok(orders);
+    }
+
+    /// <summary>دریافت فهرست تمام سفارش‌ها با قابلیت فیلتر وضعیت و صفحه‌بندی (مخصوص ادمین).</summary>
+    [HttpGet("admin")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(PagedResult<OrderDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResult<OrderDto>>> GetAdminOrders(
+        [FromQuery] OrderStatus? status,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _orderService.GetAdminOrdersAsync(status, pageNumber, pageSize, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>دریافت جزئیات یک سفارش بر اساس شناسه.</summary>

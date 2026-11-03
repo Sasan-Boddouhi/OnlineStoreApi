@@ -3,6 +3,7 @@ using BusinessLogic.DTOs.Payment;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Online_Store_Application.Controllers;
 
@@ -33,6 +34,7 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("initiate")]
     [Authorize]
+    [EnableRateLimiting("PaymentInitiateLimiter")]
     [ProducesResponseType(typeof(InitiatePaymentResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

@@ -50,4 +50,44 @@ namespace BusinessLogic.DTOs.Dashboard
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
     }
+
+    /// <summary>M7.10 — جزئیات سفارش برای پردازش و ارسال توسط فروشنده.</summary>
+    public class SellerOrderDetailsDto
+    {
+        public int OrderId { get; set; }
+        public int OrderSellerGroupId { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string OrderStatus { get; set; } = null!;
+        public string GroupStatus { get; set; } = null!;
+        public string ShippingFullName { get; set; } = null!;
+        public string ShippingAddress { get; set; } = null!;
+        public string ShippingPhoneNumber { get; set; } = null!;
+        public decimal SubTotal { get; set; }
+        public decimal CommissionAmount { get; set; }
+        public decimal SellerPayable { get; set; }
+        public string? TrackingNumber { get; set; }
+        public string? CarrierName { get; set; }
+        public DateTime? ShippedAtUtc { get; set; }
+        public List<SellerOrderItemDto> Items { get; set; } = new();
+    }
+
+    public class SellerOrderItemDto
+    {
+        public int OrderItemId { get; set; }
+        public int ProductId { get; set; }
+        public int? VariantId { get; set; }
+        public int ListingId { get; set; }
+        public string ProductName { get; set; } = null!;
+        public string? VariantName { get; set; }
+        public string? ProductImageUrl { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal TotalPrice { get; set; }
+    }
+
+    public class ShipSellerGroupRequest
+    {
+        public string? CarrierName { get; set; }
+        public string? TrackingNumber { get; set; }
+    }
 }

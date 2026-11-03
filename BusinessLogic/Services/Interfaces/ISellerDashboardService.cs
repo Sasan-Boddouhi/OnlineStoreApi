@@ -27,4 +27,14 @@ public interface ISellerDashboardService
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    Task<SellerOrderDetailsDto> GetSellerOrderDetailsAsync(
+        int orderId,
+        CancellationToken cancellationToken = default);
+
+    Task<SellerOrderDetailsDto> ShipSellerGroupAsync(
+        int orderId,
+        int groupId,
+        ShipSellerGroupRequest request,
+        CancellationToken cancellationToken = default);
 }

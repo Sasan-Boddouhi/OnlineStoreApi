@@ -66,4 +66,29 @@ public class SellerDashboardController : ControllerBase
         [FromQuery] int pageSize = 10,
         CancellationToken cancellationToken = default)
         => Ok(await _dashboardService.GetRecentOrdersAsync(sellerId, pageNumber, pageSize, cancellationToken));
+
+    /// <summary>M7.10 — دریافت اطلاعات کامل ارسال و اقلام سفارش فروشنده برای بسته‌بندی.</summary>
+    [HttpGet("/api/v{version:apiVersion}/sellers/orders/{orderId:int}")]
+    [ProducesResponseType(typeof(SellerOrderDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SellerOrderDetailsDto>> GetSellerOrderDetails(
+        int orderId,
+        CancellationToken cancellationToken)
+        => Ok(await _dashboardService.GetSellerOrderDetailsAsync(orderId, cancellationToken));
+
+    /// <summary>M7.10 — ثبت ارسال بسته سفارش توسط فروشنده و تعیین کد رهگیری مرسوله.</summary>
+    [HttpPost("/api/v{version:apiVersion}/sellers/orders/{orderId:int}/groups/{groupId:int}/ship")]
+    [ProducesResponseType(typeof(SellerOrderDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SellerOrderDetailsDto>> ShipSellerGroup(
+        int orderId,
+        int groupId,
+        [FromBody] ShipSellerGroupRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _dashboardService.ShipSellerGroupAsync(orderId, groupId, request, cancellationToken));
 }

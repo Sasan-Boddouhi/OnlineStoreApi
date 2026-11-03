@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Application.Entities
@@ -39,6 +39,9 @@ namespace Application.Entities
         public string? Reference { get; set; }
 
         public DateTime? PaidAt { get; private set; }
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = new byte[8];
 
         private SellerPayout() { } // For EF
 

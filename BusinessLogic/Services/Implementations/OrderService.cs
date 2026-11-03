@@ -1,3 +1,4 @@
+using Application.Common.Constants;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
@@ -5,6 +6,7 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
+using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using Application.Common.Specifications;
@@ -499,18 +501,33 @@ public sealed class OrderService : IOrderService
             userId,
             orderId);
 
-        var customer = await _unitOfWork.Repository<Customer>()
-            .FirstOrDefaultAsync(
-                new Spec<Customer>().Where(c => c.UserId == userId),
-                cancellationToken);
+        var role = _currentUserService.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
 
-        if (customer == null)
-            return null;
+        Spec<Order> spec;
+        if (isAdmin)
+        {
+            spec = new Spec<Order>()
+                .Where(o => o.OrderId == orderId)
+                .Include(o => o.OrderItems)
+                .Include(o => o.Invoice);
+        }
+        else
+        {
+            var customer = await _unitOfWork.Repository<Customer>()
+                .FirstOrDefaultAsync(
+                    new Spec<Customer>().Where(c => c.UserId == userId),
+                    cancellationToken);
 
-        var spec = new Spec<Order>()
-            .Where(o => o.OrderId == orderId && o.Customer.UserId == userId)
-            .Include(o => o.OrderItems)
-            .Include(o => o.Invoice);
+            if (customer == null)
+                return null;
+
+            spec = new Spec<Order>()
+                .Where(o => o.OrderId == orderId && o.Customer.UserId == userId)
+                .Include(o => o.OrderItems)
+                .Include(o => o.Invoice);
+        }
 
         var order = await _unitOfWork.Repository<Order>()
             .FirstOrDefaultAsync(spec, cancellationToken);
@@ -531,6 +548,12 @@ public sealed class OrderService : IOrderService
             {
                 OrderItemId = i.OrderItemId,
                 ProductId = i.ProductId,
+                VariantId = i.VariantId,
+                ListingId = i.ListingId,
+                ProductName = i.ProductName,
+                VariantName = i.VariantName,
+                ProductImageUrl = i.ProductImageUrl,
+                SellerStoreName = i.SellerStoreName,
                 Quantity = i.Quantity,
                 UnitPrice = i.UnitPrice,
                 TotalPrice = i.TotalPrice,
@@ -538,6 +561,35 @@ public sealed class OrderService : IOrderService
             }).ToList(),
             InvoiceNumber = order.Invoice?.InvoiceNumber,
             IsPaid = order.Invoice != null && order.Invoice.Status == InvoiceStatus.Paid
+        };
+    }
+
+    public async Task<PagedResult<OrderDto>> GetAdminOrdersAsync(
+        OrderStatus? status,
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var spec = new Spec<Order>().OrderByDescending(o => o.OrderDate);
+        if (status.HasValue)
+            spec.Where(o => o.Status == status.Value);
+
+        var totalCount = await _unitOfWork.Repository<Order>().CountAsync(spec, cancellationToken);
+
+        spec.ApplyPaging((pageNumber - 1) * pageSize, pageSize);
+
+        var orders = await _unitOfWork.Repository<Order>().ListAsync(spec, cancellationToken);
+
+        return new PagedResult<OrderDto>
+        {
+            Items = _mapper.Map<List<OrderDto>>(orders),
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
         };
     }
 

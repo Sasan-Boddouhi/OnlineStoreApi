@@ -40,5 +40,17 @@ public class TestAppDbContext : AppDbContext
         modelBuilder.Entity<SellerProduct>()
             .Property(sp => sp.RowVersion)
             .ValueGeneratedNever();
+
+        modelBuilder.Entity<Payment>()
+            .Property(p => p.RowVersion)
+            .ValueGeneratedNever();
+
+        modelBuilder.Entity<OrderSellerGroup>()
+            .Property(g => g.RowVersion)
+            .ValueGeneratedNever();
+
+        modelBuilder.Entity<SellerPayout>()
+            .Property(p => p.RowVersion)
+            .ValueGeneratedNever();
     }
 }

@@ -38,6 +38,7 @@ public class ProductProfile : Profile
         CreateMap<CreateProductDto, Product>()
             .ConfigureDbDestination()
             .ForMember(dest => dest.ProductId, opt => opt.Ignore())
+            .ForMember(dest => dest.BrandId, opt => opt.Ignore())
             .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => true))
             // Phase 9 (R33): کش امتیاز ورودی کاربر نیست.
             .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
@@ -47,6 +48,7 @@ public class ProductProfile : Profile
         // تا Update جزئی، مقدار فعلی را صفر/خالی نکند.
         CreateMap<UpdateProductDto, Product>()
             .ConfigureDbDestination()
+            .ForMember(dest => dest.BrandId, opt => opt.Ignore())
             .ForMember(dest => dest.IsActive, opt =>
             {
                 opt.PreCondition(src => src.IsActive.HasValue);

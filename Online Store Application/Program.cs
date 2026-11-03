@@ -379,6 +379,24 @@ builder.Services.AddRateLimiter(options =>
             config.Window = TimeSpan.FromMinutes(1);
             config.QueueLimit = 0;
         });
+
+        options.AddFixedWindowLimiter(
+            "PaymentInitiateLimiter",
+            config =>
+        {
+            config.PermitLimit = 10000;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+        });
+
+        options.AddFixedWindowLimiter(
+            "CheckoutLimiter",
+            config =>
+        {
+            config.PermitLimit = 10000;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+        });
     }
     else
     {
@@ -398,6 +416,28 @@ builder.Services.AddRateLimiter(options =>
             config =>
         {
             config.PermitLimit = 20;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
+
+        options.AddFixedWindowLimiter(
+            "PaymentInitiateLimiter",
+            config =>
+        {
+            config.PermitLimit = 10;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.QueueLimit = 0;
+            config.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
+
+        options.AddFixedWindowLimiter(
+            "CheckoutLimiter",
+            config =>
+        {
+            config.PermitLimit = 5;
             config.Window = TimeSpan.FromMinutes(1);
             config.QueueLimit = 0;
             config.QueueProcessingOrder =

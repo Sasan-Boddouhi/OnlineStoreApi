@@ -6,6 +6,7 @@ using BusinessLogic.DTOs.Order;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Online_Store_Application.Controllers;
 
@@ -126,6 +127,7 @@ public class CartsController : ControllerBase
     /// <summary>تبدیل سبد به سفارش.</summary>
     [HttpPost("checkout")]
     [Authorize]
+    [EnableRateLimiting("CheckoutLimiter")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
