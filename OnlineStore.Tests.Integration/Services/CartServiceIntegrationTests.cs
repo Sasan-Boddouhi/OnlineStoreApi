@@ -509,6 +509,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
             string shippingFullName,
             string shippingAddress,
             string shippingPhone,
+            string? idempotencyKey = null,
             CancellationToken cancellationToken = default)
         {
             var order = new Order

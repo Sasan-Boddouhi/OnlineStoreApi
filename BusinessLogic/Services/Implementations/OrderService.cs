@@ -148,6 +148,7 @@ public sealed class OrderService : IOrderService
         string shippingFullName,
         string shippingAddress,
         string shippingPhone,
+        string? idempotencyKey = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Creating empty order for customer {CustomerId}", customerId);
@@ -162,6 +163,7 @@ public sealed class OrderService : IOrderService
             ShippingFullName = shippingFullName,
             ShippingAddress = shippingAddress,
             ShippingPhoneNumber = shippingPhone,
+            IdempotencyKey = idempotencyKey,
             OrderDate = DateTime.UtcNow
         };
 
@@ -660,6 +662,21 @@ public sealed class OrderService : IOrderService
             // بدون این، پول مشتری نزد ما می‌ماند و گزارش مالی دروغ می‌گوید.
             await RefundSucceededPaymentsAsync(orderId, cancellationToken);
 
+            // M7.13: بازگرداندن سهمیه کوپن در صورت لغو سفارش
+            if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
+            {
+                var coupon = await _unitOfWork.Repository<Coupon>()
+                    .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.CouponId == order.CouponId.Value).AsTracking(), cancellationToken);
+
+                if (coupon != null && coupon.UsedCount > 0)
+                {
+                    coupon.UsedCount--;
+                    _unitOfWork.Repository<Coupon>().Update(coupon);
+                }
+
+                order.CouponQuotaRefunded = true;
+            }
+
             // Phase 9 (R40): لغو سفارش یک رویداد حساس است.
             await _auditService.RecordAsync(
                 "Order.Cancelled",
@@ -690,80 +707,88 @@ public sealed class OrderService : IOrderService
     {
         _logger.LogInformation("Marking order {OrderId} as returned", orderId);
 
-        var spec = new Spec<Order>()
-            .Where(o => o.OrderId == orderId)
-            .Include(o => o.OrderItems)
-            .Include(o => o.SellerGroups)
-            .AsTracking();
-
-        var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(spec, cancellationToken);
-        if (order is null)
-            throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
-
-        order.MarkReturned();
-
-        foreach (var group in order.SellerGroups)
-        {
-            if (group.Status == SellerGroupStatus.Delivered)
-                group.MarkReturned();
-            else
-                group.Cancel();
-        }
-
-        foreach (var item in order.OrderItems)
-            await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
-
-        var payouts = await _unitOfWork.Repository<SellerPayout>()
-            .ListAsync(new Spec<SellerPayout>()
-                .Where(p => p.OrderSellerGroup != null && p.OrderSellerGroup.OrderId == orderId)
-                .AsTracking(),
-                cancellationToken);
-
-        foreach (var payout in payouts)
-        {
-            if (payout.Status == PayoutStatus.Pending)
-            {
-                payout.Cancel();
-            }
-            else if (payout.Status == PayoutStatus.Paid)
-            {
-                // M7.12: Clawback debt creation for already-paid payouts on returned orders
-                var debt = new SellerDebt
-                {
-                    SellerId = payout.SellerId,
-                    Amount = payout.Amount,
-                    Reason = $"Clawback for returned order {orderId} (Payout {payout.SellerPayoutId})",
-                    CreatedAtUtc = DateTime.UtcNow,
-                    IsSettled = false
-                };
-                await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
-                await _auditService.RecordAsync(
-                    "SellerDebt.Created",
-                    nameof(SellerDebt),
-                    payout.SellerId.ToString(),
-                    $"order={orderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
-                    cancellationToken);
-            }
-        }
-
-        await _auditService.RecordAsync(
-            "Order.Returned",
-            nameof(Order),
-            orderId.ToString(),
-            $"amount={order.TotalAmount}",
-            cancellationToken);
-
-        _unitOfWork.Repository<Order>().Update(order);
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
+            var spec = new Spec<Order>()
+                .Where(o => o.OrderId == orderId)
+                .Include(o => o.OrderItems)
+                .Include(o => o.SellerGroups)
+                .AsTracking();
+
+            var order = await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(spec, cancellationToken);
+            if (order is null)
+                throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
+
+            order.MarkReturned();
+
+            foreach (var group in order.SellerGroups)
+            {
+                if (group.Status == SellerGroupStatus.Delivered)
+                    group.MarkReturned();
+                else
+                    group.Cancel();
+            }
+
+            foreach (var item in order.OrderItems)
+                await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
+
+            var payouts = await _unitOfWork.Repository<SellerPayout>()
+                .ListAsync(new Spec<SellerPayout>()
+                    .Where(p => p.OrderSellerGroup != null && p.OrderSellerGroup.OrderId == orderId)
+                    .AsTracking(),
+                    cancellationToken);
+
+            foreach (var payout in payouts)
+            {
+                if (payout.Status == PayoutStatus.Pending)
+                {
+                    payout.Cancel();
+                }
+                else if (payout.Status == PayoutStatus.Paid)
+                {
+                    // M7.12: Clawback debt creation for already-paid payouts on returned orders
+                    var debt = new SellerDebt
+                    {
+                        SellerId = payout.SellerId,
+                        Amount = payout.Amount,
+                        Reason = $"Clawback for returned order {orderId} (Payout {payout.SellerPayoutId})",
+                        CreatedAtUtc = DateTime.UtcNow,
+                        IsSettled = false
+                    };
+                    await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
+                    await _auditService.RecordAsync(
+                        "SellerDebt.Created",
+                        nameof(SellerDebt),
+                        payout.SellerId.ToString(),
+                        $"order={orderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
+                        cancellationToken);
+                }
+            }
+
+            await _auditService.RecordAsync(
+                "Order.Returned",
+                nameof(Order),
+                orderId.ToString(),
+                $"amount={order.TotalAmount}",
+                cancellationToken);
+
+            _unitOfWork.Repository<Order>().Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            return _mapper.Map<OrderDto>(order);
         }
         catch (DbUpdateConcurrencyException)
         {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
-
-        return _mapper.Map<OrderDto>(order);
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
     }
 
     /// <summary>

@@ -7,6 +7,7 @@ using BusinessLogic.DTOs.Cart;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
 using BusinessLogic.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations
@@ -462,6 +463,43 @@ namespace BusinessLogic.Services.Implementations
                 || string.IsNullOrWhiteSpace(dto.ShippingPhoneNumber))
                 throw new BusinessException("اطلاعات ارسال سفارش کامل نیست.", "CHECKOUT_SHIPPING_REQUIRED");
 
+            var customer = await _unitOfWork.Repository<Customer>()
+                .FirstOrDefaultAsync(
+                    new Spec<Customer>().Where(c => c.UserId == userId.Value),
+                    cancellationToken);
+
+            if (customer is null)
+            {
+                // M7.11: Fallback auto-provision Customer profile for legacy users
+                customer = new Customer { UserId = userId.Value };
+                await _unitOfWork.Repository<Customer>().AddAsync(customer, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            // M7.13: Idempotent checkout replay check (runs BEFORE cart empty check)
+            if (!string.IsNullOrWhiteSpace(dto.IdempotencyKey))
+            {
+                var existingOrder = await _unitOfWork.Repository<Order>()
+                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.IdempotencyKey == dto.IdempotencyKey), cancellationToken);
+
+                if (existingOrder != null)
+                {
+                    _logger.LogInformation("Idempotent checkout replay for key {Key}, order {OrderId}", dto.IdempotencyKey, existingOrder.OrderId);
+                    return _mapper != null ? _mapper.Map<OrderDto>(existingOrder) : new OrderDto
+                    {
+                        OrderId = existingOrder.OrderId,
+                        OrderDate = existingOrder.OrderDate,
+                        TotalAmount = existingOrder.TotalAmount,
+                        Status = existingOrder.Status.ToString(),
+                        ShippingFullName = existingOrder.ShippingFullName,
+                        ShippingAddress = existingOrder.ShippingAddress,
+                        ShippingPhoneNumber = existingOrder.ShippingPhoneNumber,
+                        ShippingCost = existingOrder.ShippingCost,
+                        DiscountAmount = existingOrder.DiscountAmount
+                    };
+                }
+            }
+
             var cart = await FindCartAsync(userId, null, tracking: true, cancellationToken);
 
             if (cart is null || cart.Items.Count == 0)
@@ -486,19 +524,6 @@ namespace BusinessLogic.Services.Implementations
                         $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.", "LISTING_NOT_ACTIVE");
 
                 await EnsureStockAsync(item.ListingId, item.Quantity, cancellationToken);
-            }
-
-            var customer = await _unitOfWork.Repository<Customer>()
-                .FirstOrDefaultAsync(
-                    new Spec<Customer>().Where(c => c.UserId == userId.Value),
-                    cancellationToken);
-
-            if (customer is null)
-            {
-                // M7.11: Fallback auto-provision Customer profile for legacy users
-                customer = new Customer { UserId = userId.Value };
-                await _unitOfWork.Repository<Customer>().AddAsync(customer, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
             // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11 & M7.12) ----
@@ -532,11 +557,11 @@ namespace BusinessLogic.Services.Implementations
                 if (couponEntity.UsageLimit.HasValue && couponEntity.UsedCount >= couponEntity.UsageLimit.Value)
                     throw new BusinessException("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.", "COUPON_LIMIT_REACHED");
 
-                // بررسی سقف استفاده به ازای هر کاربر (M7.12)
+                // بررسی سقف استفاده به ازای هر کاربر — به استثنای سفارش‌های لغوشده (M7.13)
                 if (couponEntity.UsageLimitPerUser.HasValue)
                 {
                     var userUsageCount = await _unitOfWork.Repository<Order>()
-                        .CountAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.CouponId == couponEntity.CouponId), cancellationToken);
+                        .CountAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.CouponId == couponEntity.CouponId && o.Status != OrderStatus.Cancelled), cancellationToken);
 
                     if (userUsageCount >= couponEntity.UsageLimitPerUser.Value)
                         throw new BusinessException("شما به سقف مجاز استفاده از این کد تخفیف رسیده‌اید.", "COUPON_LIMIT_REACHED");
@@ -573,6 +598,7 @@ namespace BusinessLogic.Services.Implementations
                     dto.ShippingFullName,
                     dto.ShippingAddress,
                     dto.ShippingPhoneNumber,
+                    dto.IdempotencyKey,
                     cancellationToken);
 
                 orderId = created.OrderId;
@@ -655,6 +681,33 @@ namespace BusinessLogic.Services.Implementations
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            }
+            catch (DbUpdateException) when (!string.IsNullOrWhiteSpace(dto.IdempotencyKey))
+            {
+                await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+                var existingOrder = await _unitOfWork.Repository<Order>()
+                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.IdempotencyKey == dto.IdempotencyKey), cancellationToken);
+
+                if (existingOrder != null)
+                    return _mapper != null ? _mapper.Map<OrderDto>(existingOrder) : new OrderDto
+                    {
+                        OrderId = existingOrder.OrderId,
+                        OrderDate = existingOrder.OrderDate,
+                        TotalAmount = existingOrder.TotalAmount,
+                        Status = existingOrder.Status.ToString(),
+                        ShippingFullName = existingOrder.ShippingFullName,
+                        ShippingAddress = existingOrder.ShippingAddress,
+                        ShippingPhoneNumber = existingOrder.ShippingPhoneNumber,
+                        ShippingCost = existingOrder.ShippingCost,
+                        DiscountAmount = existingOrder.DiscountAmount
+                    };
+
+                throw;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+                throw new ConflictException("سقف استفاده از کد تخفیف یا موجودی کالا به‌طور هم‌زمان توسط کاربر دیگری تغییر کرد.", "CONCURRENCY_CONFLICT");
             }
             catch
             {

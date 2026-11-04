@@ -104,6 +104,21 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
                     }
                 }
 
+                // M7.13: Restore coupon quota if abandoned order is cancelled
+                if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
+                {
+                    var coupon = await unitOfWork.Repository<Coupon>()
+                        .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.CouponId == order.CouponId.Value).AsTracking(), cancellationToken);
+
+                    if (coupon != null && coupon.UsedCount > 0)
+                    {
+                        coupon.UsedCount--;
+                        unitOfWork.Repository<Coupon>().Update(coupon);
+                    }
+
+                    order.CouponQuotaRefunded = true;
+                }
+
                 unitOfWork.Repository<Order>().Update(order);
             }
 

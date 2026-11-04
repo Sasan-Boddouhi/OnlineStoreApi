@@ -52,5 +52,14 @@ public class TestAppDbContext : AppDbContext
         modelBuilder.Entity<SellerPayout>()
             .Property(p => p.RowVersion)
             .ValueGeneratedNever();
+
+        // M7.13: Coupon and SellerDebt RowVersion for SQLite
+        modelBuilder.Entity<Coupon>()
+            .Property(c => c.RowVersion)
+            .ValueGeneratedNever();
+
+        modelBuilder.Entity<SellerDebt>()
+            .Property(d => d.RowVersion)
+            .ValueGeneratedNever();
     }
 }

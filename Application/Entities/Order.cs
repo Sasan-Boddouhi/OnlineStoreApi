@@ -55,6 +55,11 @@ namespace Application.Entities
         public virtual Invoice? Invoice { get; set; }
         public virtual ICollection<Payment> Payments { get; set; } = new HashSet<Payment>();
 
+        [MaxLength(100)]
+        public string? IdempotencyKey { get; set; }
+
+        public bool CouponQuotaRefunded { get; set; } = false;
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = new byte[8];
 

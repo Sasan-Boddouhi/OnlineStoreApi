@@ -740,6 +740,34 @@ public sealed class PaymentService : IPaymentService
             _unitOfWork.Repository<SellerPayout>().Update(payout);
         }
 
+        // M7.13: Harmonized clawback debt creation for already-paid payouts on refund
+        var paidPayouts = await _unitOfWork.Repository<SellerPayout>()
+            .ListAsync(
+                new Spec<SellerPayout>()
+                    .Where(p => p.OrderSellerGroupId != null
+                             && groupIds.Contains(p.OrderSellerGroupId.Value)
+                             && p.Status == PayoutStatus.Paid)
+                    .AsTracking(),
+                cancellationToken);
+
+        foreach (var payout in paidPayouts)
+        {
+            var debt = new SellerDebt
+            {
+                SellerId = payout.SellerId,
+                Amount = payout.Amount,
+                Reason = $"Clawback for refunded payment {payment.PaymentId}, order {payment.OrderId}",
+                CreatedAtUtc = DateTime.UtcNow,
+                IsSettled = false
+            };
+            await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
+            await AuditAsync(
+                "SellerDebt.Created",
+                debt.SellerDebtId,
+                $"order={payment.OrderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
+                cancellationToken);
+        }
+
         return payouts.Count;
     }
 }

@@ -49,6 +49,14 @@ public sealed class SqliteRowVersionFixInterceptor : SaveChangesInterceptor
             if (entry.Entity is SellerProduct sellerProduct &&
                 (sellerProduct.RowVersion is null || sellerProduct.RowVersion.Length == 0))
                 sellerProduct.RowVersion = new byte[8];
+
+            if (entry.Entity is Coupon coupon &&
+                (coupon.RowVersion is null || coupon.RowVersion.Length == 0))
+                coupon.RowVersion = new byte[8];
+
+            if (entry.Entity is SellerDebt sellerDebt &&
+                (sellerDebt.RowVersion is null || sellerDebt.RowVersion.Length == 0))
+                sellerDebt.RowVersion = new byte[8];
         }
     }
 }

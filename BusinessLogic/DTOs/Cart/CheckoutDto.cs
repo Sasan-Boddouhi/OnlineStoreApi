@@ -12,5 +12,6 @@ namespace BusinessLogic.DTOs.Cart
         public string? Description { get; set; }
         public string? CouponCode { get; set; }
         public int? ShippingMethodId { get; set; }
+        public string? IdempotencyKey { get; set; }
     }
 }

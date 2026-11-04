@@ -10,7 +10,7 @@ namespace BusinessLogic.Services.Interfaces
     public interface IOrderService
     {
         // ایجاد سفارش خالی (بدون آیتم)
-        Task<OrderDto> CreateEmptyOrderAsync(int customerId, string shippingFullName, string shippingAddress, string shippingPhone, CancellationToken cancellationToken = default);
+        Task<OrderDto> CreateEmptyOrderAsync(int customerId, string shippingFullName, string shippingAddress, string shippingPhone, string? idempotencyKey = null, CancellationToken cancellationToken = default);
 
         // افزودن آیتم به سفارش (اگر سفارش در وضعیت Pending باشد)
         Task<OrderDto> AddItemToOrderAsync(int orderId, AddOrderItemDto itemDto, CancellationToken cancellationToken = default);

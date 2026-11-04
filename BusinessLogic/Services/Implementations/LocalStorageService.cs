@@ -85,14 +85,15 @@ namespace BusinessLogic.Services.Implementations
 
         private static bool ValidateImageSignature(byte[] header, string extension)
         {
-            if (header.Length < 4)
+            if (header.Length < 12)
                 return false;
 
             return extension switch
             {
                 ".jpg" or ".jpeg" => header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF,
                 ".png" => header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47,
-                ".webp" => header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46,
+                ".webp" => header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
+                        && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50,
                 _ => false
             };
         }

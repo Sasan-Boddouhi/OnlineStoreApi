@@ -719,6 +719,28 @@ namespace DataLayer.Context
                 .WithMany()
                 .HasForeignKey(d => d.SellerId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // M7.13 Concurrency tokens & Idempotency
+            modelBuilder.Entity<Coupon>(entity =>
+            {
+                entity.Property(c => c.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<SellerDebt>(entity =>
+            {
+                entity.Property(d => d.RowVersion)
+                    .IsRowVersion()
+                    .IsConcurrencyToken();
+            });
+
+            modelBuilder.Entity<Order>(entity =>
+            {
+                entity.HasIndex(o => new { o.CustomerId, o.IdempotencyKey })
+                    .IsUnique()
+                    .HasFilter("[IdempotencyKey] IS NOT NULL");
+            });
         }
     }
 }

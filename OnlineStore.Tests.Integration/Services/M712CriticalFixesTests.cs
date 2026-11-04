@@ -453,4 +453,164 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         // ChangeTracker must be cleared!
         DbContext.ChangeTracker.Entries<User>().Should().BeEmpty();
     }
+
+    // 8. Idempotent Checkout Replay with IdempotencyKey
+    [Fact]
+    public async Task Checkout_IdempotencyKey_ReturnsSameOrder_OnDuplicateSubmit()
+    {
+        var (seller, _, _, listing) = await SetupListingWithStockAsync(price: 150m, stock: 10m);
+
+        var buyer = new User
+        {
+            FirstName = "Idempotent",
+            LastName = "Buyer",
+            PhoneNumber = $"09{Random.Shared.Next(100000000, 999999999)}",
+            PasswordHash = "hash",
+            UserType = UserType.Customer
+        };
+        DbContext.User.Add(buyer);
+        await DbContext.SaveChangesAsync();
+        DbContext.Customer.Add(new Customer { UserId = buyer.UserId });
+        await DbContext.SaveChangesAsync();
+
+        SetCurrentUser(buyer.UserId, "Customer");
+        await CartService.AddItemAsync(buyer.UserId, null, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
+
+        var key = $"IDEMP-{Guid.NewGuid():N}";
+        var order1 = await CartService.CheckoutAsync(buyer.UserId, null, new CheckoutDto
+        {
+            ShippingFullName = "Idempotent Buyer",
+            ShippingAddress = "Street 1",
+            ShippingPhoneNumber = "09120000001",
+            IdempotencyKey = key
+        });
+
+        // Submit duplicate checkout with the same IdempotencyKey
+        var order2 = await CartService.CheckoutAsync(buyer.UserId, null, new CheckoutDto
+        {
+            ShippingFullName = "Idempotent Buyer",
+            ShippingAddress = "Street 1",
+            ShippingPhoneNumber = "09120000001",
+            IdempotencyKey = key
+        });
+
+        order1.OrderId.Should().Be(order2.OrderId);
+        order1.TotalAmount.Should().Be(order2.TotalAmount);
+    }
+
+    // 9. Coupon Quota Restoration on Cancellation
+    [Fact]
+    public async Task Checkout_RestoresCouponQuota_WhenOrderCancelled()
+    {
+        var (_, _, _, listing) = await SetupListingWithStockAsync(price: 100m, stock: 10m);
+
+        var coupon = await CouponService.CreateAsync(new CreateCouponDto
+        {
+            Code = $"RESTORE-{Guid.NewGuid():N}",
+            DiscountPercentage = 15m,
+            UsageLimit = 1,
+            UsageLimitPerUser = 1,
+            IsActive = true
+        });
+
+        var buyer = new User
+        {
+            FirstName = "Restore",
+            LastName = "Buyer",
+            PhoneNumber = $"09{Random.Shared.Next(100000000, 999999999)}",
+            PasswordHash = "hash",
+            UserType = UserType.Customer
+        };
+        DbContext.User.Add(buyer);
+        await DbContext.SaveChangesAsync();
+        DbContext.Customer.Add(new Customer { UserId = buyer.UserId });
+        await DbContext.SaveChangesAsync();
+
+        SetCurrentUser(buyer.UserId, "Customer");
+        await CartService.AddItemAsync(buyer.UserId, null, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
+
+        var order = await CartService.CheckoutAsync(buyer.UserId, null, new CheckoutDto
+        {
+            ShippingFullName = "Restore Buyer",
+            ShippingAddress = "Street 1",
+            ShippingPhoneNumber = "09120000002",
+            CouponCode = coupon.Code
+        });
+
+        // UsedCount should now be 1
+        var reloadedCoupon = await DbContext.Coupon.FirstAsync(c => c.CouponId == coupon.CouponId);
+        reloadedCoupon.UsedCount.Should().Be(1);
+
+        // Cancel order
+        await OrderService.CancelOrderAsync(order.OrderId);
+
+        // UsedCount should be restored to 0!
+        reloadedCoupon = await DbContext.Coupon.FirstAsync(c => c.CouponId == coupon.CouponId);
+        reloadedCoupon.UsedCount.Should().Be(0);
+
+        // Customer can reuse the coupon!
+        await CartService.AddItemAsync(buyer.UserId, null, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
+        var order2 = await CartService.CheckoutAsync(buyer.UserId, null, new CheckoutDto
+        {
+            ShippingFullName = "Restore Buyer",
+            ShippingAddress = "Street 1",
+            ShippingPhoneNumber = "09120000002",
+            CouponCode = coupon.Code
+        });
+
+        order2.Should().NotBeNull();
+        order2.DiscountAmount.Should().Be(15m);
+    }
+
+    // 10. WebP 8..11 Magic Byte Signature Verification
+    [Fact]
+    public async Task LocalStorageService_RejectsWav_WithWebpExtension()
+    {
+        var settings = Options.Create(new StorageSettings
+        {
+            RootPath = "wwwroot/uploads",
+            PublicBaseUrl = "/uploads",
+            MaxFileSizeBytes = 5 * 1024 * 1024,
+            AllowedExtensions = new[] { ".webp" }
+        });
+        var storage = new LocalStorageService(settings, NullLogger<LocalStorageService>.Instance);
+
+        // RIFF....WAVE header
+        var wavHeader = new byte[12];
+        wavHeader[0] = 0x52; wavHeader[1] = 0x49; wavHeader[2] = 0x46; wavHeader[3] = 0x46; // RIFF
+        wavHeader[8] = 0x57; wavHeader[9] = 0x41; wavHeader[10] = 0x56; wavHeader[11] = 0x45; // WAVE
+
+        using var stream = new MemoryStream(wavHeader);
+        var act = () => storage.SaveAsync(stream, "audio.webp", "audio/wav");
+
+        await act.Should().ThrowAsync<BusinessException>()
+            .WithMessage("*هم‌خوانی ندارد*");
+    }
+
+    // 11. SellerDebt Settlement on Next Payout
+    [Fact]
+    public async Task SellerPayout_SettlesOutstandingSellerDebt()
+    {
+        var (seller, _, _, _) = await SetupListingWithStockAsync(price: 1000m);
+
+        var debt = new SellerDebt
+        {
+            SellerId = seller.SellerId,
+            Amount = 300m,
+            Reason = "Clawback test",
+            IsSettled = false
+        };
+        DbContext.SellerDebt.Add(debt);
+        await DbContext.SaveChangesAsync();
+
+        var payout = new SellerPayout(seller.SellerId, null, 800m, DateTime.UtcNow.AddDays(-2), DateTime.UtcNow);
+        DbContext.SellerPayout.Add(payout);
+        await DbContext.SaveChangesAsync();
+
+        var payoutService = GetService<ISellerPayoutService>();
+        await payoutService.MarkAsPaidAsync(payout.SellerPayoutId, "BANK-SETTLE-001");
+
+        var reloadedDebt = await DbContext.SellerDebt.FirstAsync(d => d.SellerDebtId == debt.SellerDebtId);
+        reloadedDebt.IsSettled.Should().BeTrue();
+    }
 }

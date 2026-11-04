@@ -28,5 +28,8 @@ namespace Application.Entities
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
         public bool IsSettled { get; set; } = false;
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = new byte[8];
     }
 }

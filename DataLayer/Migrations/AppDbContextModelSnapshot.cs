@@ -347,6 +347,12 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("ModifiedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<int?>("UsageLimit")
                         .HasColumnType("int");
 
@@ -666,6 +672,9 @@ namespace DataLayer.Migrations
                     b.Property<int?>("CouponId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("CouponQuotaRefunded")
+                        .HasColumnType("bit");
+
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");
 
@@ -677,6 +686,10 @@ namespace DataLayer.Migrations
 
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
@@ -731,6 +744,10 @@ namespace DataLayer.Migrations
                     b.HasIndex("ShippingMethodId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("CustomerId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
 
                     b.ToTable("Order");
                 });
@@ -1676,6 +1693,12 @@ namespace DataLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<int>("SellerId")
                         .HasColumnType("int");

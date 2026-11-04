@@ -33,5 +33,8 @@ namespace Application.Entities
         public int? UsageLimitPerUser { get; set; }
 
         public int UsedCount { get; set; } = 0;
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = new byte[8];
     }
 }
