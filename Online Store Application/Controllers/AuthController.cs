@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.OutputCaching;
 using BusinessLogic.DTOs.User;
 
 namespace WebApi.Controllers
@@ -12,6 +13,8 @@ namespace WebApi.Controllers
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/v{version:apiVersion}/auth")]
+    // F-04: پاسخ‌های احراز هویت و «من» به کاربر جاری وابسته‌اند و هرگز کش نمی‌شوند.
+    [OutputCache(NoStore = true)]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;

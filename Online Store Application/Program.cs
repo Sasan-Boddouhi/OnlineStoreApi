@@ -442,19 +442,13 @@ builder.Services.AddRateLimiter(options =>
     }
 });
 
-// Register OutputCache only outside Testing
-if (!builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddOutputCache(options =>
-    {
-        options.AddBasePolicy(builder => builder.Cache());
-    });
+// F-04: کش خروجی opt-in است؛ سیاست پایه ندارد و فقط endpointهای دارای سیاست نام‌دار کش می‌شوند
+// (OutputCachePolicies). سبد، موجودی، احراز هویت و health صراحتاً NoStore هستند.
+var outputCacheEnabled = OutputCacheExtensions.IsOutputCacheEnabled(builder.Configuration, builder.Environment);
 
-    builder.Services.AddStackExchangeRedisOutputCache(options =>
-    {
-        options.Configuration = redisOptions.Configuration;
-        options.InstanceName = redisOptions.InstanceName;
-    });
+if (outputCacheEnabled)
+{
+    builder.Services.AddApplicationOutputCache(builder.Environment, redisOptions);
 }
 
 var app = builder.Build();
@@ -526,22 +520,17 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 
         await context.Response.WriteAsJsonAsync(result);
     }
-});
+}).CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false
-});
+}).CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-});
-
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    app.UseOutputCache();
-}
+}).CacheOutput(policy => policy.NoCache());
 
 app.UseCors("ReactFrontend");
 
@@ -552,6 +541,12 @@ app.UseMiddleware<QueryMetricsMiddleware>();
 app.UseAuthentication();
 
 app.UseAuthorization();
+
+// F-04: پس از CORS و احراز هویت، تا پاسخ کش‌شده از کنار این دو عبور نکند.
+if (outputCacheEnabled)
+{
+    app.UseOutputCache();
+}
 
 app.MapControllers();
 

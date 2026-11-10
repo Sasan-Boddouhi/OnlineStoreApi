@@ -7,6 +7,8 @@ using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Cities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -80,6 +82,7 @@ public class CitiesController : ControllerBase
     /// <summary>دریافت مشخصات شهر بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(CityDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
@@ -91,6 +94,7 @@ public class CitiesController : ControllerBase
     /// <summary>دریافت فهرست شهرهای یک استان بر اساس شناسه استان (جهت لیست‌های آبشاری فرانت‌اند).</summary>
     [HttpGet("by-province/{provinceId:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(IEnumerable<CityDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<CityDto>>> GetByProvince(int provinceId, CancellationToken cancellationToken)
     {

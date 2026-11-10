@@ -252,6 +252,17 @@ Detailed authentication/session behavior belongs in `docs/authentication.md`.
 
 The API composition root registers memory caching and Redis-based caching. Redis is also used for distributed output caching outside the Testing environment.
 
+Output caching is opt-in. There is no base policy: an endpoint is cached only when it carries a named policy from `OutputCachePolicies` (`Online Store Application/Extensions/OutputCacheExtensions.cs`). Both policies ignore the query string, so random query parameters cannot add entries.
+
+| Policy | Duration | Endpoints |
+|---|---|---|
+| `ReferenceData` | 60 s | `GET categories`, `categories/tree`, `categories/{id}`, `brands`, `brands/{id}`, `shipping-methods`, `shipping-methods/{id}`, `provinces/{id}`, `cities/{id}`, `cities/by-province/{provinceId}` |
+| `ProductDetail` | 30 s | `GET products/{id}` |
+
+Carts, inventory, auth and health endpoints are explicitly marked no-store. Never put a policy on anything that depends on the current user, the guest cart session header (`X-Cart-Session`), payments, orders, or live stock. The product list is not output-cached; it uses the data cache below. `UseOutputCache` runs after CORS, authentication and authorization. Output caching is off in the Testing environment unless `OutputCaching:Enabled=true` (see `OutputCacheIsolationTests`).
+
+The data cache (`ICacheService` / `RedisCacheService`) is an optimisation only: a Redis error is logged and treated as a miss (reads) or ignored (writes and removals), so the catalog keeps working from the database when Redis is down. Query cache keys are `{prefix}:q:{sha256}` of the normalised query (paging, filter, sort field and direction), so key length is fixed whatever the filter text.
+
 Serilog provides structured logging. Query metrics middleware provides request/query diagnostics. Health checks cover SQL Server and Redis and are exposed through the API health endpoint.
 
 ## 14. Dependency Injection

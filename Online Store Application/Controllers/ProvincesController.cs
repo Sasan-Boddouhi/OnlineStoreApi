@@ -7,6 +7,8 @@ using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Provinces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -80,6 +82,7 @@ public class ProvincesController : ControllerBase
     /// <summary>دریافت مشخصات استان بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(ProvinceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)

@@ -6,6 +6,7 @@ using BusinessLogic.DTOs.Order;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Online_Store_Application.Controllers;
@@ -20,6 +21,8 @@ namespace Online_Store_Application.Controllers;
 [ApiController]
 [ApiVersion(1.0)]
 [Route("api/v{version:apiVersion}/carts")]
+// F-04: سبد به هدر X-Cart-Session یا توکن وابسته است و هرگز کش نمی‌شود.
+[OutputCache(NoStore = true)]
 public class CartsController : ControllerBase
 {
     /// <summary>هدر شناسهٔ نشست برای سبد مهمان.</summary>

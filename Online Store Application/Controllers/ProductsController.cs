@@ -8,6 +8,7 @@ using BusinessLogic.Specifications.Products;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -34,6 +35,10 @@ public class ProductsController : ControllerBase
 
     // ================= GET ALL =================
     /// <summary>جستجو و دریافت فهرست محصولات با فیلتر، مرتب‌سازی و صفحه‌بندی.</summary>
+    /// <remarks>
+    /// F-04/F-23: کش خروجی ندارد؛ query آزاد است و هر ترکیب تصادفی یک ورودی جدید می‌ساخت.
+    /// کش داده در ProductService با کلید هش‌شده و نسخه‌دار انجام می‌شود.
+    /// </remarks>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(PagedResult<ProductDto>), StatusCodes.Status200OK)]
@@ -93,7 +98,7 @@ public class ProductsController : ControllerBase
     /// <summary>دریافت مشخصات کامل یک محصول بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
-    [OutputCache(Duration = 30, VaryByRouteValueNames = new[] { "id" })]
+    [OutputCache(PolicyName = OutputCachePolicies.ProductDetail)]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> GetProduct(int id)

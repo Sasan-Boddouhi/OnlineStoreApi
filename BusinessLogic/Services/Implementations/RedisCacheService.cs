@@ -3,18 +3,26 @@ using Application.Interfaces.Services;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 using Application.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace BusinessLogic.Services.Implementations;
 
+/// <summary>
+/// کش توزیع‌شده روی Redis.
+/// F-23: کش فقط یک بهینه‌سازی است؛ خطای Redis ثبت می‌شود و درخواست بدون کش ادامه می‌یابد
+/// (Get → miss، Set/Remove → بی‌اثر). پیش از این هر خطای Redis به 500 روی کاتالوگ و users/me تبدیل می‌شد.
+/// </summary>
 public sealed class RedisCacheService : ICacheService
 {
     private static readonly ActivitySource ActivitySource = new("OnlineStore.Cache");
 
     private readonly IDistributedCache _cache;
+    private readonly ILogger<RedisCacheService> _logger;
 
-    public RedisCacheService(IDistributedCache cache)
+    public RedisCacheService(IDistributedCache cache, ILogger<RedisCacheService> logger)
     {
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default) where T : class
@@ -52,11 +60,13 @@ public sealed class RedisCacheService : ICacheService
             activity?.SetStatus(ActivityStatusCode.Ok);
             return JsonSerializer.Deserialize<T>(cached);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsCallerCancellation(ex, ct))
         {
             stopwatch.Stop();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw;
+            activity?.SetTag("cache.hit", false);
+            _logger.LogWarning(ex, "Cache read failed for key {CacheKey}; treating as a miss", key);
+            return null;
         }
     }
 
@@ -87,11 +97,11 @@ public sealed class RedisCacheService : ICacheService
 
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsCallerCancellation(ex, ct))
         {
             stopwatch.Stop();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw;
+            _logger.LogWarning(ex, "Cache write failed for key {CacheKey}; continuing without cache", key);
         }
     }
 
@@ -113,11 +123,16 @@ public sealed class RedisCacheService : ICacheService
 
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsCallerCancellation(ex, ct))
         {
             stopwatch.Stop();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw;
+            // ورودی کهنه حداکثر تا پایان TTL خودش باقی می‌ماند.
+            _logger.LogError(ex, "Cache remove failed for key {CacheKey}; entry may stay stale until it expires", key);
         }
     }
+
+    /// <summary>لغو درخواست توسط فراخوان خطای کش نیست و باید بالا برود.</summary>
+    private static bool IsCallerCancellation(Exception ex, CancellationToken ct)
+        => ex is OperationCanceledException && ct.IsCancellationRequested;
 }

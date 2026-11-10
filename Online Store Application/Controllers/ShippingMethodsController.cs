@@ -7,6 +7,8 @@ using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -25,6 +27,7 @@ public class ShippingMethodsController : ControllerBase
     /// <summary>دریافت فهرست روش‌های ارسال فعال.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(IEnumerable<ShippingMethodDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<ShippingMethodDto>>> GetAll(CancellationToken cancellationToken)
         => Ok(await _shippingMethodService.GetAllAsync(cancellationToken));
@@ -32,6 +35,7 @@ public class ShippingMethodsController : ControllerBase
     /// <summary>دریافت مشخصات یک روش ارسال بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(ShippingMethodDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ShippingMethodDto>> GetById(int id, CancellationToken cancellationToken)

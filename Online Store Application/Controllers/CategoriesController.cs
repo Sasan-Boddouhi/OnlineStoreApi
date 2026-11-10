@@ -3,6 +3,8 @@ using BusinessLogic.DTOs.ProductCategory;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -25,6 +27,7 @@ public class CategoriesController : ControllerBase
     /// <summary>دریافت فهرست تمام دسته‌بندی‌های فعال.</summary>
     [HttpGet]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(IEnumerable<ProductCategoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
@@ -35,6 +38,7 @@ public class CategoriesController : ControllerBase
     /// <summary>دریافت ساختار درختی دسته‌بندی‌ها به همراه زیردسته‌ها.</summary>
     [HttpGet("tree")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(IEnumerable<CategoryTreeDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTree(CancellationToken cancellationToken)
     {
@@ -45,6 +49,7 @@ public class CategoriesController : ControllerBase
     /// <summary>دریافت مشخصات یک دسته‌بندی بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(ProductCategoryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
