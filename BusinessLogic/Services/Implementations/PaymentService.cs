@@ -298,30 +298,8 @@ public sealed class PaymentService : IPaymentService
                 verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
         }
 
-        await _unitOfWork.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            payment.GatewayReference = verification.ReferenceId;
-            payment.TransitionTo(PaymentState.Succeeded);
-            await AuditAsync("Payment.Succeeded", payment.PaymentId, verification.ReferenceId, cancellationToken);
-
-            await ApplyPaidStatusToOrderAsync(payment, cancellationToken);
-
-            _unitOfWork.Repository<Payment>().Update(payment);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-            _logger.LogInformation(
-                "Payment {PaymentId} succeeded for order {OrderId}", payment.PaymentId, payment.OrderId);
-
-            return _mapper.Map<PaymentDto>(payment);
-        }
-        catch (Exception ex)
-        {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            _logger.LogError(ex, "Failed to complete payment {PaymentId} verification transaction", payment.PaymentId);
-            throw;
-        }
+        // Batch 4b: از اینجا پول برداشته شده است؛ ثبت پرداخت نباید شکست بخورد.
+        return await CompleteCapturedPaymentAsync(payment, verification.ReferenceId, "verify");
     }
 
     // ==================== Webhook ====================
@@ -383,16 +361,12 @@ public sealed class PaymentService : IPaymentService
                     verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
             }
 
-            payment.GatewayReference = verification.ReferenceId;
-            payment.TransitionTo(PaymentState.Succeeded);
-            await AuditAsync("Payment.Succeeded", payment.PaymentId, verification.ReferenceId, cancellationToken);
-            await ApplyPaidStatusToOrderAsync(payment, cancellationToken);
+            // Batch 4b: از اینجا پول برداشته شده است؛ ثبت پرداخت نباید شکست بخورد.
+            return await CompleteCapturedPaymentAsync(payment, verification.ReferenceId, "webhook");
         }
-        else
-        {
-            payment.TransitionTo(PaymentState.Failed, note: parsed.Status);
-            await AuditAsync("Payment.Failed", payment.PaymentId, parsed.Status, cancellationToken);
-        }
+
+        payment.TransitionTo(PaymentState.Failed, note: parsed.Status);
+        await AuditAsync("Payment.Failed", payment.PaymentId, parsed.Status, cancellationToken);
 
         try
         {
@@ -482,46 +456,231 @@ public sealed class PaymentService : IPaymentService
             throw new ForbiddenException("این سفارش متعلق به کاربر دیگری است.", "PAYMENT_FORBIDDEN");
     }
 
+    // ==================== Batch 4b: پس از برداشت پول ====================
+
     /// <summary>
-    /// پرداخت موفق:
-    ///  • اگر سفارش Pending است، به Processing می‌رود (کمیسیون هم قفل می‌شود).
-    ///  • فاکتور به Paid علامت می‌خورد.
+    /// Batch 4b — درگاه پول را برداشته است؛ از این نقطه هیچ خطایی نباید ثبت پرداخت را برگرداند.
+    ///
+    ///  1) Payment با مرجع درگاه در تراکنش مستقل Succeeded ذخیره می‌شود.
+    ///  2) سفارش، گروه‌ها و فاکتور در تراکنش دوم و به‌صورت idempotent همگام می‌شوند؛
+    ///     شکست این گام پرداخت ثبت‌شده را برنمی‌گرداند.
+    ///  3) هر ناسازگاری واقعی با سطح Error لاگ و با عنوان Payment.ReviewRequired در AuditLog
+    ///     ثبت می‌شود تا دستی بررسی شود؛ پاسخ به مشتری همچنان موفق است.
+    ///
+    /// عمداً CancellationToken.None: قطع اتصال مشتری (RequestAborted) نباید ثبت پولی را که
+    /// گرفته شده نیمه‌کاره بگذارد.
     /// </summary>
-    private async Task ApplyPaidStatusToOrderAsync(Payment payment, CancellationToken cancellationToken)
+    private async Task<PaymentDto> CompleteCapturedPaymentAsync(Payment payment, string? referenceId, string source)
+    {
+        var issues = new List<string>();
+
+        payment = await PersistCapturedPaymentAsync(payment, referenceId, source, issues);
+
+        if (payment.State == PaymentState.Succeeded)
+            await SyncOrderAfterCaptureAsync(payment, issues);
+
+        if (issues.Count > 0)
+            await RecordReviewRequiredAsync(payment, referenceId, source, issues);
+
+        _logger.LogInformation(
+            "Payment {PaymentId} captured for order {OrderId} via {Source}", payment.PaymentId, payment.OrderId, source);
+
+        return _mapper.Map<PaymentDto>(payment);
+    }
+
+    /// <summary>
+    /// گام ۱: فقط خود پرداخت ذخیره می‌شود. اگر درخواست رقیب (redirect/webhook) هم‌زمان همین
+    /// پرداخت را ثبت کرده باشد، نسخهٔ تازه بارگذاری و همان برگردانده می‌شود.
+    /// </summary>
+    private async Task<Payment> PersistCapturedPaymentAsync(
+        Payment payment, string? referenceId, string source, List<string> issues)
+    {
+        var ct = CancellationToken.None;
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            // درخواست رقیب پیش‌تر ثبت کرده است ⇒ کار ما تمام است.
+            if (payment.State is PaymentState.Succeeded or PaymentState.Refunded)
+                return payment;
+
+            if (payment.State != PaymentState.Pending)
+            {
+                // ماشین حالت پرداخت اجازهٔ Failed/Cancelled → Succeeded نمی‌دهد؛ پول گرفته شده ولی
+                // رکورد در وضعیت پایانی دیگری است. فقط بررسی دستی می‌تواند تصمیم بگیرد.
+                issues.Add($"gateway captured money but payment was already {payment.State}");
+                return payment;
+            }
+
+            payment.GatewayReference = referenceId;
+            payment.TransitionTo(PaymentState.Succeeded);
+            await AuditAsync("Payment.Succeeded", payment.PaymentId, referenceId, ct);
+            _unitOfWork.Repository<Payment>().Update(payment);
+
+            await _unitOfWork.BeginTransactionAsync(ct);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(ct);
+                await _unitOfWork.CommitTransactionAsync(ct);
+                return payment;
+            }
+            catch (DbUpdateConcurrencyException ex) when (attempt < maxAttempts)
+            {
+                // Rollback، ChangeTracker را هم پاک می‌کند؛ بارگذاری بعدی از دیتابیس است.
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                _logger.LogWarning(ex,
+                    "Concurrent update while recording captured payment {PaymentId} via {Source} (attempt {Attempt}); reloading.",
+                    payment.PaymentId, source, attempt);
+
+                payment = await GetByAuthorityAsync(payment.TransactionId!, ct);
+            }
+            catch (Exception ex)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                _logger.LogCritical(ex,
+                    "Gateway captured money but payment {PaymentId} (authority {Authority}, reference {Reference}) could not be recorded via {Source}.",
+                    payment.PaymentId, payment.TransactionId, referenceId, source);
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// گام ۲: همگام‌سازی idempotent سفارش با پرداخت موفق.
+    ///  • سفارش Pending → Processing؛ سفارش Processing/Shipped/Delivered دست نمی‌خورد.
+    ///  • گروه Pending کمیسیون می‌گیرد (Pending → Processing)؛ گروهی که قبلاً کمیسیون گرفته رد می‌شود.
+    ///  • فاکتور Paid می‌شود.
+    /// هیچ متد دامنه‌ای خارج از گذار مجازش صدا زده نمی‌شود؛ هر وضعیت غیرمنتظره به‌جای
+    /// InvalidOperationException به فهرست بررسی دستی اضافه می‌شود.
+    /// </summary>
+    private async Task SyncOrderAfterCaptureAsync(Payment payment, List<string> issues)
     {
         if (payment.OrderId is null)
             return;
 
-        var order = await _unitOfWork.Repository<Order>()
-            .FirstOrDefaultAsync(
-                new Spec<Order>()
-                    .Where(o => o.OrderId == payment.OrderId.Value)
-                    .Include(o => o.SellerGroups)
-                    .AsTracking(),
-                cancellationToken);
+        var ct = CancellationToken.None;
 
-        if (order is null)
-            return;
-
-        if (order.Status == OrderStatus.Pending)
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
         {
-            order.Confirm();
+            var order = await _unitOfWork.Repository<Order>()
+                .FirstOrDefaultAsync(
+                    new Spec<Order>()
+                        .Where(o => o.OrderId == payment.OrderId.Value)
+                        .Include(o => o.SellerGroups)
+                        .AsTracking(),
+                    ct);
 
-            foreach (var group in order.SellerGroups)
-                group.ApplyCommission();
+            if (order is null)
+            {
+                issues.Add($"order {payment.OrderId} not found");
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                return;
+            }
 
+            ApplyPaidStatus(order, issues);
             _unitOfWork.Repository<Order>().Update(order);
+
+            var invoice = await _unitOfWork.Repository<Invoice>()
+                .FirstOrDefaultAsync(
+                    new Spec<Invoice>().Where(i => i.OrderId == order.OrderId).AsTracking(),
+                    ct);
+
+            if (invoice is not null && invoice.Status != InvoiceStatus.Paid)
+            {
+                invoice.MarkAsPaid();
+                _unitOfWork.Repository<Invoice>().Update(invoice);
+            }
+
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            // پرداخت در گام ۱ ثبت شده است؛ شکست این گام فقط بررسی دستی می‌خواهد.
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            _logger.LogError(ex,
+                "Order sync failed after captured payment {PaymentId} for order {OrderId}.",
+                payment.PaymentId, payment.OrderId);
+            issues.Add($"order sync failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>گذارهای سفارش و گروه‌ها پس از پرداخت؛ هرگز پرتاب نمی‌کند.</summary>
+    private static void ApplyPaidStatus(Order order, List<string> issues)
+    {
+        var wasPending = order.Status == OrderStatus.Pending;
+
+        switch (order.Status)
+        {
+            case OrderStatus.Pending:
+                order.Confirm();
+                break;
+
+            case OrderStatus.Processing:
+                // مثلاً تأیید ادمین پیش از پرداخت؛ سفارش همین حالا در وضعیت هدف است.
+                break;
+
+            case OrderStatus.Shipped:
+            case OrderStatus.Delivered:
+                // ارسال پیش از ثبت این پرداخت: دادهٔ پیش از Batch 4 یا پرداخت تکراری.
+                issues.Add($"order was {order.Status} before this payment was captured");
+                return;
+
+            default:
+                // Cancelled/Returned: پول گرفته شده برای سفارشی که انجام نمی‌شود ⇒ برگشت دستی.
+                issues.Add($"order was {order.Status}; captured money needs a manual refund");
+                return;
         }
 
-        var invoice = await _unitOfWork.Repository<Invoice>()
-            .FirstOrDefaultAsync(
-                new Spec<Invoice>().Where(i => i.OrderId == order.OrderId).AsTracking(),
-                cancellationToken);
-
-        if (invoice is not null && invoice.Status != InvoiceStatus.Paid)
+        foreach (var group in order.SellerGroups.OrderBy(g => g.OrderSellerGroupId))
         {
-            invoice.MarkAsPaid();
-            _unitOfWork.Repository<Invoice>().Update(invoice);
+            switch (group.Status)
+            {
+                case SellerGroupStatus.Pending:
+                    group.ApplyCommission();
+                    break;
+
+                case SellerGroupStatus.Processing:
+                    // کمیسیون قبلاً (هنگام تأیید) قفل شده است.
+                    break;
+
+                case SellerGroupStatus.Shipped:
+                case SellerGroupStatus.Delivered:
+                    if (wasPending)
+                        issues.Add($"group {group.OrderSellerGroupId} was {group.Status} while the order was unpaid");
+                    break;
+
+                default:
+                    issues.Add($"group {group.OrderSellerGroupId} was {group.Status}; its share of the payment needs a manual refund");
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// گام ۳: ناسازگاری‌ها با سطح Error لاگ و در AuditLog (Payment.ReviewRequired) ثبت می‌شوند.
+    /// اگر حتی این ذخیره شکست بخورد، لاگ Critical تنها رد باقی‌مانده است و پاسخ همچنان موفق است.
+    /// </summary>
+    private async Task RecordReviewRequiredAsync(
+        Payment payment, string? referenceId, string source, IReadOnlyList<string> issues)
+    {
+        var details = $"source={source} | order={payment.OrderId?.ToString() ?? "none"} | amount={payment.Amount} " +
+                      $"| reference={referenceId} | paymentState={payment.State} | issues: {string.Join("; ", issues)}";
+
+        _logger.LogError(
+            "Captured payment {PaymentId} needs manual review: {Details}", payment.PaymentId, details);
+
+        try
+        {
+            await AuditAsync("Payment.ReviewRequired", payment.PaymentId, details, CancellationToken.None);
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex,
+                "Could not record manual-review entry for captured payment {PaymentId}: {Details}",
+                payment.PaymentId, details);
         }
     }
 
