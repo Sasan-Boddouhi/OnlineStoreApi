@@ -14,6 +14,8 @@ namespace Online_Store_Application.Services;
 /// </summary>
 public sealed class AbandonedOrderCleanupService : BackgroundService
 {
+    private const string ReviewRequiredAction = "Payment.ReviewRequired";
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AbandonedOrderCleanupService> _logger;
@@ -148,6 +150,21 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         if (order is null || order.Status != OrderStatus.Pending)
             return false;
 
+        // Batch 4c: پرداخت پیش از به‌روزرسانی سفارش Succeeded ذخیره می‌شود (Batch 4b)؛ اگر آن گام
+        // شکسته باشد، سفارش با پرداخت موفق Pending می‌ماند. چنین سفارشی هرگز لغو نمی‌شود و موجودی‌اش
+        // آزاد نمی‌شود (پولش گرفته شده)؛ فقط برای بررسی دستی ثبت می‌شود.
+        var succeededPayment = order.Payments.FirstOrDefault(p => p.State == PaymentState.Succeeded);
+        if (succeededPayment is not null)
+        {
+            await FlagPaidPendingOrderAsync(
+                unitOfWork,
+                scope.ServiceProvider.GetRequiredService<IAuditService>(),
+                order,
+                succeededPayment,
+                cancellationToken);
+            return false;
+        }
+
         order.Cancel();
 
         foreach (var group in order.SellerGroups)
@@ -188,5 +205,44 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return true;
+    }
+
+    /// <summary>
+    /// Batch 4c: سفارش Pending با پرداخت Succeeded را به‌جای لغو، با عنوان Payment.ReviewRequired
+    /// در AuditLog ثبت می‌کند. جاب هر ۱۰ دقیقه اجرا می‌شود، پس اگر برای همان پرداخت قبلاً
+    /// (اینجا یا در مسیر verify/webhook) مورد بررسی دستی ثبت شده باشد، دوباره ثبت نمی‌شود؛
+    /// لاگ Error در هر اجرا باقی می‌ماند.
+    /// </summary>
+    private async Task FlagPaidPendingOrderAsync(
+        IUnitOfWork unitOfWork,
+        IAuditService auditService,
+        Order order,
+        Payment payment,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogError(
+            "Order {OrderId} is Pending but payment {PaymentId} already Succeeded; skipped by the abandoned-order cleanup (no cancel, no stock release). Needs manual review.",
+            order.OrderId, payment.PaymentId);
+
+        var paymentKey = payment.PaymentId.ToString();
+        var alreadyFlagged = await unitOfWork.Repository<AuditLog>()
+            .AnyAsync(
+                new Spec<AuditLog>().Where(a => a.Action == ReviewRequiredAction
+                                              && a.EntityName == nameof(Payment)
+                                              && a.EntityId == paymentKey),
+                cancellationToken);
+
+        if (alreadyFlagged)
+            return;
+
+        await auditService.RecordAsync(
+            ReviewRequiredAction,
+            nameof(Payment),
+            paymentKey,
+            $"source=abandoned-order cleanup | order={order.OrderId} | amount={payment.Amount} " +
+            $"| paymentState={payment.State} | issues: order is still Pending although the payment Succeeded; cleanup skipped it",
+            cancellationToken);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

@@ -95,8 +95,24 @@ public sealed class PaymentService : IPaymentService
         await _unitOfWork.Repository<Payment>().AddAsync(payment, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // Batch 4c: پرداخت دستی هم «پولِ دریافت‌شده» است؛ همان همگام‌سازی idempotent مسیر verify
+        // (تأیید سفارش، گروه‌های Pending ← Processing با کمیسیون، فاکتور) اجرا می‌شود تا سفارش
+        // Pending نماند. ناسازگاری‌ها به‌جای خطا، با Payment.ReviewRequired ثبت می‌شوند.
+        await SyncManualPaymentOrderAsync(payment);
+
         _logger.LogInformation("Payment recorded for invoice {InvoiceId}", invoiceId);
         return _mapper.Map<PaymentDto>(payment);
+    }
+
+    /// <summary>گام همگام‌سازی سفارش برای پرداخت دستی؛ شکست آن پرداخت ثبت‌شده را برنمی‌گرداند.</summary>
+    private async Task SyncManualPaymentOrderAsync(Payment payment)
+    {
+        var issues = new List<string>();
+
+        await SyncOrderAfterCaptureAsync(payment, issues);
+
+        if (issues.Count > 0)
+            await RecordReviewRequiredAsync(payment, payment.TransactionId, "manual", issues);
     }
 
     // ==================== Initiate ====================
