@@ -151,14 +151,21 @@ public class OrderServiceTests
     {
         var order = CreateValidOrder(1, status: OrderStatus.Pending);
         // Phase 2: قیمت و موجودی از Listing می‌آید، نه از Product.
+        // Batch 6 (F-15): آیتم سفارش فقط با واریانت و محصول فعال پذیرفته می‌شود؛ پس هر دو چیده می‌شوند.
         var listing = new SellerProduct
         {
             ListingId = 20,
             SellerId = 1,
             VariantId = 10,
             Price = 100,
-            Status = SellerProductStatus.Active
+            Status = SellerProductStatus.Active,
+            Variant = new ProductVariant { VariantId = 10, ProductId = 5, IsActive = true }
         };
+
+        var productRepoMock = new Mock<IGenericRepository<Product>>();
+        productRepoMock.Setup(r => r.GetByIdAsync(5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Product { ProductId = 5, Name = "P", Price = 100, SubcategoryId = 1, IsActive = true });
+        _uowMock.Setup(u => u.Repository<Product>()).Returns(productRepoMock.Object);
 
         SetupOwnedCustomer();
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))

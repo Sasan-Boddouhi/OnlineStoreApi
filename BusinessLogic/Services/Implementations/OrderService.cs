@@ -203,14 +203,15 @@ public sealed class OrderService : IOrderService
         if (listing == null)
             throw new BusinessException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
-        if (listing.Status != SellerProductStatus.Active)
-            throw new BusinessException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
-
-        await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
-
         var product = listing.Variant != null && listing.Variant.ProductId > 0
             ? await _unitOfWork.Repository<Product>().GetByIdAsync(listing.Variant.ProductId, cancellationToken)
             : null;
+
+        // Batch 6 (F-15): محصول یا واریانت حذف‌شده (غیرفعال) قابل خرید نیست.
+        if (listing.Status != SellerProductStatus.Active || !IsCatalogEntryActive(listing, product))
+            throw new ConflictException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
+
+        await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
         // Phase 6 & M7.9: ProductId از مسیر واریانت گرفته می‌شود و مشخصات هم snapshot می‌شود.
         var item = new OrderItem(
@@ -305,17 +306,19 @@ public sealed class OrderService : IOrderService
             if (!listings.TryGetValue(itemDto.ListingId, out var listing))
                 throw new BusinessException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
-            if (listing.Status != SellerProductStatus.Active ||
-                listing.Seller == null ||
-                listing.Seller.Status != SellerStatus.Approved ||
-                !listing.Seller.IsActive)
-                throw new BusinessException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
-
-            await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
-
             var product = (listing.Variant != null && listing.Variant.ProductId > 0 && products.TryGetValue(listing.Variant.ProductId, out var prod))
                 ? prod
                 : null;
+
+            // Batch 6 (F-15): همان قاعدهٔ CartService؛ محصول یا واریانت غیرفعال قابل خرید نیست.
+            if (listing.Status != SellerProductStatus.Active ||
+                listing.Seller == null ||
+                listing.Seller.Status != SellerStatus.Approved ||
+                !listing.Seller.IsActive ||
+                !IsCatalogEntryActive(listing, product))
+                throw new ConflictException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
+
+            await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
             var item = new OrderItem(
                 productId: listing.Variant?.ProductId ?? 0,
@@ -364,6 +367,13 @@ public sealed class OrderService : IOrderService
         _logger.LogInformation("Batch items added to order {OrderId}, new total: {TotalAmount}", order.OrderId, order.TotalAmount);
         return _mapper.Map<OrderDto>(order);
     }
+
+    /// <summary>
+    /// Batch 6 (F-15): واریانت و محصولِ پیشنهاد فروش باید فعال باشند.
+    /// واریانت یا محصولِ لودنشده (null) هم قابل خرید شمرده نمی‌شود.
+    /// </summary>
+    private static bool IsCatalogEntryActive(SellerProduct listing, Product? product)
+        => listing.Variant is { IsActive: true } && product is { IsActive: true };
 
     #endregion
 

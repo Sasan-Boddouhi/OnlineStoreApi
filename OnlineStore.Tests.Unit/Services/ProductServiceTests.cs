@@ -234,10 +234,19 @@ public class ProductServiceTests
         _productRepoMock.Setup(r => r.GetByIdAsync(10, It.IsAny<CancellationToken>())).ReturnsAsync(product);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
+        // Batch 6 (F-15): حذف محصول پیشنهادهای فروش آن را هم غیرفعال می‌کند؛ مخزن Listing باید چیده شود.
+        var listing = new SellerProduct { ListingId = 7, SellerId = 1, VariantId = 3, Price = 10, Status = SellerProductStatus.Active };
+        var listingRepoMock = new Mock<IGenericRepository<SellerProduct>>();
+        listingRepoMock
+            .Setup(r => r.ListAsync(It.IsAny<Spec<SellerProduct>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SellerProduct> { listing });
+        _uowMock.Setup(u => u.Repository<SellerProduct>()).Returns(listingRepoMock.Object);
+
         var result = await _productService.DeleteAsync(10);
         result.Should().BeTrue();
         product.IsActive.Should().BeFalse();
         _productRepoMock.Verify(r => r.Update(product), Times.Once);
+        listing.Status.Should().Be(SellerProductStatus.Inactive);
     }
 
     [Fact]

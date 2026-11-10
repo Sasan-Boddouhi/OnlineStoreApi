@@ -169,13 +169,33 @@ namespace BusinessLogic.Services.Implementations
             if (listing is null)
                 throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
-            if (listing.Status != SellerProductStatus.Active ||
-                listing.Seller == null ||
-                listing.Seller.Status != SellerStatus.Approved ||
-                !listing.Seller.IsActive)
-                throw new BusinessException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
+            await EnsureListingPurchasableAsync(listing, "این پیشنهاد فروش در حال حاضر فعال نیست.", cancellationToken);
 
             return listing;
+        }
+
+        /// <summary>
+        /// Batch 6 (F-15): پیشنهاد فروش فقط وقتی قابل خرید است که خودش Active، فروشنده‌اش
+        /// تأییدشده و فعال، و واریانت و محصولش هم فعال باشند. محصول حذف‌شده (IsActive = false)
+        /// پیش‌تر از همین مسیر قابل خرید می‌ماند.
+        /// تعارض وضعیت است، نه ورودی نامعتبر ⇒ 409.
+        /// </summary>
+        private async Task EnsureListingPurchasableAsync(
+            SellerProduct listing,
+            string message,
+            CancellationToken cancellationToken)
+        {
+            var purchasable =
+                listing.Status == SellerProductStatus.Active &&
+                listing.Seller != null &&
+                listing.Seller.Status == SellerStatus.Approved &&
+                listing.Seller.IsActive &&
+                await _unitOfWork.Repository<ProductVariant>().AnyAsync(
+                    v => v.VariantId == listing.VariantId && v.IsActive && v.Product.IsActive,
+                    cancellationToken);
+
+            if (!purchasable)
+                throw new ConflictException(message, "LISTING_NOT_ACTIVE");
         }
 
         private async Task EnsureStockAsync(int listingId, decimal quantity, CancellationToken cancellationToken)
@@ -187,14 +207,10 @@ namespace BusinessLogic.Services.Implementations
                         .Include(l => l.Seller),
                     cancellationToken);
 
-            if (listing is null ||
-                listing.Status != SellerProductStatus.Active ||
-                listing.Seller == null ||
-                listing.Seller.Status != SellerStatus.Approved ||
-                !listing.Seller.IsActive)
-            {
-                throw new BusinessException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
-            }
+            if (listing is null)
+                throw new ConflictException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
+
+            await EnsureListingPurchasableAsync(listing, "این پیشنهاد فروش در حال حاضر فعال نیست.", cancellationToken);
 
             var available = await _inventoryService.GetAvailableAsync(listingId, cancellationToken);
             if (available < quantity)
@@ -516,26 +532,30 @@ namespace BusinessLogic.Services.Implementations
                     throw new BusinessException(
                         $"پیشنهاد فروش {item.ListingId} دیگر موجود نیست.", "LISTING_NOT_FOUND");
 
-                if (listing.Status != SellerProductStatus.Active ||
-                    listing.Seller == null ||
-                    listing.Seller.Status != SellerStatus.Approved ||
-                    !listing.Seller.IsActive)
-                    throw new BusinessException(
-                        $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.", "LISTING_NOT_ACTIVE");
+                await EnsureListingPurchasableAsync(
+                    listing,
+                    $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.",
+                    cancellationToken);
 
                 await EnsureStockAsync(item.ListingId, item.Quantity, cancellationToken);
             }
 
             // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11 & M7.12) ----
+            // Batch 6 (F-11): هزینهٔ ارسال فقط از روش ارسال روی سرور خوانده می‌شود. اگر دست‌کم یک
+            // روش فعال وجود دارد، نفرستادن روش ارسال رد می‌شود؛ پیش‌تر همین حذف یک فیلد ارسال را رایگان می‌کرد.
             decimal shippingCost = 0;
             if (dto.ShippingMethodId.HasValue)
             {
                 var shippingMethod = await _unitOfWork.Repository<ShippingMethod>()
                     .GetByIdAsync(dto.ShippingMethodId.Value, cancellationToken);
                 if (shippingMethod is null || !shippingMethod.IsActive)
-                    throw new BusinessException("روش ارسال نامعتبر یا غیرفعال است.", "INVALID_SHIPPING_METHOD");
+                    throw new UnprocessableEntityException("روش ارسال نامعتبر یا غیرفعال است.", "INVALID_SHIPPING_METHOD");
 
                 shippingCost = shippingMethod.BaseCost;
+            }
+            else if (await _unitOfWork.Repository<ShippingMethod>().AnyAsync(m => m.IsActive, cancellationToken))
+            {
+                throw new UnprocessableEntityException("انتخاب روش ارسال برای ثبت سفارش الزامی است.", "SHIPPING_METHOD_REQUIRED");
             }
 
             decimal discountAmount = 0;

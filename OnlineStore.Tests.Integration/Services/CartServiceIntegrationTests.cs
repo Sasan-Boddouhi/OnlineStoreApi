@@ -192,7 +192,8 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
         var act = () => CartService.AddItemAsync(
             null, sessionId, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        // Batch 6: گارد قابل‌خرید بودن تعارض وضعیت است ⇒ ConflictException (409) به‌جای BusinessException (400).
+        var ex = await act.Should().ThrowAsync<ConflictException>();
         ex.And.Code.Should().Be("LISTING_NOT_ACTIVE");
     }
 

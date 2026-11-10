@@ -317,8 +317,12 @@ public sealed class SellerService : ISellerService
 
     public async Task<IReadOnlyList<VariantListingDto>> GetListingsByVariantIdAsync(int variantId, CancellationToken cancellationToken = default)
     {
+        // Batch 6 (F-15): پیشنهاد فروشِ واریانت یا محصول غیرفعال (حذف‌شده) نمایش داده نمی‌شود.
         var spec = new Spec<SellerProduct>()
-            .Where(l => l.VariantId == variantId && l.Status == SellerProductStatus.Active)
+            .Where(l => l.VariantId == variantId
+                        && l.Status == SellerProductStatus.Active
+                        && l.Variant.IsActive
+                        && l.Variant.Product.IsActive)
             .Include(l => l.Seller)
             .Include(l => l.Inventories);
 

@@ -7,8 +7,13 @@ namespace BusinessLogic.Services.Interfaces;
 
 public interface IProductService
 {
+    /// <summary>
+    /// فهرست محصولات. Batch 6 (F-15): به‌طور پیش‌فرض فقط محصولات فعال؛
+    /// <paramref name="includeInactive"/> را فقط کنترلر و فقط برای دارندهٔ مجوز catalog.products.write روشن می‌کند.
+    /// </summary>
     Task<PagedResult<ProductDto>> GetByQueryAsync(
         QueryContract<Product> query,
+        bool includeInactive = false,
         CancellationToken cancellationToken = default);
 
     Task<ProductDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);

@@ -21,5 +21,11 @@ public class CheckoutDtoValidator : AbstractValidator<CheckoutDto>
 
         RuleFor(x => x.Description)
             .MaximumLength(500).WithMessage("توضیحات نباید بیش از ۵۰۰ کاراکتر باشد.");
+
+        // Batch 6 (F-11): شناسهٔ ارسال‌شده باید معتبر باشد. اجباری‌بودن آن به وجود روش ارسال فعال
+        // بستگی دارد و در CartService.CheckoutAsync (SHIPPING_METHOD_REQUIRED) سنجیده می‌شود.
+        RuleFor(x => x.ShippingMethodId)
+            .GreaterThan(0).When(x => x.ShippingMethodId.HasValue)
+            .WithMessage("شناسهٔ روش ارسال معتبر نیست.");
     }
 }

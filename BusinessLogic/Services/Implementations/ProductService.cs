@@ -48,12 +48,15 @@ public sealed class ProductService : IProductService
 
     public async Task<PagedResult<ProductDto>> GetByQueryAsync(
         QueryContract<Product> query,
+        bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
         using var activity = ActivitySource.StartActivity("Product.GetByQuery", ActivityKind.Internal);
 
+        // Batch 6 (F-15): فهرست با و بدون محصولات غیرفعال کلید کش جدا دارد؛
+        // وگرنه پاسخ مدیر کاتالوگ (شامل حذف‌شده‌ها) به کاربر عمومی برمی‌گشت.
         var version = _cacheService != null ? await _cacheService.GetAsync<string>("products:version", cancellationToken) ?? "v1" : "v1";
-        var cacheKey = $"{query.ToCacheKey("products")}:{version}";
+        var cacheKey = $"{query.ToCacheKey(includeInactive ? "products:all" : "products")}:{version}";
         if (_cacheService != null)
         {
             var cached = await _cacheService.GetAsync<PagedResult<ProductDto>>(cacheKey, cancellationToken);
@@ -67,6 +70,11 @@ public sealed class ProductService : IProductService
         try
         {
             var spec = query.ToSpec();
+
+            // Batch 6 (F-15): محصول حذف‌شده (IsActive = false) در فهرست عمومی دیده نمی‌شود،
+            // همان قاعده‌ای که GetByIdAsync از قبل داشت.
+            if (!includeInactive)
+                spec.Where(p => p.IsActive);
 
         var items = await _unitOfWork.Repository<Product>()
             .ListAsync(spec, ProductQueryConfig.Projection, cancellationToken);
@@ -293,11 +301,26 @@ public sealed class ProductService : IProductService
             entity.IsActive = false;
             _unitOfWork.Repository<Product>().Update(entity);
 
+            // Batch 6 (F-15): پیشنهادهای فروشِ واریانت‌های این محصول هم غیرفعال می‌شوند؛
+            // پیش‌تر Active می‌ماندند و محصول حذف‌شده با شناسهٔ Listing قابل خرید بود.
+            var listings = await _unitOfWork.Repository<SellerProduct>()
+                .ListAsync(
+                    new Spec<SellerProduct>()
+                        .Where(l => l.Variant.ProductId == id && l.Status != SellerProductStatus.Inactive)
+                        .AsTracking(),
+                    cancellationToken);
+
+            foreach (var listing in listings)
+            {
+                listing.Status = SellerProductStatus.Inactive;
+                _unitOfWork.Repository<SellerProduct>().Update(listing);
+            }
+
             await _auditService.RecordAsync(
                 "Product.Deleted",
                 nameof(Product),
                 entity.ProductId.ToString(),
-                $"name={entity.Name}",
+                $"name={entity.Name} | deactivatedListings={listings.Count}",
                 cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

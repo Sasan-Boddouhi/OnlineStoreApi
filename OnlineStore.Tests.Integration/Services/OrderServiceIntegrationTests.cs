@@ -288,7 +288,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
             .Awaiting(() => OrderService.AddItemToOrderAsync(
                 orderDto.OrderId,
                 new AddOrderItemDto { ListingId = listing.ListingId, Quantity = 1 }))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.ConflictException>(); // Batch 6: قابل‌خرید نبودن تعارض وضعیت است ⇒ 409.
 
         ex.And.Code.Should().Be("LISTING_NOT_AVAILABLE");
     }

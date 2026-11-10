@@ -20,6 +20,7 @@ using Asp.Versioning;
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly IAuthorizationService _authorizationService;
 
     private static readonly QueryParseContext<Product> QueryContext = new()
     {
@@ -28,9 +29,10 @@ public class ProductsController : ControllerBase
         CaseInsensitive = true
     };
 
-    public ProductsController(IProductService productService)
+    public ProductsController(IProductService productService, IAuthorizationService authorizationService)
     {
         _productService = productService;
+        _authorizationService = authorizationService;
     }
 
     // ================= GET ALL =================
@@ -38,6 +40,10 @@ public class ProductsController : ControllerBase
     /// <remarks>
     /// F-04/F-23: کش خروجی ندارد؛ query آزاد است و هر ترکیب تصادفی یک ورودی جدید می‌ساخت.
     /// کش داده در ProductService با کلید هش‌شده و نسخه‌دار انجام می‌شود.
+    ///
+    /// Batch 6 (F-15): محصولات غیرفعال (حذف‌شده) به‌طور پیش‌فرض برنمی‌گردند.
+    /// <c>includeInactive=true</c> فقط برای دارندهٔ مجوز catalog.products.write اثر دارد
+    /// و برای بقیه بی‌صدا نادیده گرفته می‌شود.
     /// </remarks>
     [HttpGet]
     [AllowAnonymous]
@@ -47,7 +53,8 @@ public class ProductsController : ControllerBase
         [FromQuery] string? filter,
         [FromQuery] string? sort,
         [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+        [FromQuery] bool includeInactive = false)
     {
         var parseResult = StringQueryParser.TryParse<Product>(
             filter,
@@ -90,7 +97,10 @@ public class ProductsController : ControllerBase
             return BadRequest(problem);
         }
 
-        var result = await _productService.GetByQueryAsync(validation.Value!);
+        var canSeeInactive = includeInactive
+            && (await _authorizationService.AuthorizeAsync(User, "CanManageCatalog")).Succeeded;
+
+        var result = await _productService.GetByQueryAsync(validation.Value!, canSeeInactive);
         return Ok(result);
     }
 
