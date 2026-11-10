@@ -448,8 +448,10 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
         payouts.Should().BeEmpty();
 
         // تحویل سفارش لغوشده ممکن نیست.
+        // Batch 4 (F-02): سفارش لغوشده اکنون با 409 و کد ORDER_CANCELLED رد می‌شود (پیش‌تر 400 ORDER_NOT_DELIVERABLE).
         var act = () => OrderService.MarkDeliveredAsync(order.OrderId);
-        await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>();
+        ex.And.Code.Should().Be("ORDER_CANCELLED");
     }
 
     // ==================== R9 — تراکنش Checkout ====================

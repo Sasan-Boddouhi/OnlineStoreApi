@@ -546,7 +546,10 @@ public class Phase8PaymentTests : BaseIntegrationTest
     {
         var (order, buyerUser) = await CreatePayableOrderAsync(100m);
 
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
         var group = await DbContext.OrderSellerGroup.AsNoTracking()

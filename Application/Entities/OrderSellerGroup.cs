@@ -50,7 +50,11 @@ namespace Application.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal SellerPayable { get; private set; }
 
-        public SellerGroupStatus Status { get; set; } = SellerGroupStatus.Pending;
+        /// <summary>
+        /// Batch 4 (F-02): وضعیت فقط از متدهای گذار همین موجودیت تغییر می‌کند؛
+        /// setter عمومی ماشین حالت را دور می‌زد.
+        /// </summary>
+        public SellerGroupStatus Status { get; private set; } = SellerGroupStatus.Pending;
 
         [MaxLength(100)]
         public string? TrackingNumber { get; set; }
@@ -102,11 +106,28 @@ namespace Application.Entities
             SellerPayable = Math.Max(0, SubTotal - DiscountAmount - ShippingCostShare - CommissionAmount);
         }
 
+        // ---------------- Batch 4 (F-02): ماشین حالت گروه ----------------
+        //
+        //   Pending    --ApplyCommission--> Processing   (پرداخت/تأیید سفارش)
+        //   Processing --MarkShipped------> Shipped
+        //   Shipped    --MarkDelivered----> Delivered
+        //   Delivered  --MarkReturned-----> Returned     (تنها خروج از Delivered)
+        //   Pending | Processing | Shipped --Cancel--> Cancelled
+        //   Cancelled پایانی است؛ Cancel دوباره روی آن بی‌اثر است.
+        //   Returned پایانی است.
+        //
+        // هر گذار دیگری InvalidOperationException می‌دهد و وضعیت را دست نمی‌زند.
+        // لایهٔ سرویس پیش از صدا زدن این متدها همین قواعد را با خطای 409 گزارش می‌کند.
+
         /// <summary>
-        /// کمیسیون را قفل می‌کند. فقط یک بار در چرخهٔ سفارش (هنگام تأیید) صدا زده می‌شود.
+        /// کمیسیون را قفل می‌کند و گروه را از Pending به Processing می‌برد.
+        /// فقط یک بار در چرخهٔ سفارش (هنگام پرداخت/تأیید) صدا زده می‌شود.
         /// </summary>
         public void ApplyCommission()
         {
+            if (Status != SellerGroupStatus.Pending)
+                throw new InvalidOperationException($"Commission can only be applied to a pending group (current: {Status}).");
+
             if (CommissionRate < 0 || CommissionRate > 100)
                 throw new InvalidOperationException("Commission rate is out of range.");
 
@@ -115,10 +136,14 @@ namespace Application.Entities
             Status = SellerGroupStatus.Processing;
         }
 
+        /// <summary>
+        /// ارسال فقط از Processing؛ یعنی فقط پس از پرداخت و تأیید سفارش.
+        /// گروه Pending (سفارش پرداخت‌نشده) قابل ارسال نیست.
+        /// </summary>
         public void MarkShipped(string? carrierName, string? trackingNumber, DateTime shippedAtUtc)
         {
-            if (Status != SellerGroupStatus.Processing && Status != SellerGroupStatus.Pending)
-                throw new InvalidOperationException("Only pending or processing groups can be shipped.");
+            if (Status != SellerGroupStatus.Processing)
+                throw new InvalidOperationException($"Only processing groups can be shipped (current: {Status}).");
 
             Status = SellerGroupStatus.Shipped;
             CarrierName = carrierName;
@@ -126,19 +151,27 @@ namespace Application.Entities
             ShippedAtUtc = shippedAtUtc;
         }
 
+        /// <summary>تحویل فقط از Shipped؛ گروهی که ارسال نشده، تحویل هم نمی‌شود.</summary>
         public void MarkDelivered(DateTime deliveredAt)
         {
-            if (Status == SellerGroupStatus.Cancelled)
-                throw new InvalidOperationException("A cancelled group cannot be delivered.");
+            if (Status != SellerGroupStatus.Shipped)
+                throw new InvalidOperationException($"Only shipped groups can be delivered (current: {Status}).");
 
             Status = SellerGroupStatus.Delivered;
             DeliveredAt = deliveredAt;
         }
 
+        /// <summary>
+        /// لغو از Pending/Processing/Shipped. روی گروه لغوشده بی‌اثر است (idempotent).
+        /// گروه تحویل‌شده یا مرجوعی لغو نمی‌شود؛ مسیر آن برگشت/مرجوعی است.
+        /// </summary>
         public void Cancel()
         {
-            if (Status == SellerGroupStatus.Delivered)
-                throw new InvalidOperationException("A delivered group cannot be cancelled.");
+            if (Status == SellerGroupStatus.Cancelled)
+                return;
+
+            if (Status is SellerGroupStatus.Delivered or SellerGroupStatus.Returned)
+                throw new InvalidOperationException($"A {Status} group cannot be cancelled.");
 
             Status = SellerGroupStatus.Cancelled;
         }

@@ -361,7 +361,10 @@ public class OrderSplittingTests : BaseIntegrationTest
         await OrderService.AddItemToOrderAsync(order.OrderId,
             new AddOrderItemDto { ListingId = listingB.ListingId, Quantity = 1 });
 
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
         var payouts = await DbContext.SellerPayout
@@ -389,11 +392,12 @@ public class OrderSplittingTests : BaseIntegrationTest
 
         var order = await OrderService.CreateEmptyOrderAsync(customer.CustomerId, "T", "Addr", "09120000000");
 
+        // Batch 4 (F-02): سفارش تأییدنشده پرداخت‌شده هم نیست؛ اکنون 409 ORDER_NOT_PAID (پیش‌تر 400 ORDER_NOT_DELIVERABLE).
         var ex = await FluentActions
             .Awaiting(() => OrderService.MarkDeliveredAsync(order.OrderId))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.ConflictException>();
 
-        ex.And.Code.Should().Be("ORDER_NOT_DELIVERABLE");
+        ex.And.Code.Should().Be("ORDER_NOT_PAID");
     }
 
     [Fact]
@@ -410,7 +414,10 @@ public class OrderSplittingTests : BaseIntegrationTest
         await OrderService.AddItemToOrderAsync(order.OrderId,
             new AddOrderItemDto { ListingId = listing.ListingId, Quantity = 1 });
 
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
         await FluentActions

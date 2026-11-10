@@ -142,7 +142,10 @@ public class ReviewServiceIntegrationTests : BaseIntegrationTest
         var order = await OrderService.CreateEmptyOrderAsync(customer.CustomerId, "Buyer", "Tehran", "09120000000");
         await OrderService.AddItemToOrderAsync(
             order.OrderId, new AddOrderItemDto { ListingId = listing.ListingId, Quantity = 1 });
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
         return (buyer, customer, seller, product);

@@ -328,8 +328,12 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
+
         SetCurrentUser(buyer.UserId, "Customer");
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
 
         // Deliver order
         SetCurrentUser(1, "Admin");

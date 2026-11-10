@@ -55,77 +55,30 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Batch 4 (F-18): هر سفارش در scope و SaveChanges جداگانهٔ خودش لغو می‌شود.
+    /// پیش‌تر یک سفارش خراب (مثلاً گروهِ «تحویل‌شده» در سفارش Pending) کل دسته را
+    /// برمی‌گرداند و هیچ موجودی رزروشده‌ای آزاد نمی‌شد. اکنون آن سفارش ثبت خطا و رد
+    /// می‌شود و بقیه پردازش می‌شوند.
+    /// </summary>
+    /// <returns>تعداد سفارش‌هایی که واقعاً لغو و ذخیره شدند.</returns>
     public async Task<int> RunCleanupAsync(CancellationToken cancellationToken = default)
     {
+        List<int> staleOrderIds;
+
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
 
-            var now = _timeProvider.GetUtcNow().UtcDateTime;
-            var cutoff = now.Subtract(_orderTimeout);
+            var cutoff = _timeProvider.GetUtcNow().UtcDateTime.Subtract(_orderTimeout);
 
-            var staleOrders = await unitOfWork.Repository<Order>()
-                .ListAsync(
-                    new Spec<Order>()
-                        .Where(o => o.Status == OrderStatus.Pending && o.OrderDate < cutoff)
-                        .Include(o => o.OrderItems)
-                        .Include(o => o.SellerGroups)
-                        .Include(o => o.Payments)
-                        .AsTracking(),
-                    cancellationToken);
-
-            if (staleOrders.Count == 0)
-                return 0;
-
-            _logger.LogInformation("Found {Count} abandoned pending orders to cancel.", staleOrders.Count);
-
-            foreach (var order in staleOrders)
-            {
-                order.Cancel();
-
-                foreach (var group in order.SellerGroups)
-                {
-                    group.Cancel();
-                }
-
-                foreach (var item in order.OrderItems)
-                {
-                    await inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
-                }
-
-                foreach (var payment in order.Payments)
-                {
-                    if (payment.State is PaymentState.Pending or PaymentState.Initiated)
-                    {
-                        payment.TransitionTo(PaymentState.Cancelled, "abandoned: order cancelled by timeout");
-                        unitOfWork.Repository<Payment>().Update(payment);
-                    }
-                }
-
-                // M7.13: Restore coupon quota if abandoned order is cancelled
-                if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
-                {
-                    var coupon = await unitOfWork.Repository<Coupon>()
-                        .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.CouponId == order.CouponId.Value).AsTracking(), cancellationToken);
-
-                    if (coupon != null && coupon.UsedCount > 0)
-                    {
-                        coupon.UsedCount--;
-                        unitOfWork.Repository<Coupon>().Update(coupon);
-                    }
-
-                    order.CouponQuotaRefunded = true;
-                }
-
-                unitOfWork.Repository<Order>().Update(order);
-            }
-
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            _logger.LogWarning("AbandonedOrderCleanupService cancelled {Count} abandoned orders and released inventory.", staleOrders.Count);
-            return staleOrders.Count;
+            staleOrderIds = (await unitOfWork.Repository<Order>()
+                    .ListAsync(
+                        new Spec<Order>().Where(o => o.Status == OrderStatus.Pending && o.OrderDate < cutoff),
+                        cancellationToken))
+                .Select(o => o.OrderId)
+                .ToList();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -133,8 +86,107 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error occurred during AbandonedOrderCleanupService execution.");
+            _logger.LogError(ex, "AbandonedOrderCleanupService could not list abandoned orders.");
             return 0;
         }
+
+        if (staleOrderIds.Count == 0)
+            return 0;
+
+        _logger.LogInformation("Found {Count} abandoned pending orders to cancel.", staleOrderIds.Count);
+
+        var cancelled = 0;
+        var failed = 0;
+
+        foreach (var orderId in staleOrderIds)
+        {
+            try
+            {
+                if (await CancelAbandonedOrderAsync(orderId, cancellationToken))
+                    cancelled++;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                _logger.LogError(ex,
+                    "AbandonedOrderCleanupService could not cancel order {OrderId}; it was skipped and the remaining orders continue.",
+                    orderId);
+            }
+        }
+
+        _logger.LogWarning(
+            "AbandonedOrderCleanupService cancelled {Cancelled} abandoned orders and released inventory; {Failed} failed.",
+            cancelled, failed);
+
+        return cancelled;
+    }
+
+    /// <summary>
+    /// یک سفارش رهاشده را در scope خودش لغو و ذخیره می‌کند.
+    /// اگر سفارش در این فاصله پرداخت/تغییر کرده باشد، کاری نمی‌کند.
+    /// </summary>
+    private async Task<bool> CancelAbandonedOrderAsync(int orderId, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
+
+        var order = await unitOfWork.Repository<Order>()
+            .FirstOrDefaultAsync(
+                new Spec<Order>()
+                    .Where(o => o.OrderId == orderId)
+                    .Include(o => o.OrderItems)
+                    .Include(o => o.SellerGroups)
+                    .Include(o => o.Payments)
+                    .AsTracking(),
+                cancellationToken);
+
+        if (order is null || order.Status != OrderStatus.Pending)
+            return false;
+
+        order.Cancel();
+
+        foreach (var group in order.SellerGroups)
+        {
+            group.Cancel();
+        }
+
+        foreach (var item in order.OrderItems)
+        {
+            await inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
+        }
+
+        foreach (var payment in order.Payments)
+        {
+            if (payment.State is PaymentState.Pending or PaymentState.Initiated)
+            {
+                payment.TransitionTo(PaymentState.Cancelled, "abandoned: order cancelled by timeout");
+                unitOfWork.Repository<Payment>().Update(payment);
+            }
+        }
+
+        // M7.13: Restore coupon quota if abandoned order is cancelled
+        if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
+        {
+            var coupon = await unitOfWork.Repository<Coupon>()
+                .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.CouponId == order.CouponId.Value).AsTracking(), cancellationToken);
+
+            if (coupon != null && coupon.UsedCount > 0)
+            {
+                coupon.UsedCount--;
+                unitOfWork.Repository<Coupon>().Update(coupon);
+            }
+
+            order.CouponQuotaRefunded = true;
+        }
+
+        unitOfWork.Repository<Order>().Update(order);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
 }

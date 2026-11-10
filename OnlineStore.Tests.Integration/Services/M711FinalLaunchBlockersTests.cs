@@ -362,6 +362,9 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
             ShippingPhoneNumber = "09121112233"
         });
 
+        // Batch 4 (F-02): ارسال/تحویل فقط برای سفارش پرداخت‌شده؛ پیش از تأیید، پرداخت موفق ثبت می‌شود.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
+
         // Confirm order
         SetCurrentUser(buyerUser.UserId, "Customer");
         await OrderService.ConfirmOrderAsync(order.OrderId);

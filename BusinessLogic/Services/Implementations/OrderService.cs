@@ -452,46 +452,38 @@ public sealed class OrderService : IOrderService
         if (order is null)
             throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
+        // Batch 4 (F-02): همان گارد مسیر فروشنده — سفارش باید پرداخت‌شده و لغو/مرجوع/برگشت‌وجه‌نشده باشد.
+        await OrderFulfilmentGuard.EnsureOrderIsPaidAsync(_unitOfWork, order, cancellationToken);
+
         if (order.Status != OrderStatus.Processing && order.Status != OrderStatus.Shipped)
             throw new BusinessException(
                 "فقط سفارش در حال پردازش یا ارسال‌شده قابل تحویل است.", "ORDER_NOT_DELIVERABLE");
+
+        // همهٔ بسته‌های باز باید پیش از تحویل ارسال شده باشند؛ پیش از هر تغییری بررسی می‌شود.
+        var openGroups = order.SellerGroups
+            .Where(g => g.Status != SellerGroupStatus.Delivered && g.Status != SellerGroupStatus.Cancelled)
+            .ToList();
+
+        foreach (var group in openGroups)
+            OrderFulfilmentGuard.EnsureGroupCanBeDelivered(group);
 
         order.MarkDelivered();
 
         var now = DateTime.UtcNow;
 
-        foreach (var group in order.SellerGroups)
+        foreach (var group in openGroups)
+            group.MarkDelivered(now);
+
+        var payoutGroupIds = new List<int>();
+
+        foreach (var group in order.SellerGroups.Where(g => g.Status == SellerGroupStatus.Delivered))
         {
-            if (group.Status != SellerGroupStatus.Delivered && group.Status != SellerGroupStatus.Cancelled)
-            {
-                group.MarkDelivered(now);
-            }
-
-            var existingPayout = await _unitOfWork.Repository<SellerPayout>()
-                .FirstOrDefaultAsync(new Spec<SellerPayout>().Where(p => p.OrderSellerGroupId == group.OrderSellerGroupId), cancellationToken);
-
-            if (existingPayout == null && group.Status != SellerGroupStatus.Cancelled)
-            {
-                var payout = new SellerPayout(
-                    group.SellerId,
-                    group.OrderSellerGroupId,
-                    group.SellerPayable,
-                    order.OrderDate,
-                    now);
-
-                await _unitOfWork.Repository<SellerPayout>().AddAsync(payout, cancellationToken);
-            }
+            if (await OrderFulfilmentGuard.AddPayoutIfMissingAsync(_unitOfWork, group, order.OrderDate, now, cancellationToken))
+                payoutGroupIds.Add(group.OrderSellerGroupId);
         }
 
         _unitOfWork.Repository<Order>().Update(order);
-        try
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
-        }
+        await OrderFulfilmentGuard.SaveAsync(_unitOfWork, payoutGroupIds, cancellationToken);
 
         _logger.LogInformation(
             "Order {OrderId} delivered; {Count} seller payouts created",

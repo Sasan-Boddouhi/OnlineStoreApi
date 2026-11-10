@@ -174,11 +174,13 @@ public class Phase9RefundTests : BaseIntegrationTest
     {
         var (orderId, _) = await CreateOrderAsync();
 
-        await OrderService.ConfirmOrderAsync(orderId);
-        await OrderService.MarkDeliveredAsync(orderId);
-
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و ارسال‌شده؛ پرداخت پیش از تحویل ثبت و بسته ارسال می‌شود.
         var invoiceId = await CreateInvoiceAsync(orderId);
         var payment = await AddSucceededPaymentAsync(orderId, invoiceId);
+
+        await OrderService.ConfirmOrderAsync(orderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, orderId);
+        await OrderService.MarkDeliveredAsync(orderId);
 
         return (payment, orderId);
     }
