@@ -58,7 +58,7 @@ namespace BusinessLogic.Services.Implementations
                     throw new NotFoundException("تسویه یافت نشد.", "PAYOUT_NOT_FOUND");
 
                 if (payout.Status != PayoutStatus.Pending)
-                    throw new BusinessException("فقط تسویه‌های در انتظار قابل پرداخت هستند.", "PAYOUT_INVALID_STATUS");
+                    throw new ConflictException("فقط تسویه‌های در انتظار قابل پرداخت هستند.", "PAYOUT_INVALID_STATUS");
 
                 // M7.13: Settle outstanding seller debts against this payout
                 var unsettledDebts = await _unitOfWork.Repository<SellerDebt>()
@@ -132,7 +132,7 @@ namespace BusinessLogic.Services.Implementations
             }
             catch (InvalidOperationException ex)
             {
-                throw new BusinessException(ex.Message, "PAYOUT_INVALID_STATUS");
+                throw new ConflictException(ex.Message, "PAYOUT_INVALID_STATUS");
             }
 
             _unitOfWork.Repository<SellerPayout>().Update(payout);

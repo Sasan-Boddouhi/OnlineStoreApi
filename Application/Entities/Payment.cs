@@ -1,3 +1,4 @@
+using Application.Exceptions;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -93,7 +94,7 @@ namespace Application.Entities
         public void TransitionTo(PaymentState next, string? note = null)
         {
             if (!IsAllowed(State, next))
-                throw new InvalidOperationException($"Invalid payment transition: {State} → {next}.");
+                throw new BusinessRuleViolationException($"Invalid payment transition: {State} → {next}.", "PAYMENT_INVALID_TRANSITION");
 
             State = next;
             LastStateChangedAtUtc = DateTime.UtcNow;

@@ -206,13 +206,15 @@ Important relationship groups include:
 Application-specific failures are represented under `Application/Exceptions`, including:
 
 - `AppException`
-- `BusinessException`
-- `ConflictException`
+- `BusinessException` (400 — invalid input)
+- `UnprocessableEntityException` (422 — well-formed input rejected by a business precondition)
+- `ConflictException` (409 — the resource is in a state that does not allow the action)
 - `ForbiddenException`
 - `NotFoundException`
 - `UnauthorizedException`
+- `BusinessRuleViolationException` — thrown by domain entities (`Order`, `OrderSellerGroup`, `Payment`, `SellerPayout`, `Inventory`) when a state-machine rule is broken. It derives from `InvalidOperationException` (so existing catch blocks keep working) and carries a `Code` (for example `ORDER_INVALID_STATE`, `GROUP_INVALID_STATE`, `PAYMENT_INVALID_TRANSITION`, `PAYOUT_INVALID_STATE`, `INSUFFICIENT_STOCK`). It is not an `AppException`, so the domain layer stays free of HTTP concerns.
 
-`ExceptionHandlingMiddleware` translates these exceptions into HTTP Problem Details responses.
+`ExceptionHandlingMiddleware` translates these exceptions into HTTP Problem Details responses. Status convention: invalid input 400/422, state conflict 409, never 500 for a domain rule. The middleware also maps `DbUpdateConcurrencyException` to 409 `CONCURRENCY_CONFLICT` and a database unique-index/key violation to 409 `DUPLICATE_RECORD` (SQL Server error 2601/2627; database details are not returned). Any other `DbUpdateException` stays a 500.
 
 FluentValidation exceptions are returned as validation Problem Details with HTTP 422 and property-level validation errors. Unexpected exceptions become HTTP 500 responses with a generic client-facing message and are logged server-side.
 

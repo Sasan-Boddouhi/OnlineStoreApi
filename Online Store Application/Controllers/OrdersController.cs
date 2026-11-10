@@ -82,30 +82,25 @@ public class OrdersController : ControllerBase
     [HttpPost("{id:int}/deliver")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderDto>> Deliver(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.MarkDeliveredAsync(id, cancellationToken));
 
-    /// <summary>تأیید سفارش توسط ادمین.</summary>
-    [HttpPost("{id:int}/confirm")]
-    [Authorize(Policy = "AdminOnly")]
-    [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<OrderDto>> Confirm(int id, CancellationToken cancellationToken)
-        => Ok(await _orderService.ConfirmOrderAsync(id, cancellationToken));
+    // Batch 7 (F-17): endpoint «POST {id}/confirm» حذف شد. تأیید سفارش فقط با پرداخت موفق انجام می‌شود
+    // (verify/webhook/ثبت دستی پرداخت)؛ تأیید ادمین بی‌پرداخت هیچ‌گاه برای ادمین کار نمی‌کرد (فقط مالک سفارش).
 
-    /// <summary>لغو سفارش.</summary>
+    /// <summary>
+    /// لغو سفارش. مشتری فقط سفارش خودش را لغو می‌کند؛ ادمین هر سفارشی را.
+    /// سفارش ارسال‌شده، تحویل‌شده یا مرجوعی لغو نمی‌شود (409).
+    /// </summary>
     [HttpPost("{id:int}/cancel")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OrderDto>> Cancel(int id, CancellationToken cancellationToken)
         => Ok(await _orderService.CancelOrderAsync(id, cancellationToken));
 
@@ -113,7 +108,7 @@ public class OrdersController : ControllerBase
     [HttpPost("{id:int}/return")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(OrderDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -1,3 +1,4 @@
+using Application.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -79,14 +80,14 @@ namespace Application.Entities
         public void Confirm()
         {
             if (Status != OrderStatus.Pending)
-                throw new InvalidOperationException("Only pending orders can be confirmed.");
+                throw new BusinessRuleViolationException("Only pending orders can be confirmed.", "ORDER_INVALID_STATE");
             Status = OrderStatus.Processing;
         }
 
         public void MarkShipped()
         {
             if (Status != OrderStatus.Processing)
-                throw new InvalidOperationException("Only processing orders can be marked as shipped.");
+                throw new BusinessRuleViolationException("Only processing orders can be marked as shipped.", "ORDER_INVALID_STATE");
 
             Status = OrderStatus.Shipped;
         }
@@ -95,7 +96,7 @@ namespace Application.Entities
         public void MarkDelivered()
         {
             if (Status != OrderStatus.Processing && Status != OrderStatus.Shipped)
-                throw new InvalidOperationException("Only processing or shipped orders can be delivered.");
+                throw new BusinessRuleViolationException("Only processing or shipped orders can be delivered.", "ORDER_INVALID_STATE");
 
             Status = OrderStatus.Delivered;
         }
@@ -103,7 +104,7 @@ namespace Application.Entities
         public void Cancel()
         {
             if (Status == OrderStatus.Shipped || Status == OrderStatus.Delivered || Status == OrderStatus.Returned)
-                throw new InvalidOperationException("Cannot cancel shipped, delivered, or returned orders.");
+                throw new BusinessRuleViolationException("Cannot cancel shipped, delivered, or returned orders.", "ORDER_INVALID_STATE");
             Status = OrderStatus.Cancelled;
         }
 
@@ -117,7 +118,7 @@ namespace Application.Entities
         public void MarkReturned()
         {
             if (Status != OrderStatus.Delivered)
-                throw new InvalidOperationException("Only delivered orders can be returned.");
+                throw new BusinessRuleViolationException("Only delivered orders can be returned.", "ORDER_INVALID_STATE");
 
             Status = OrderStatus.Returned;
         }

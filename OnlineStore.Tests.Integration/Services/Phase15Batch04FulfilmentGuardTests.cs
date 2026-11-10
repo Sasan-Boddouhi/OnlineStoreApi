@@ -222,7 +222,29 @@ public class Phase15Batch04FulfilmentGuardTests : ControllerIntegrationTestBase
 
         var ex = await again.Should().ThrowAsync<AppException>();
         ex.Which.Code.Should().Be("GROUP_ALREADY_DELIVERED");
+        ex.Which.StatusCode.Should().Be(409, "Batch 7: a state conflict is 409 like every other fulfilment guard, not 400");
         (await PayoutCountAsync(seeded.OrderId)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Deliver_CancelledGroupOfLiveOrder_Returns409GroupCancelled_AndCreatesNoPayout()
+    {
+        // Batch 7: GROUP_CANCELLED پیش‌تر 400 بود. گروه لغوشده در سفارش پرداخت‌شدهٔ زنده (دو فروشنده).
+        var seeded = await CreateOrderAsync(sellers: 2, pay: true, confirm: true);
+        var (seller, groupId) = seeded.Groups[0];
+
+        var group = await DbContext.OrderSellerGroup.AsTracking().SingleAsync(g => g.OrderSellerGroupId == groupId);
+        group.Cancel();
+        await DbContext.SaveChangesAsync();
+        DbContext.ChangeTracker.Clear();
+
+        SetCurrentUser(seller.UserId, "Seller");
+        var act = () => DashboardService.DeliverSellerGroupAsync(seeded.OrderId, groupId);
+
+        var ex = await act.Should().ThrowAsync<AppException>();
+        ex.Which.Code.Should().Be("GROUP_CANCELLED");
+        ex.Which.StatusCode.Should().Be(409);
+        (await PayoutCountAsync(seeded.OrderId)).Should().Be(0);
     }
 
     [Fact]

@@ -21,7 +21,8 @@ namespace BusinessLogic.Services.Interfaces
         // حذف آیتم از سفارش
         Task<OrderDto> RemoveItemFromOrderAsync(int orderId, int orderItemId, CancellationToken cancellationToken = default);
 
-        // تأیید سفارش (تغییر وضعیت به Processing)
+        // تأیید سفارش (تغییر وضعیت به Processing). Batch 7: endpoint HTTP حذف شد؛ تأیید در عمل با پرداخت
+        // موفق انجام می‌شود و این متد فقط برای سناریوهای سطح سرویس/تست (تأیید ادمین بی‌پرداخت) مانده است.
         Task<OrderDto> ConfirmOrderAsync(int orderId, CancellationToken cancellationToken = default);
 
         // دریافت تمام سفارش‌های کاربر جاری

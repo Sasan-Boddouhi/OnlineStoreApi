@@ -153,7 +153,8 @@ public class Phase9RefundTests : BaseIntegrationTest
 
         var act = async () => await PaymentService.RefundPaymentAsync(payment.PaymentId);
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        // Batch 7: رد برگشت وجهِ پرداخت غیرموفق تعارض وضعیت است: 409 ConflictException، نه 400 BusinessException.
+        var ex = await act.Should().ThrowAsync<ConflictException>();
         ex.Which.Code.Should().Be("PAYMENT_NOT_REFUNDABLE");
     }
 

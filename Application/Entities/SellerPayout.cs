@@ -1,3 +1,4 @@
+using Application.Exceptions;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -68,7 +69,7 @@ namespace Application.Entities
         public void MarkPaid(string? reference)
         {
             if (Status != PayoutStatus.Pending)
-                throw new InvalidOperationException("Only pending payouts can be marked as paid.");
+                throw new BusinessRuleViolationException("Only pending payouts can be marked as paid.", "PAYOUT_INVALID_STATE");
 
             Status = PayoutStatus.Paid;
             PaidAt = DateTime.UtcNow;
@@ -78,7 +79,7 @@ namespace Application.Entities
         public void Cancel()
         {
             if (Status == PayoutStatus.Paid)
-                throw new InvalidOperationException("A paid payout cannot be cancelled.");
+                throw new BusinessRuleViolationException("A paid payout cannot be cancelled.", "PAYOUT_INVALID_STATE");
 
             Status = PayoutStatus.Cancelled;
         }

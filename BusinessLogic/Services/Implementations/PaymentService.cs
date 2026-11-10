@@ -165,7 +165,7 @@ public sealed class PaymentService : IPaymentService
 
         // وضعیت سفارش: پرداخت برای سفارش در انتظار یا در حال پردازش معنا دارد.
         if (order.Status is not (OrderStatus.Pending or OrderStatus.Processing))
-            throw new BusinessException(
+            throw new ConflictException(
                 "این سفارش در وضعیتی نیست که بتوان برایش پرداخت کرد.",
                 "ORDER_NOT_PAYABLE");
 
@@ -289,7 +289,7 @@ public sealed class PaymentService : IPaymentService
             return _mapper.Map<PaymentDto>(payment);
 
         if (payment.State != PaymentState.Pending)
-            throw new BusinessException(
+            throw new ConflictException(
                 "این پرداخت در وضعیت قابل تأیید نیست.",
                 "PAYMENT_NOT_VERIFIABLE");
 
@@ -357,7 +357,7 @@ public sealed class PaymentService : IPaymentService
         }
 
         if (payment.State != PaymentState.Pending)
-            throw new BusinessException("این پرداخت در وضعیت قابل تأیید نیست.", "PAYMENT_NOT_VERIFIABLE");
+            throw new ConflictException("این پرداخت در وضعیت قابل تأیید نیست.", "PAYMENT_NOT_VERIFIABLE");
 
         if (parsed.IsSuccessful)
         {
@@ -784,7 +784,7 @@ public sealed class PaymentService : IPaymentService
                 throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
 
             if (payment.State != PaymentState.Succeeded)
-                throw new BusinessException(
+                throw new ConflictException(
                     $"فقط پرداخت موفق قابل برگشت است؛ وضعیت فعلی: {payment.State}.",
                     "PAYMENT_NOT_REFUNDABLE");
 

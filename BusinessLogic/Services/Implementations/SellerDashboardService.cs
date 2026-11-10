@@ -464,10 +464,10 @@ public sealed class SellerDashboardService : ISellerDashboardService
         await OrderFulfilmentGuard.EnsureOrderIsPaidAsync(_unitOfWork, group.Order, cancellationToken);
 
         if (group.Status == SellerGroupStatus.Delivered)
-            throw new BusinessException("این بسته قبلاً تحویل شده است.", "GROUP_ALREADY_DELIVERED");
+            throw new ConflictException("این بسته قبلاً تحویل شده است.", "GROUP_ALREADY_DELIVERED");
 
         if (group.Status == SellerGroupStatus.Cancelled)
-            throw new BusinessException("بسته لغوشده قابل تحویل نیست.", "GROUP_CANCELLED");
+            throw new ConflictException("بسته لغوشده قابل تحویل نیست.", "GROUP_CANCELLED");
 
         // تحویل فقط پس از ارسال.
         OrderFulfilmentGuard.EnsureGroupCanBeDelivered(group);

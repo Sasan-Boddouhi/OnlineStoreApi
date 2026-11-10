@@ -225,14 +225,15 @@ public class OrderServiceTests
     }
 
     [Fact]
-    public async Task AddItemToOrderAsync_OrderNotPending_ThrowsBusinessException()
+    public async Task AddItemToOrderAsync_OrderNotPending_ThrowsConflictException()
     {
         var order = CreateValidOrder(1, status: OrderStatus.Cancelled);
         SetupOwnedCustomer();
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
 
-        await Assert.ThrowsAsync<BusinessException>(() =>
+        // Batch 7: ویرایش سفارش غیر Pending تعارض وضعیت است (409 ConflictException)، نه 400.
+        await Assert.ThrowsAsync<ConflictException>(() =>
             _service.AddItemToOrderAsync(1, new AddOrderItemDto()));
     }
 

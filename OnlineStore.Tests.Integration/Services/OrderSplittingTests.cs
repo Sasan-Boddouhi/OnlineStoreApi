@@ -420,9 +420,10 @@ public class OrderSplittingTests : BaseIntegrationTest
         await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
+        // Batch 7: تحویل دوباره (سفارش دیگر Processing/Shipped نیست) تعارض وضعیت است: 409 ConflictException، نه 400 BusinessException.
         await FluentActions
             .Awaiting(() => OrderService.MarkDeliveredAsync(order.OrderId))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.ConflictException>();
 
         var payouts = await DbContext.SellerPayout.Where(p => p.OrderSellerGroupId != null).ToListAsync();
         payouts.Should().HaveCount(1);

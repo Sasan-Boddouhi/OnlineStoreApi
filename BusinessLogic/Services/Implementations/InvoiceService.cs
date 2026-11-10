@@ -32,7 +32,7 @@ namespace BusinessLogic.Services.Implementations
             if (order == null) throw new BusinessException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
             if (order.Status != OrderStatus.Processing)
-                throw new BusinessException("سفارش باید تایید شده باشد.", "ORDER_NOT_PROCESSING");
+                throw new ConflictException("سفارش باید تایید شده باشد.", "ORDER_NOT_PROCESSING");
 
             if (order.Invoice != null) throw new BusinessException("فاکتور قبلاً ایجاد شده است.", "INVOICE_ALREADY_EXISTS");
 

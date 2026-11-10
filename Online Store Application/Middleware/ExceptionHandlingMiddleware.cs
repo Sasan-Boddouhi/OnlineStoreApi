@@ -3,6 +3,7 @@ using System.Text.Json;
 using Application.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Online_Store_Application.Middleware;
 
@@ -59,6 +60,26 @@ public sealed class ExceptionHandlingMiddleware
                 await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
             }
         }
+        catch (BusinessRuleViolationException ex)
+        {
+            // Batch 7 (F-16): نقض قاعدهٔ دامنه (مثلاً لغو سفارش ارسال‌شده) تعارض وضعیت است، نه خطای سرور.
+            _logger.LogWarning(ex, "Business rule violation: {Code} - {Message}", ex.Code, ex.Message);
+
+            await WriteConflictAsync(context, ex.Code, "عملیات درخواستی در وضعیت فعلی مجاز نیست.");
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Concurrency conflict");
+
+            await WriteConflictAsync(context, "CONCURRENCY_CONFLICT", "تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.");
+        }
+        catch (DbUpdateException ex) when (DatabaseErrorClassifier.IsUniqueViolation(ex))
+        {
+            // جزئیات دیتابیس (نام جدول/ایندکس) عمداً در پاسخ نمی‌آید.
+            _logger.LogWarning(ex, "Unique constraint violation");
+
+            await WriteConflictAsync(context, "DUPLICATE_RECORD", "رکوردی با همین مشخصات قبلاً ثبت شده است.");
+        }
         catch (ValidationException ex)
         {
             _logger.LogWarning(ex, "Validation failed");
@@ -110,6 +131,28 @@ public sealed class ExceptionHandlingMiddleware
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
         }
+    }
+
+    private static async Task WriteConflictAsync(HttpContext context, string code, string detail)
+    {
+        if (context.Response.HasStarted)
+            return;
+
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        context.Response.ContentType = "application/problem+json";
+
+        var problem = new ProblemDetails
+        {
+            Type = $"https://api.yourstore.com/errors/{code.ToLowerInvariant()}",
+            Title = GetTitleForStatusCode(StatusCodes.Status409Conflict),
+            Status = StatusCodes.Status409Conflict,
+            Detail = detail,
+            Instance = context.Request.Path
+        };
+        problem.Extensions["code"] = code;
+        problem.Extensions["traceId"] = context.TraceIdentifier;
+
+        await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
     }
 
     private static string GetTitleForStatusCode(int statusCode) => statusCode switch

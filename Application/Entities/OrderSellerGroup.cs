@@ -1,3 +1,4 @@
+using Application.Exceptions;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -126,10 +127,10 @@ namespace Application.Entities
         public void ApplyCommission()
         {
             if (Status != SellerGroupStatus.Pending)
-                throw new InvalidOperationException($"Commission can only be applied to a pending group (current: {Status}).");
+                throw new BusinessRuleViolationException($"Commission can only be applied to a pending group (current: {Status}).", "GROUP_INVALID_STATE");
 
             if (CommissionRate < 0 || CommissionRate > 100)
-                throw new InvalidOperationException("Commission rate is out of range.");
+                throw new BusinessRuleViolationException("Commission rate is out of range.", "COMMISSION_RATE_INVALID");
 
             CommissionAmount = Math.Round(SubTotal * CommissionRate / 100m, 2, MidpointRounding.AwayFromZero);
             SellerPayable = Math.Max(0, SubTotal - DiscountAmount - ShippingCostShare - CommissionAmount);
@@ -143,7 +144,7 @@ namespace Application.Entities
         public void MarkShipped(string? carrierName, string? trackingNumber, DateTime shippedAtUtc)
         {
             if (Status != SellerGroupStatus.Processing)
-                throw new InvalidOperationException($"Only processing groups can be shipped (current: {Status}).");
+                throw new BusinessRuleViolationException($"Only processing groups can be shipped (current: {Status}).", "GROUP_INVALID_STATE");
 
             Status = SellerGroupStatus.Shipped;
             CarrierName = carrierName;
@@ -155,7 +156,7 @@ namespace Application.Entities
         public void MarkDelivered(DateTime deliveredAt)
         {
             if (Status != SellerGroupStatus.Shipped)
-                throw new InvalidOperationException($"Only shipped groups can be delivered (current: {Status}).");
+                throw new BusinessRuleViolationException($"Only shipped groups can be delivered (current: {Status}).", "GROUP_INVALID_STATE");
 
             Status = SellerGroupStatus.Delivered;
             DeliveredAt = deliveredAt;
@@ -171,7 +172,7 @@ namespace Application.Entities
                 return;
 
             if (Status is SellerGroupStatus.Delivered or SellerGroupStatus.Returned)
-                throw new InvalidOperationException($"A {Status} group cannot be cancelled.");
+                throw new BusinessRuleViolationException($"A {Status} group cannot be cancelled.", "GROUP_INVALID_STATE");
 
             Status = SellerGroupStatus.Cancelled;
         }
@@ -179,7 +180,7 @@ namespace Application.Entities
         public void MarkReturned()
         {
             if (Status != SellerGroupStatus.Delivered)
-                throw new InvalidOperationException("Only delivered groups can be returned.");
+                throw new BusinessRuleViolationException("Only delivered groups can be returned.", "GROUP_INVALID_STATE");
 
             Status = SellerGroupStatus.Returned;
         }

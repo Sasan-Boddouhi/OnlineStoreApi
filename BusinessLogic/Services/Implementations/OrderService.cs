@@ -124,6 +124,35 @@ public sealed class OrderService : IOrderService
     }
 
     /// <summary>
+    /// Batch 7 (F-17): ادمین/سوپرادمین می‌تواند هر سفارشی را لغو کند (پشتیبانی به‌جای مشتری)؛
+    /// بقیه فقط سفارش خودشان را (<see cref="GetOwnedOrderAsync"/>) و برای سفارش دیگران 404 می‌گیرند.
+    /// ادمین هم از گذارهای مجاز پرداخت و سفارش (مثلاً سفارش ارسال‌شده لغو نمی‌شود) عبور نمی‌کند.
+    /// </summary>
+    private async Task<Order> GetCancellableOrderAsync(int orderId, CancellationToken cancellationToken)
+    {
+        var role = _currentUserService.GetCurrentUserRole();
+        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+
+        if (!isAdmin)
+            return await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
+
+        var order = await _unitOfWork.Repository<Order>()
+            .FirstOrDefaultAsync(
+                new Spec<Order>()
+                    .Where(o => o.OrderId == orderId)
+                    .Include(o => o.OrderItems)
+                    .Include(o => o.SellerGroups)
+                    .AsTracking(),
+                cancellationToken);
+
+        if (order is null)
+            throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
+
+        return order;
+    }
+
+    /// <summary>
     /// نرخ کمیسیون مؤثر: نرخ اختصاصی فروشنده (اگر مقدار دارد)، وگرنه نرخ پیش‌فرض پلتفرم.
     /// </summary>
     private async Task<decimal> ResolveCommissionRateAsync(int sellerId, CancellationToken cancellationToken)
@@ -188,7 +217,7 @@ public sealed class OrderService : IOrderService
         var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
 
         if (order.Status != OrderStatus.Pending)
-            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
+            throw new ConflictException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
 
         // Phase 2 (D2/D5): قیمت از Listing خوانده می‌شود و موجودی از همان Listing کسر می‌گردد.
         // Phase 6: واریانت باید همراه Listing خوانده شود، وگرنه ProductId صفر ثبت می‌شود.
@@ -269,7 +298,7 @@ public sealed class OrderService : IOrderService
         var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
 
         if (order.Status != OrderStatus.Pending)
-            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
+            throw new ConflictException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
 
         var itemsList = itemsDto.ToList();
         var listingIds = itemsList.Select(i => i.ListingId).Distinct().ToList();
@@ -389,7 +418,7 @@ public sealed class OrderService : IOrderService
         var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
 
         if (order.Status != OrderStatus.Pending)
-            throw new BusinessException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
+            throw new ConflictException("فقط سفارش‌های در انتظار قابل ویرایش هستند.", "ORDER_NOT_PENDING");
 
         var item = order.OrderItems.FirstOrDefault(i => i.OrderItemId == orderItemId);
         if (item == null)
@@ -466,7 +495,7 @@ public sealed class OrderService : IOrderService
         await OrderFulfilmentGuard.EnsureOrderIsPaidAsync(_unitOfWork, order, cancellationToken);
 
         if (order.Status != OrderStatus.Processing && order.Status != OrderStatus.Shipped)
-            throw new BusinessException(
+            throw new ConflictException(
                 "فقط سفارش در حال پردازش یا ارسال‌شده قابل تحویل است.", "ORDER_NOT_DELIVERABLE");
 
         // همهٔ بسته‌های باز باید پیش از تحویل ارسال شده باشند؛ پیش از هر تغییری بررسی می‌شود.
@@ -648,7 +677,7 @@ public sealed class OrderService : IOrderService
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            var order = await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
+            var order = await GetCancellableOrderAsync(orderId, cancellationToken);
 
             order.Cancel();
 

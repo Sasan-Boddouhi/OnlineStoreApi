@@ -90,7 +90,7 @@ internal static class OrderFulfilmentGuard
         CancellationToken cancellationToken)
     {
         if (group.Status != SellerGroupStatus.Delivered)
-            throw new InvalidOperationException("A payout can only be created for a delivered group.");
+            throw new BusinessRuleViolationException("A payout can only be created for a delivered group.", "GROUP_INVALID_STATE");
 
         var exists = await unitOfWork.Repository<SellerPayout>()
             .AnyAsync(p => p.OrderSellerGroupId == group.OrderSellerGroupId, cancellationToken);
