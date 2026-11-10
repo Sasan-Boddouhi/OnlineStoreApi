@@ -189,11 +189,41 @@ PaymentGatewaySettings__MerchantId
 PaymentGatewaySettings__WebhookSecret
 PaymentGatewaySettings__CallbackUrl
 CorsOrigins__0
+ForwardedHeaders__KnownNetworks__0
+ForwardedHeaders__KnownProxies__0
+ForwardedHeaders__ForwardLimit
 ```
+
+**Client IP behind a reverse proxy (F-20).** The API trusts `X-Forwarded-For` and `X-Forwarded-Proto` **only** from the addresses listed in `ForwardedHeaders__KnownProxies__N` (single IPs) or `ForwardedHeaders__KnownNetworks__N` (CIDR). From any other peer the headers are ignored, so a client cannot spoof its IP. Per-IP rate limits, `UserSession.IpAddress` and the rate-limit log lines all use this resolved IP.
+
+- `docker-compose.prod.yml` maps them from `TRUSTED_PROXY_NETWORK` and `TRUSTED_PROXY_IP`. Set **one** of them on the deploy host.
+- If nginx runs on the host and proxies to `localhost:5000`, Docker forwards the connection from the gateway of the compose network. Use that network's subnet, or the gateway IP alone (tighter):
+  ```bash
+  docker network inspect <project>_onlinestore-network --format '{{(index .IPAM.Config 0).Subnet}}'   # -> TRUSTED_PROXY_NETWORK
+  docker network inspect <project>_onlinestore-network --format '{{(index .IPAM.Config 0).Gateway}}'  # -> TRUSTED_PROXY_IP
+  ```
+  If nginx runs as a container on the same network, use that subnet or the nginx container IP.
+- The network must be written with its host bits zero (`172.18.0.0/16`, not `172.18.0.1/16`). A prefix of `/0` (`0.0.0.0/0`) means "trust everyone" and makes start-up fail.
+- `ForwardLimit` (default `1`) is the number of proxies in front of the API. With one nginx it stays `1`, so only the address nginx appended is used.
+- nginx must set the header, for example `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` and `proxy_set_header X-Forwarded-Proto $scheme;`.
+- When nginx is on the host, publish the API port on loopback only (`127.0.0.1:5000:80`) so nobody can reach the API without passing through nginx.
+- If neither variable is set in Production the API still starts but logs a warning at start-up: every client then appears with the proxy's IP and shares one rate-limit bucket per endpoint.
+
+**Rate limits (F-03).** Each limit is a fixed window **per client**: per client IP for `login`, `register` and `refresh`; per user id (falling back to IP) for `carts/checkout` and `payments/initiate`. Defaults (`appsettings.json`), all overridable with `RateLimiting__<Policy>__PermitLimit` / `RateLimiting__<Policy>__WindowSeconds`:
+
+| Policy | Endpoint | Partition | Default |
+|---|---|---|---|
+| `Login` | `POST /api/v1/auth/login` | client IP | 5 / 60 s |
+| `Register` | `POST /api/v1/auth/register` | client IP | 5 / 60 s |
+| `Refresh` | `POST /api/v1/auth/refresh` | client IP | 20 / 60 s |
+| `Checkout` | `POST /api/v1/carts/checkout` | user id, else IP | 5 / 60 s |
+| `PaymentInitiate` | `POST /api/v1/payments/initiate` | user id, else IP | 10 / 60 s |
+
+A rejected request gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a ProblemDetails body with `code = RATE_LIMIT_EXCEEDED` and `retryAfterSeconds`. Counters are kept in memory per API instance. Users behind one carrier NAT share the per-IP login/register quota; raise those limits if that becomes a problem.
 
 **Start-up validation (Production).** The API refuses to start unless `PaymentGatewaySettings__Provider=Zarinpal`, `PaymentGatewaySettings__EnableRealGateway=true`, `PaymentGatewaySettings__MerchantId` and `PaymentGatewaySettings__WebhookSecret` are set, and `CorsOrigins__0` (and further indexes) lists the real front-end origin (no `localhost`). In any environment other than Development and Testing the `Manual`/fake payment gateway is never created; `Provider` must be `Zarinpal`. `Jwt__ExpireMinutes` is optional and defaults to 60.
 
-The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT_ID`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_CALLBACK_URL`, `CORS_ORIGIN_0`.
+The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT_ID`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_CALLBACK_URL`, `CORS_ORIGIN_0`, and `TRUSTED_PROXY_NETWORK` or `TRUSTED_PROXY_IP` (see below).
 
 **Uploads.** Product images are stored in `/app/wwwroot/uploads`. The image creates this folder owned by the `app` user and `docker-compose.prod.yml` mounts the named volume `onlinestoreapi_uploads_data` there so files survive redeploys.
 
@@ -556,6 +586,9 @@ row to `Pending`.
 | `AbandonedPaymentSettings__ScanIntervalMinutes` | no (default 15) | Cleanup job cadence. |
 | `AbandonedPaymentSettings__TimeoutMinutes` | no (default 30) | Age after which a `Pending` payment is cancelled. |
 | `AbandonedPaymentSettings__Enabled` | no (default true) | Turn the cleanup job off. |
+| `ForwardedHeaders__KnownNetworks__0` / `ForwardedHeaders__KnownProxies__0` | **yes behind a proxy** | Trusted reverse proxy (CIDR or single IP). Without it every client has the proxy's IP; a start-up warning is logged in Production. See §7. |
+| `ForwardedHeaders__ForwardLimit` | no (default 1) | Number of proxies in front of the API. |
+| `RateLimiting__<Policy>__PermitLimit` / `__WindowSeconds` | no | Per-client limits for `Login`, `Register`, `Refresh`, `Checkout`, `PaymentInitiate`. See §7. |
 
 `appsettings.json` currently ships
 `WebhookSecret = "dev-only-webhook-secret-change-in-production"`. **Override it

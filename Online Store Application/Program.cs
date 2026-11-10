@@ -22,7 +22,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
@@ -35,7 +34,6 @@ using Serilog;
 using Serilog.Enrichers.Span;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.RateLimiting;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -354,93 +352,11 @@ builder.Services.AddCors(options =>
         });
 });
 
-builder.Services.AddRateLimiter(options =>
-{
-    if (builder.Environment.IsEnvironment("Testing"))
-    {
-        options.AddFixedWindowLimiter(
-            "LoginLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
+// F-20: فقط X-Forwarded-For/Proto پروکسی‌های صریحاً تنظیم‌شده پذیرفته می‌شود (ForwardedHeaders:*).
+builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
 
-        options.AddFixedWindowLimiter(
-            "RefreshLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter(
-            "PaymentInitiateLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter(
-            "CheckoutLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-    }
-    else
-    {
-        options.AddFixedWindowLimiter(
-            "LoginLimiter",
-            config =>
-        {
-            config.PermitLimit = 5;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-
-        options.AddFixedWindowLimiter(
-            "RefreshLimiter",
-            config =>
-        {
-            config.PermitLimit = 20;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-
-        options.AddFixedWindowLimiter(
-            "PaymentInitiateLimiter",
-            config =>
-        {
-            config.PermitLimit = 10;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-
-        options.AddFixedWindowLimiter(
-            "CheckoutLimiter",
-            config =>
-        {
-            config.PermitLimit = 5;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-    }
-});
+// F-03: محدودیت نرخ به‌ازای هر کلاینت (IP یا شناسهٔ کاربر)؛ سقف‌ها از RateLimiting:* خوانده می‌شوند.
+builder.Services.AddPartitionedRateLimiting(builder.Configuration);
 
 // F-04: کش خروجی opt-in است؛ سیاست پایه ندارد و فقط endpointهای دارای سیاست نام‌دار کش می‌شوند
 // (OutputCachePolicies). سبد، موجودی، احراز هویت و health صراحتاً NoStore هستند.
@@ -459,6 +375,9 @@ var app = builder.Build();
 await app.Services.ApplyMigrationsAsync(
     app.Configuration,
     app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AutoMigrate"));
+
+// F-20: اولین middleware، تا محدودیت نرخ، احراز هویت، لاگ‌ها و نشست‌ها IP واقعی کلاینت را ببینند.
+app.UseTrustedForwardedHeaders();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
@@ -534,11 +453,12 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 app.UseCors("ReactFrontend");
 
-app.UseRateLimiter();
-
 app.UseMiddleware<QueryMetricsMiddleware>();
 
 app.UseAuthentication();
+
+// F-03: پس از احراز هویت، تا سیاست‌های checkout و پرداخت بر اساس شناسهٔ کاربر کلید بخورند.
+app.UseRateLimiter();
 
 app.UseAuthorization();
 

@@ -88,6 +88,14 @@ services:
       PaymentGatewaySettings__CallbackUrl: ${PAYMENT_CALLBACK_URL}
       CorsOrigins__0: ${CORS_ORIGIN_0}
 
+      # F-20: پروکسی معکوس مورد اعتماد (nginx). فقط X-Forwarded-For از همین آدرس‌ها پذیرفته می‌شود.
+      # TRUSTED_PROXY_NETWORK = زیرشبکهٔ شبکهٔ compose به‌صورت CIDR (مثلاً 172.18.0.0/16؛ docs/deployment.md §7)؛
+      # یا TRUSTED_PROXY_IP = IP دقیق پروکسی. اگر هر دو خالی بمانند API هشدار می‌دهد و همهٔ کلاینت‌ها
+      # IP پروکسی را می‌گیرند (محدودیت نرخ ورود بین همه مشترک می‌شود). هرگز 0.0.0.0/0 ندهید.
+      ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-}
+      ForwardedHeaders__KnownProxies__0: ${TRUSTED_PROXY_IP:-}
+      ForwardedHeaders__ForwardLimit: "1"
+
       Redis__Configuration: "redis:6379"
       Redis__InstanceName: "OnlineStore:"
 

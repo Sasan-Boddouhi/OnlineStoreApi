@@ -46,7 +46,7 @@ public sealed class AuthService : IAuthService
     }
 
     // ================= REGISTER =================
-    public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
+    public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, ClientRequestInfo client, CancellationToken ct = default)
     {
         using var activity = ActivitySource.StartActivity("RegisterUser", ActivityKind.Internal);
 
@@ -92,7 +92,7 @@ public sealed class AuthService : IAuthService
 
             // NOTE: do NOT call LimitActiveSessionsAsync here (no active sessions yet)
 
-            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
+            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, client.IpAddress, client.UserAgent));
 
             _logger.LogInformation("User {UserId} registered and creating initial session", user.UserId);
 
@@ -121,7 +121,7 @@ public sealed class AuthService : IAuthService
     }
 
     // ================= LOGIN =================
-    public async Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken ct = default)
+    public async Task<AuthResultDto?> LoginAsync(LoginDto dto, ClientRequestInfo client, CancellationToken ct = default)
     {
         using var activity = ActivitySource.StartActivity("Login", ActivityKind.Internal);
 
@@ -206,7 +206,7 @@ public sealed class AuthService : IAuthService
             // enforce max active sessions per user (revokes oldest sessions and their tokens)
             await LimitActiveSessionsAsync(user.UserId, DefaultMaxSessions, ct);
 
-            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
+            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, client.IpAddress, client.UserAgent));
 
             _logger.LogInformation("User {UserId} logged in", user.UserId);
 

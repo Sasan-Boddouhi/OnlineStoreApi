@@ -19,6 +19,9 @@ namespace OnlineStore.Tests.Unit.Services;
 
 public class AuthServiceTests
 {
+    /// <summary>F-20: اطلاعات اتصالی که کنترلر از خود درخواست HTTP می‌خواند.</summary>
+    private static readonly ClientRequestInfo Client = new("203.0.113.9", "unit-test-agent/1.0");
+
     private readonly Mock<IUnitOfWork> _uowMock;
     private readonly Mock<IJwtTokenService> _jwtMock;
     private readonly Mock<IPasswordHasher> _hasherMock;
@@ -103,7 +106,7 @@ public class AuthServiceTests
 
         _mapperMock.Setup(m => m.Map<UserDto>(It.IsAny<User>())).Returns(new UserDto { PhoneNumber = dto.PhoneNumber });
 
-        var result = await _service.RegisterAsync(dto);
+        var result = await _service.RegisterAsync(dto, Client);
 
         result.Should().NotBeNull();
         result.AccessToken.Should().Be("access");
@@ -127,7 +130,7 @@ public class AuthServiceTests
         _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync(true);
 
-        Func<Task> act = () => _service.RegisterAsync(dto);
+        Func<Task> act = () => _service.RegisterAsync(dto, Client);
         await act.Should().ThrowAsync<BusinessException>()
                  .WithMessage("*شماره تماس تکراری*");
 
@@ -169,7 +172,7 @@ public class AuthServiceTests
                 .Callback<List<Claim>>(claims => captured = claims)
                 .Returns("access");
 
-        await _service.RegisterAsync(dto);
+        await _service.RegisterAsync(dto, Client);
 
         captured.Should().NotBeNull();
         var roleClaims = captured!.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
@@ -202,7 +205,7 @@ public class AuthServiceTests
                 .Callback<List<Claim>>(claims => captured = claims)
                 .Returns("access");
 
-        await _service.RegisterAsync(dto);
+        await _service.RegisterAsync(dto, Client);
 
         var roleClaims = captured!.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
         roleClaims.Should().ContainSingle().Which.Should().Be("Customer");
@@ -241,11 +244,22 @@ public class AuthServiceTests
         _sessionRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<UserSession>>(), It.IsAny<CancellationToken>()))
                         .ReturnsAsync(new List<UserSession>());
 
-        var result = await _service.LoginAsync(loginDto);
+        UserSession? created = null;
+        _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<UserSession>(), It.IsAny<CancellationToken>()))
+                        .Callback<UserSession, CancellationToken>((s, _) => created = s)
+                        .Returns(Task.CompletedTask);
+
+        var result = await _service.LoginAsync(loginDto, Client);
 
         result.Should().NotBeNull();
         result!.AccessToken.Should().Be("access");
         result.RefreshToken.Should().Be("refresh_raw");
+
+        // F-20: IP و User-Agent نشست از اتصال می‌آیند، نه از بدنهٔ درخواست.
+        created.Should().NotBeNull();
+        created!.IpAddress.Should().Be(Client.IpAddress);
+        created.UserAgent.Should().Be(Client.UserAgent);
+        created.DeviceId.Should().Be("dev");
     }
 
     // ---------------------------------------------------------------
@@ -289,7 +303,7 @@ public class AuthServiceTests
 
         // ListAsync برای RefreshTokenEntity قبلاً به صورت خالی تنظیم شده، می‌توانیم همان را نگه داریم
 
-        var result = await _service.LoginAsync(loginDto);
+        var result = await _service.LoginAsync(loginDto, Client);
 
         result.Should().NotBeNull();
         result!.AccessToken.Should().Be("access");
@@ -324,7 +338,7 @@ public class AuthServiceTests
                      .ReturnsAsync(user);
         _hasherMock.Setup(h => h.Verify(loginDto.Password, user.PasswordHash)).Returns(false);
 
-        var result = await _service.LoginAsync(loginDto);
+        var result = await _service.LoginAsync(loginDto, Client);
         result.Should().BeNull();
 
         user.FailedLoginAttempts.Should().Be(1);
@@ -352,7 +366,7 @@ public class AuthServiceTests
         _userRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<User>>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync(user);
 
-        var act = async () => await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "any" });
+        var act = async () => await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "any" }, Client);
         var ex = await act.Should().ThrowAsync<LockedOutException>();
         ex.Which.StatusCode.Should().Be(403);
         ex.Which.RemainingSeconds.Should().BeGreaterThan(0);
@@ -382,7 +396,7 @@ public class AuthServiceTests
         _sessionRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<UserSession>>(), It.IsAny<CancellationToken>()))
                         .ReturnsAsync(new List<UserSession>());
 
-        var result = await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "correct_pass" });
+        var result = await _service.LoginAsync(new LoginDto { PhoneNumber = "09120000000", Password = "correct_pass" }, Client);
 
         result.Should().NotBeNull();
         user.LockoutEnd.Should().BeNull();
@@ -398,7 +412,7 @@ public class AuthServiceTests
         _userRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<User>>(), It.IsAny<CancellationToken>()))
                      .ReturnsAsync((User?)null);
 
-        var result = await _service.LoginAsync(new LoginDto());
+        var result = await _service.LoginAsync(new LoginDto(), Client);
         result.Should().BeNull();
     }
 

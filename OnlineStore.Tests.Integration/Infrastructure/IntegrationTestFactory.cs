@@ -49,7 +49,14 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["Redis:InstanceName"] = "OnlineStore_Test:",
                 ["Swagger:Enabled"] = "true",
                 ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:",
-                ["PaymentGatewaySettings:WebhookSecret"] = "test-webhook-secret-for-integration-tests"
+                ["PaymentGatewaySettings:WebhookSecret"] = "test-webhook-secret-for-integration-tests",
+                // F-03: سقف‌های بزرگ تا تست‌های عادی (که همه از یک IP می‌آیند) به محدودیت نرخ نخورند.
+                // سقف‌های واقعی و کوچک در RateLimitingTestFactory سنجیده می‌شوند.
+                ["RateLimiting:Login:PermitLimit"] = "10000",
+                ["RateLimiting:Register:PermitLimit"] = "10000",
+                ["RateLimiting:Refresh:PermitLimit"] = "10000",
+                ["RateLimiting:Checkout:PermitLimit"] = "10000",
+                ["RateLimiting:PaymentInitiate:PermitLimit"] = "10000"
             });
         });
 

@@ -7,6 +7,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.OutputCaching;
 using BusinessLogic.DTOs.User;
+using Online_Store_Application.Extensions;
 
 namespace WebApi.Controllers
 {
@@ -26,28 +27,30 @@ namespace WebApi.Controllers
 
         /// <summary>ثبت‌نام کاربر جدید.</summary>
         [HttpPost("register")]
-        [EnableRateLimiting("LoginLimiter")]
+        [EnableRateLimiting(RateLimitPolicies.Register)]
         [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
             var result =
-                await _authService.RegisterAsync(dto);
+                await _authService.RegisterAsync(dto, HttpContext.GetClientRequestInfo());
 
             return Ok(result);
         }
 
         /// <summary>ورود کاربر و دریافت AccessToken و RefreshToken.</summary>
         [HttpPost("login")]
-        [EnableRateLimiting("LoginLimiter")]
+        [EnableRateLimiting(RateLimitPolicies.Login)]
         [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
-            var tokenResult = await _authService.LoginAsync(dto);
+            var tokenResult = await _authService.LoginAsync(dto, HttpContext.GetClientRequestInfo());
             if (tokenResult == null)
                 return Unauthorized(new ProblemDetails
                 {
@@ -78,9 +81,10 @@ namespace WebApi.Controllers
 
         /// <summary>تازه‌سازی توکن احراز هویت با استفاده از RefreshToken.</summary>
         [HttpPost("refresh")]
-        [EnableRateLimiting("RefreshLimiter")]
+        [EnableRateLimiting(RateLimitPolicies.Refresh)]
         [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
         public async Task<IActionResult> Refresh([FromBody] RefreshTokenDto dto)
         {
             var tokenResult = await _authService.RefreshTokenAsync(dto.RefreshToken);

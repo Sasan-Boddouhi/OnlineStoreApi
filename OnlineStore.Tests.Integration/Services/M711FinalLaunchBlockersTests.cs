@@ -150,7 +150,7 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
             PhoneNumber = phone,
             Password = "Password123!",
             DeviceId = "device1"
-        });
+        }, new ClientRequestInfo(null, null));
 
         result.Should().NotBeNull();
         result.User.UserId.Should().BeGreaterThan(0);
@@ -287,7 +287,7 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
             PhoneNumber = phone,
             Password = "Password123!",
             DeviceId = "dev-inactive"
-        });
+        }, new ClientRequestInfo(null, null));
 
         // Deactivate user
         var user = await DbContext.User.FirstAsync(u => u.UserId == auth.User.UserId);

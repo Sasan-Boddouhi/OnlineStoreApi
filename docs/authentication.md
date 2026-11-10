@@ -166,17 +166,31 @@ LockoutEnd = null
 
 ## 7. Login Rate Limiting
 
-The login endpoint uses the `LoginLimiter` rate-limiting policy.
+The login endpoint uses the `LoginLimiter` policy and the register endpoint its own `RegisterLimiter` policy. Both are partitioned **per client IP**: each IP has its own quota, so one client cannot lock everyone else out.
 
-For normal environments:
+Defaults (configurable through `RateLimiting:Login` and `RateLimiting:Register`):
 
 ```text
-PermitLimit = 5
-Window = 1 minute
-QueueLimit = 0
+Login:    PermitLimit = 5, WindowSeconds = 60, QueueLimit = 0
+Register: PermitLimit = 5, WindowSeconds = 60, QueueLimit = 0
 ```
 
-The Testing environment uses a much higher limit so automated tests are not blocked by the production-oriented policy.
+The client IP is the TCP peer address, or the `X-Forwarded-For` address when the request comes from a trusted proxy configured in `ForwardedHeaders` (see `docs/deployment.md` §7). A rejected request receives `429 Too Many Requests` with a `Retry-After` header (seconds) and a ProblemDetails body:
+
+```json
+{
+  "type": "https://api.yourstore.com/errors/rate_limit_exceeded",
+  "title": "Too Many Requests",
+  "status": 429,
+  "detail": "تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً 60 ثانیهٔ دیگر دوباره تلاش کنید.",
+  "instance": "/api/v1/auth/login",
+  "code": "RATE_LIMIT_EXCEEDED",
+  "traceId": "...",
+  "retryAfterSeconds": 60
+}
+```
+
+The integration test host raises the limits to 10 000 through configuration; `RateLimitingTestFactory` runs the real, small limits.
 
 ## 8. User Sessions
 
@@ -196,6 +210,8 @@ LastActivityUtc
 AbsoluteExpiryUtc
 Status
 ```
+
+`Device Id` and `Device Name` come from the request body. `IP Address` and `User Agent` come from the HTTP request itself: the resolved client IP (see section 7) and the `User-Agent` header, truncated to the column sizes. `ipAddress` and `userAgent` fields in the login or register body are ignored.
 
 New sessions are created with:
 
@@ -408,17 +424,17 @@ The refresh endpoint:
 POST /api/auth/refresh
 ```
 
-uses the `RefreshLimiter` policy.
+uses the `RefreshLimiter` policy, partitioned per client IP.
 
-For normal environments:
+Defaults (configurable through `RateLimiting:Refresh`):
 
 ```text
 PermitLimit = 20
-Window = 1 minute
+WindowSeconds = 60
 QueueLimit = 0
 ```
 
-The Testing environment uses a higher limit.
+Rejections use the same `429` response as login (section 7).
 
 ## 20. Refresh Token Rotation
 
