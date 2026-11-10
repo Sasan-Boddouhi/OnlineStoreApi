@@ -65,8 +65,10 @@ The final container runs as the non-root `app` user.
 The Docker image defines a health check against:
 
 ```text
-http://localhost:80/health
+http://localhost:80/health/live
 ```
+
+`/health/live` runs no dependency checks, so a short SQL Server or Redis outage does not mark the container unhealthy and does not restart the API. Use `/health/ready` for dependency readiness.
 
 Current Docker health-check configuration:
 
@@ -181,7 +183,19 @@ Jwt__Issuer
 Jwt__Audience
 Redis__Configuration
 Redis__InstanceName
+PaymentGatewaySettings__Provider
+PaymentGatewaySettings__EnableRealGateway
+PaymentGatewaySettings__MerchantId
+PaymentGatewaySettings__WebhookSecret
+PaymentGatewaySettings__CallbackUrl
+CorsOrigins__0
 ```
+
+**Start-up validation (Production).** The API refuses to start unless `PaymentGatewaySettings__Provider=Zarinpal`, `PaymentGatewaySettings__EnableRealGateway=true`, `PaymentGatewaySettings__MerchantId` and `PaymentGatewaySettings__WebhookSecret` are set, and `CorsOrigins__0` (and further indexes) lists the real front-end origin (no `localhost`). In any environment other than Development and Testing the `Manual`/fake payment gateway is never created; `Provider` must be `Zarinpal`. `Jwt__ExpireMinutes` is optional and defaults to 60.
+
+The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT_ID`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_CALLBACK_URL`, `CORS_ORIGIN_0`.
+
+**Uploads.** Product images are stored in `/app/wwwroot/uploads`. The image creates this folder owned by the `app` user and `docker-compose.prod.yml` mounts the named volume `onlinestoreapi_uploads_data` there so files survive redeploys.
 
 Secrets such as the SQL Server password and JWT signing key must be supplied through protected environment/secret storage and must not be committed to Git.
 

@@ -195,29 +195,25 @@ builder.Services.Configure<StorageSettings>(
 // وگرنه IProductImageService در زمان اجرا قابل ساخت نیست.
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
 // ---------------- Phase 8: Payment ----------------
-builder.Services.AddOptions<PaymentGatewaySettings>()
-    .Bind(builder.Configuration.GetSection(PaymentGatewaySettings.SectionName))
-    .Validate(settings =>
-    {
-        if (builder.Environment.IsProduction())
-        {
-            return !string.IsNullOrWhiteSpace(settings.WebhookSecret);
-        }
-        return true;
-    }, "PaymentGatewaySettings:WebhookSecret must be configured in production environment.")
-    .ValidateOnStart();
+// F-01/F-14: در Production (و هر محیط غیر Development/Testing) راه‌اندازی شکست می‌خورد
+// مگر اینکه Provider=Zarinpal، EnableRealGateway=true، MerchantId و WebhookSecret تنظیم شده باشند،
+// و CorsOrigins با دامنهٔ واقعی فرانت‌اند مشخص شده باشد.
+builder.Services.AddProductionSafeConfiguration(builder.Configuration);
 
 builder.Services.AddHttpClient();
 
-// انتخاب درگاه در زمان اجرا از روی تنظیمات؛ هیچ درگاه واقعی به‌صورت پیش‌فرض فعال نیست.
+// انتخاب درگاه در زمان اجرا از روی تنظیمات؛ FakePaymentGateway فقط در Development/Testing
+// ساخته می‌شود و در بقیهٔ محیط‌ها حل آن استثنا می‌دهد.
 builder.Services.AddScoped<IPaymentGateway>(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<PaymentGatewaySettings>>().Value;
+    var environment = sp.GetRequiredService<IHostEnvironment>();
 
-    if (string.Equals(settings.Provider, "Zarinpal", StringComparison.OrdinalIgnoreCase))
-        return ActivatorUtilities.CreateInstance<ZarinpalPaymentGateway>(sp);
-
-    return ActivatorUtilities.CreateInstance<FakePaymentGateway>(sp);
+    return ProductionConfigurationExtensions.ResolveGatewayKind(settings.Provider, environment.EnvironmentName) switch
+    {
+        PaymentGatewayKind.Zarinpal => ActivatorUtilities.CreateInstance<ZarinpalPaymentGateway>(sp),
+        _ => ActivatorUtilities.CreateInstance<FakePaymentGateway>(sp)
+    };
 });
 
 // بدون ثبت صریح، اعتبارسنجی امضا وجود نداشت و همهٔ webhookها رد می‌شدند.

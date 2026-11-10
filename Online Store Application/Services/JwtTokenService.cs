@@ -1,5 +1,6 @@
+using Application.Options;
 using BusinessLogic.Services.Interfaces;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -8,28 +9,30 @@ using System.Text;
 
 public class JwtTokenService : IJwtTokenService
 {
-    private readonly IConfiguration _config;
+    private readonly JwtOptions _options;
 
-    public JwtTokenService(IConfiguration config)
+    /// <summary>
+    /// تنظیمات از <see cref="JwtOptions"/> خوانده می‌شود تا نبودِ <c>Jwt:ExpireMinutes</c>
+    /// به مقدار پیش‌فرض ۶۰ دقیقه برگردد، نه اینکه ورود/ثبت‌نام با استثنا شکست بخورد (F-14).
+    /// </summary>
+    public JwtTokenService(IOptions<JwtOptions> options)
     {
-        _config = config;
+        _options = options.Value;
     }
 
     public string GenerateToken(List<Claim> claims)
     {
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_config["Jwt:Key"]!)
+            Encoding.UTF8.GetBytes(_options.Key)
         );
 
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
+            issuer: _options.Issuer,
+            audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(
-                int.Parse(_config["Jwt:ExpireMinutes"]!)
-            ),
+            expires: DateTime.UtcNow.AddMinutes(_options.ExpireMinutes),
             signingCredentials: creds
         );
 

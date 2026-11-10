@@ -80,6 +80,14 @@ services:
       Jwt__Issuer: "OnlineStoreApi"
       Jwt__Audience: "OnlineStoreClient"
 
+      # الزامی در Production؛ نبودِ هرکدام راه‌اندازی را متوقف می‌کند (F-01, F-14).
+      PaymentGatewaySettings__Provider: "Zarinpal"
+      PaymentGatewaySettings__EnableRealGateway: "true"
+      PaymentGatewaySettings__MerchantId: ${ZARINPAL_MERCHANT_ID}
+      PaymentGatewaySettings__WebhookSecret: ${PAYMENT_WEBHOOK_SECRET}
+      PaymentGatewaySettings__CallbackUrl: ${PAYMENT_CALLBACK_URL}
+      CorsOrigins__0: ${CORS_ORIGIN_0}
+
       Redis__Configuration: "redis:6379"
       Redis__InstanceName: "OnlineStore:"
 
@@ -92,6 +100,9 @@ services:
 
       GIT_COMMIT: ${GIT_COMMIT}
 
+    volumes:
+      - uploads_data:/app/wwwroot/uploads
+
     ports:
       - "5000:80"
     mem_limit: 512m
@@ -100,6 +111,9 @@ services:
     restart: unless-stopped
 
 volumes:
+  uploads_data:
+    name: onlinestoreapi_uploads_data
+
   sqlserver_data:
     external: true
     name: onlinestoreapi_sqlserver_data

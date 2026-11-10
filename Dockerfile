@@ -45,12 +45,16 @@ EXPOSE 80
 USER root
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
+# 8.1 پوشهٔ آپلود باید قبل از سوییچ به کاربر غیر root ساخته و به او داده شود؛ وگرنه
+#     LocalStorageService در سازنده خطای دسترسی می‌دهد (F-32). در compose روی volume پایدار mount می‌شود.
+RUN mkdir -p /app/wwwroot/uploads && chown -R app:app /app/wwwroot
+
 # 9. برگرداندن کاربر غیر root (امنیت بیشتر)
 USER app
 
 # 10. HEALTHCHECK واقعی
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl --fail http://localhost:80/health || exit 1
+  CMD curl --fail http://localhost:80/health/live || exit 1
 
 # 11. دستور اجرا
 ENTRYPOINT ["dotnet", "Online Store Application(API).dll"]
