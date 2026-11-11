@@ -66,6 +66,9 @@ public class UserSessionOptionsValidatorTests
     private static UserSessionOptions Resolve(Dictionary<string, string?> settings)
     {
         settings.TryAdd("Jwt:Key", new string('k', 40));
+        // Batch 40 (SEC-08): Issuer و Audience هم الزامی‌اند؛ پیکربندی پایهٔ معتبر باید آن‌ها را داشته باشد.
+        settings.TryAdd("Jwt:Issuer", "OnlineStoreApi");
+        settings.TryAdd("Jwt:Audience", "OnlineStoreClient");
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
         var services = new ServiceCollection();

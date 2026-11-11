@@ -26,6 +26,7 @@ namespace WebApi.Controllers
         }
 
         /// <summary>ثبت‌نام کاربر جدید.</summary>
+        [AllowAnonymous]
         [HttpPost("register")]
         [EnableRateLimiting(RateLimitPolicies.Register)]
         [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
@@ -41,6 +42,7 @@ namespace WebApi.Controllers
         }
 
         /// <summary>ورود کاربر و دریافت AccessToken و RefreshToken.</summary>
+        [AllowAnonymous]
         [HttpPost("login")]
         [EnableRateLimiting(RateLimitPolicies.Login)]
         [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]
@@ -80,6 +82,7 @@ namespace WebApi.Controllers
         }
 
         /// <summary>تازه‌سازی توکن احراز هویت با استفاده از RefreshToken.</summary>
+        [AllowAnonymous]
         [HttpPost("refresh")]
         [EnableRateLimiting(RateLimitPolicies.Refresh)]
         [ProducesResponseType(typeof(AuthResultDto), StatusCodes.Status200OK)]

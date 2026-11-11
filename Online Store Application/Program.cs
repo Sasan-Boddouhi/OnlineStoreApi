@@ -51,12 +51,12 @@ builder.Services.AddControllers(options =>
 
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
 })
+// Batch 40 (SEC-05): فقط JSON؛ formatterهای XML حذف شدند (بدنهٔ XML → 415، Accept: xml → همان JSON).
 .AddNewtonsoftJson(options =>
 {
     options.SerializerSettings.ReferenceLoopHandling =
     Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-})
-.AddXmlDataContractSerializerFormatters();
+});
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
@@ -315,6 +315,12 @@ builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
+    // Batch 40 (SEC-01): هر endpoint بدون ویژگی مجوز، به‌طور پیش‌فرض احراز هویت می‌خواهد.
+    // endpointهای عمومی صریحاً [AllowAnonymous] / AllowAnonymous() دارند (فهرست در EndpointAuthorizationInventoryTests).
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .AddRequirements(new AuthenticatedByDefaultRequirement())
+        .Build();
+
     options.AddPolicy("AdminOnly", policy =>
         policy.AddRequirements(new PermissionRequirement(Permissions.AdminFull)));
 
@@ -345,8 +351,8 @@ builder.Services.AddCors(options =>
                 // پس preflight برای آن پاسخ می‌گیرد. اگر روزی این سیاست محدود شد،
                 // این هدر باید صریحاً در WithHeaders باقی بماند.
                 .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
+                .AllowAnyMethod();
+            // Batch 40 (SEC-16): AllowCredentials حذف شد؛ API کوکی ندارد و توکن در هدر Authorization می‌آید.
         });
 });
 
@@ -366,6 +372,13 @@ if (outputCacheEnabled)
 }
 
 var app = builder.Build();
+
+// Batch 40 (SEC-06): AllowedHosts از پیکربندی خوانده می‌شود (HostFiltering)؛ «*» در Production فقط هشدار است.
+foreach (var warning in ProductionConfigurationRules.AllowedHostsWarnings(
+             app.Configuration["AllowedHosts"], app.Environment.EnvironmentName))
+{
+    app.Logger.LogWarning("{AllowedHostsWarning}", warning);
+}
 
 // Staging: مایگریشن قبل از سرو کردن اولین درخواست.
 // اگر شکست بخورد، استثنا بالا می‌رود و کانتینر healthy نمی‌شود —
@@ -407,6 +420,9 @@ app.Use(async (context, next) =>
     context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
     context.Response.Headers.TryAdd("X-Frame-Options", "DENY");
     context.Response.Headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+    // Batch 40 (SEC-06): پاسخ‌های API و فایل‌های آپلودشده هرگز به‌عنوان صفحه اجرا نمی‌شوند.
+    // Swagger UI پیش از این middleware پاسخ می‌دهد و این هدر را نمی‌گیرد.
+    context.Response.Headers.TryAdd("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
     await next();
 });
 
@@ -437,17 +453,17 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 
         await context.Response.WriteAsJsonAsync(result);
     }
-}).CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false
-}).CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-}).CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
 
 app.UseCors("ReactFrontend");
 
@@ -474,7 +490,7 @@ app.MapGet("/version", () => new
     version = "v2",
     commit = Environment.GetEnvironmentVariable("GIT_COMMIT") ?? "unknown",
     deployedAt = DateTime.UtcNow
-}).CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
 
 
 Log.Information("Online Store API started successfully");

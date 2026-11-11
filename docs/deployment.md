@@ -189,6 +189,7 @@ PaymentGatewaySettings__MerchantId
 PaymentGatewaySettings__WebhookSecret
 PaymentGatewaySettings__CallbackUrl
 CorsOrigins__0
+AllowedHosts
 ForwardedHeaders__KnownNetworks__0
 ForwardedHeaders__KnownProxies__0
 ForwardedHeaders__ForwardLimit
@@ -221,9 +222,19 @@ ForwardedHeaders__ForwardLimit
 
 A rejected request gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a ProblemDetails body with `code = RATE_LIMIT_EXCEEDED` and `retryAfterSeconds`. Counters are kept in memory per API instance. Users behind one carrier NAT share the per-IP login/register quota; raise those limits if that becomes a problem.
 
-**Start-up validation (Production).** The API refuses to start unless `PaymentGatewaySettings__Provider=Zarinpal`, `PaymentGatewaySettings__EnableRealGateway=true`, `PaymentGatewaySettings__MerchantId` and `PaymentGatewaySettings__WebhookSecret` are set, and `CorsOrigins__0` (and further indexes) lists the real front-end origin (no `localhost`). In any environment other than Development and Testing the `Manual`/fake payment gateway is never created; `Provider` must be `Zarinpal`. `Jwt__ExpireMinutes` is optional and defaults to 60.
+**Start-up validation (Production).** The API refuses to start unless `PaymentGatewaySettings__Provider=Zarinpal`, `PaymentGatewaySettings__EnableRealGateway=true`, `PaymentGatewaySettings__MerchantId` and `PaymentGatewaySettings__WebhookSecret` are set, `PaymentGatewaySettings__CallbackUrl` is an absolute `https` address that is not `localhost`/loopback (Batch 40), and `CorsOrigins__0` (and further indexes) lists the real front-end origin (no `localhost`). In any environment other than Development and Testing the `Manual`/fake payment gateway is never created; `Provider` must be `Zarinpal`. `Jwt__Issuer` and `Jwt__Audience` are required in every environment (empty values stop start-up, Batch 40). `Jwt__ExpireMinutes` is optional and defaults to 15.
 
-The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT_ID`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_CALLBACK_URL`, `CORS_ORIGIN_0`, and `TRUSTED_PROXY_NETWORK` or `TRUSTED_PROXY_IP` (see below).
+The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT_ID`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_CALLBACK_URL`, `CORS_ORIGIN_0`, `ALLOWED_HOSTS`, and `TRUSTED_PROXY_NETWORK` or `TRUSTED_PROXY_IP` (see below).
+
+**Allowed hosts (Batch 40).** `AllowedHosts` (compose: `ALLOWED_HOSTS`, `;`-separated) limits the `Host` header the API answers. Include `localhost`, because the container `HEALTHCHECK` calls `http://localhost:80/health/live`; for example `ALLOWED_HOSTS=api.example.com;localhost`. When it is empty or `*` in Production the API still starts but logs a warning.
+
+**HTTP surface (Batch 40).**
+- Authorization is on by default: every endpoint without an authorization attribute requires a signed-in user. Public endpoints carry an explicit `[AllowAnonymous]` (`/health`, `/health/live`, `/health/ready` and `/version` are anonymous). Unknown routes still return `404`.
+- JSON only: a request body with `Content-Type: application/xml` gets `415`; `Accept: application/xml` is ignored and JSON is returned.
+- Every response (API and `/uploads/*`) carries `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
+- CORS does not send `Access-Control-Allow-Credentials`; the API uses bearer tokens, not cookies.
+
+**Images are built from a clean checkout only (Batch 40).** `.dockerignore` keeps `.env*`, every `appsettings.Production.json`, the local audit/plan documents and the test projects out of the build context, but never push an image built on a developer machine; CI builds from a clean checkout.
 
 **Uploads.** Product images are stored in `/app/wwwroot/uploads`. The image creates this folder owned by the `app` user and `docker-compose.prod.yml` mounts the named volume `onlinestoreapi_uploads_data` there so files survive redeploys.
 
@@ -576,11 +587,13 @@ row to `Pending`.
 | `ConnectionStrings__DefaultConnection` | yes | SQL Server connection string. |
 | `Redis__Configuration` | yes | Cache/session backend. |
 | `Jwt__Key` | yes | Signing key. Must not be the development value. |
+| `Jwt__Issuer` / `Jwt__Audience` | yes | Token issuer and audience. Empty values stop start-up (Batch 40). |
+| `AllowedHosts` | recommended in production | Allowed `Host` values, `;`-separated, include `localhost` for the health check. `*` logs a start-up warning in Production. |
 | `PaymentGatewaySettings__Provider` | yes | `Manual` \| `Zarinpal` \| `IDPay`. |
 | `PaymentGatewaySettings__WebhookSecret` | **yes in production** | HMAC-SHA256 key for `X-Payment-Signature`. If unset, **every** webhook is rejected (fail-closed). |
 | `PaymentGatewaySettings__MerchantId` | when real gateway | Zarinpal merchant id. Empty ⇒ gateway refuses to start a payment. |
 | `PaymentGatewaySettings__EnableRealGateway` | when real gateway | `false` refuses all live calls. Set to `true` only after the runbook checklist. |
-| `PaymentGatewaySettings__CallbackUrl` | when real gateway | Absolute URL the gateway redirects to. |
+| `PaymentGatewaySettings__CallbackUrl` | **yes in production** | Absolute URL the gateway redirects to. In Production it must be `https` and not `localhost`/loopback, or start-up fails (Batch 40). |
 | `PaymentGatewaySettings__UseSandbox` | staging | `true` forces `https://sandbox.zarinpal.com` and **overrides** `BaseUrl`, so a sandbox merchant id can never reach the live gateway. |
 | `PaymentGatewaySettings__BaseUrl` | no (default `https://payment.zarinpal.com`) | Zarinpal v4 host. Both the API calls (`/pg/v4/payment/*.json`) and the payment page (`/pg/StartPay/{authority}`) are built from it (Batch 5, F-28). Must be absolute `https`. |
 | `PaymentGatewaySettings__RequestTimeoutSeconds` | no (default 20, 1-120) | Timeout of each gateway call. A timeout on verify is an unknown outcome, not a failure. |

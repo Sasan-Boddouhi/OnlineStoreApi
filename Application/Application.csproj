@@ -3,9 +3,15 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);NU1903;1591</NoWarn>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Batch 40 (SEC-11, ARC-05): فقط همین یک advisory پنهان می‌شود. AutoMapper 14.0.0 نسخهٔ اصلاح‌شدهٔ رایگان ندارد
+         (اصلاح فقط در 15.1.1 / 16.1.1 با مجوز تجاری)؛ BusinessLogic.Extensions.AutoMapperDepthGuard همان سقف عمق 64
+         را روی نسخهٔ 14 اعمال می‌کند. تصمیم نهایی (خرید مجوز یا جایگزینی) با مالک است (N14). -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rvv3-g6hj-g44x" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Remove="Common\Expressions\**" />
     <EmbeddedResource Remove="Common\Expressions\**" />
@@ -13,8 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.9" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.1.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.34" />
     <PackageReference Include="MediatR" Version="14.2.0" />
     <PackageReference Include="AutoMapper" Version="14.0.0" />
   </ItemGroup>

@@ -88,6 +88,10 @@ services:
       PaymentGatewaySettings__CallbackUrl: ${PAYMENT_CALLBACK_URL}
       CorsOrigins__0: ${CORS_ORIGIN_0}
 
+      # Batch 40 (SEC-06): Hostهای مجاز (با «;» جدا). localhost برای HEALTHCHECK کانتینر لازم است.
+      # مثال: ALLOWED_HOSTS=api.example.com;localhost . خالی = «*» و یک هشدار در لاگ راه‌اندازی.
+      AllowedHosts: "${ALLOWED_HOSTS:-*}"
+
       # F-20: پروکسی معکوس مورد اعتماد (nginx). فقط X-Forwarded-For از همین آدرس‌ها پذیرفته می‌شود.
       # TRUSTED_PROXY_NETWORK = زیرشبکهٔ شبکهٔ compose به‌صورت CIDR (مثلاً 172.18.0.0/16؛ docs/deployment.md §7)؛
       # یا TRUSTED_PROXY_IP = IP دقیق پروکسی. اگر هر دو خالی بمانند API هشدار می‌دهد و همهٔ کلاینت‌ها

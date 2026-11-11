@@ -62,9 +62,40 @@ public static class ProductionConfigurationRules
 
             if (string.IsNullOrWhiteSpace(settings.WebhookSecret))
                 errors.Add("PaymentGatewaySettings:WebhookSecret must be configured in production environment.");
+
+            // Batch 40 (SEC-09): درگاه کاربر را به همین آدرس برمی‌گرداند؛ پیش‌فرض localhost در Production یعنی
+            // پرداخت‌کننده به ماشین خودش فرستاده می‌شود و http یعنی Authority در مسیر قابل شنود است.
+            if (!Uri.TryCreate(settings.CallbackUrl, UriKind.Absolute, out var callbackUri)
+                || callbackUri.Scheme != Uri.UriSchemeHttps)
+            {
+                errors.Add($"PaymentGatewaySettings:CallbackUrl در Production باید آدرس مطلق https باشد؛ مقدار فعلی «{settings.CallbackUrl}».");
+            }
+            else if (callbackUri.IsLoopback || string.Equals(callbackUri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"PaymentGatewaySettings:CallbackUrl در Production نباید localhost باشد: «{settings.CallbackUrl}».");
+            }
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// Batch 40 (SEC-06): هشدارهای <c>AllowedHosts</c>؛ فهرست خالی یعنی مشکلی نیست.
+    /// در Production مقدار «*» (یا خالی، که همان «*» است) یعنی هر Host پذیرفته می‌شود؛ راه‌اندازی شکست نمی‌خورد
+    /// چون HEALTHCHECK کانتینر با Host=localhost صدا می‌زند و فهرست درست به دامنهٔ استقرار بستگی دارد،
+    /// ولی هشدار ثبت می‌شود (مثلاً <c>AllowedHosts=api.example.com;localhost</c>).
+    /// </summary>
+    public static IReadOnlyList<string> AllowedHostsWarnings(string? allowedHosts, string? environmentName)
+    {
+        if (!IsProduction(environmentName))
+            return Array.Empty<string>();
+
+        var hosts = (allowedHosts ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return hosts.Length == 0 || hosts.Contains("*")
+            ? new[] { "AllowedHosts در Production روی «*» است و هر Host پذیرفته می‌شود؛ دامنه‌های API را تنظیم کنید (مثلاً AllowedHosts=api.example.com;localhost)." }
+            : Array.Empty<string>();
     }
 
     /// <summary>

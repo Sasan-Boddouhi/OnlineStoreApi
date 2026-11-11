@@ -20,6 +20,8 @@ public class ProductionStartupValidationTests
         ["PaymentGatewaySettings:EnableRealGateway"] = "true",
         ["PaymentGatewaySettings:MerchantId"] = "00000000-0000-0000-0000-000000000000",
         ["PaymentGatewaySettings:WebhookSecret"] = "prod-webhook-secret-for-tests",
+        // Batch 40 (SEC-09): در Production آدرس بازگشت باید https و غیر loopback باشد.
+        ["PaymentGatewaySettings:CallbackUrl"] = "https://shop.example.com/payment/callback",
         ["CorsOrigins:0"] = "https://shop.example.com"
     };
 
@@ -99,6 +101,33 @@ public class ProductionStartupValidationTests
         var act = () => factory.CreateClient();
 
         act.Should().Throw<OptionsValidationException>().WithMessage("*CorsOrigins*");
+    }
+
+    [Theory]
+    [InlineData("Jwt:Issuer")]
+    [InlineData("Jwt:Audience")]
+    public void Batch40_Production_WithEmptyJwtIssuerOrAudience_FailsToStart(string key)
+    {
+        using var factory = new EnvironmentFactory("Production", With((key, "")));
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage($"*{key}*");
+    }
+
+    [Theory]
+    [InlineData("https://localhost:5173/payment/callback")]
+    [InlineData("https://127.0.0.1/payment/callback")]
+    [InlineData("http://shop.example.com/payment/callback")]
+    [InlineData("/payment/callback")]
+    public void Batch40_Production_WithLoopbackOrInsecureCallbackUrl_FailsToStart(string callbackUrl)
+    {
+        using var factory = new EnvironmentFactory("Production",
+            With(("PaymentGatewaySettings:CallbackUrl", callbackUrl)));
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*PaymentGatewaySettings:CallbackUrl*");
     }
 
     [Fact]

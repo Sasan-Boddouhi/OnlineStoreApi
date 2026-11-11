@@ -12,7 +12,8 @@ public class ProductionConfigurationRulesTests
         Provider = "Zarinpal",
         EnableRealGateway = true,
         MerchantId = "merchant",
-        WebhookSecret = "secret"
+        WebhookSecret = "secret",
+        CallbackUrl = "https://shop.example.com/payment/callback"
     };
 
     [Fact]
@@ -37,7 +38,55 @@ public class ProductionConfigurationRulesTests
     {
         var errors = ProductionConfigurationRules.ValidatePaymentGateway(new PaymentGatewaySettings(), "Production");
 
-        errors.Should().HaveCount(4); // Provider, EnableRealGateway, MerchantId, WebhookSecret
+        // Batch 40: پیش‌فرض CallbackUrl (localhost) هم در Production رد می‌شود.
+        errors.Should().HaveCount(5); // Provider, EnableRealGateway, MerchantId, WebhookSecret, CallbackUrl
+    }
+
+    [Theory]
+    [InlineData("https://localhost:5173/payment/callback")]
+    [InlineData("https://127.0.0.1/payment/callback")]
+    [InlineData("https://[::1]/payment/callback")]
+    [InlineData("http://shop.example.com/payment/callback")]
+    [InlineData("/payment/callback")]
+    [InlineData("")]
+    public void Batch40_Production_LoopbackInsecureOrRelativeCallbackUrl_IsRejected(string callbackUrl)
+    {
+        var settings = ValidZarinpal();
+        settings.CallbackUrl = callbackUrl;
+
+        ProductionConfigurationRules.ValidatePaymentGateway(settings, "Production")
+            .Should().ContainSingle(e => e.Contains("PaymentGatewaySettings:CallbackUrl"));
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public void Batch40_OutsideProduction_LocalCallbackUrl_IsAllowed(string environment)
+    {
+        var settings = ValidZarinpal();
+        settings.CallbackUrl = "http://localhost:5173/payment/callback";
+
+        ProductionConfigurationRules.ValidatePaymentGateway(settings, environment)
+            .Should().NotContain(e => e.Contains("PaymentGatewaySettings:CallbackUrl"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("*")]
+    [InlineData("api.example.com;*")]
+    public void Batch40_Production_WildcardOrMissingAllowedHosts_IsReported(string? allowedHosts)
+    {
+        ProductionConfigurationRules.AllowedHostsWarnings(allowedHosts, "Production")
+            .Should().ContainSingle(w => w.Contains("AllowedHosts"));
+    }
+
+    [Fact]
+    public void Batch40_AllowedHosts_ConfiguredInProduction_OrAnyValueElsewhere_IsNotReported()
+    {
+        ProductionConfigurationRules.AllowedHostsWarnings("api.example.com;localhost", "Production").Should().BeEmpty();
+        ProductionConfigurationRules.AllowedHostsWarnings("*", "Development").Should().BeEmpty();
     }
 
     [Theory]
