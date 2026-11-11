@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -58,12 +59,15 @@ public sealed class AuthService : IAuthService
     {
         using var activity = ActivitySource.StartActivity("RegisterUser", ActivityKind.Internal);
 
+        // Batch 48b: فقط شکل استاندارد 09… جست‌وجو و ذخیره می‌شود؛ +98… و ارقام فارسی همان شماره‌اند.
+        var phone = IranianPhoneNumber.NormalizeOrThrow(dto.PhoneNumber);
+
         await _unitOfWork.BeginTransactionAsync(ct);
 
         try
         {
             var exists = await _unitOfWork.Repository<User>()
-                .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, ct);
+                .AnyAsync(x => x.PhoneNumber == phone, ct);
 
             if (exists)
             {
@@ -85,7 +89,7 @@ public sealed class AuthService : IAuthService
             {
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
-                PhoneNumber = dto.PhoneNumber,
+                PhoneNumber = phone,
                 Email = email,
                 DateOfBirth = !string.IsNullOrWhiteSpace(dto.DateOfBirth)
                     ? PersianDateHelper.ToGregorian(dto.DateOfBirth)
@@ -148,15 +152,20 @@ public sealed class AuthService : IAuthService
 
         OnlineStoreMetrics.LoginAttempts.Add(1);
 
-        var user = await _unitOfWork.Repository<User>()
-            .FirstOrDefaultAsync(
-                new Spec<User>()
-                    .Where(u => u.PhoneNumber == dto.PhoneNumber)
-                    .Where(u => u.IsActive)
-                    .Include(u => u.Employee!)
-                    .Include(u => u.Employee!.EmployeeType)
-                    .AsTracking(),
-                ct);
+        // Batch 48b: جست‌وجو فقط با شکل استاندارد 09…؛ شمارهٔ غیرقابل نرمال‌سازی مانند کاربر ناموجود است (همان 401).
+        var phone = IranianPhoneNumber.NormalizeOrNull(dto.PhoneNumber);
+
+        var user = phone is null
+            ? null
+            : await _unitOfWork.Repository<User>()
+                .FirstOrDefaultAsync(
+                    new Spec<User>()
+                        .Where(u => u.PhoneNumber == phone)
+                        .Where(u => u.IsActive)
+                        .Include(u => u.Employee!)
+                        .Include(u => u.Employee!.EmployeeType)
+                        .AsTracking(),
+                    ct);
 
         if (user is null)
         {

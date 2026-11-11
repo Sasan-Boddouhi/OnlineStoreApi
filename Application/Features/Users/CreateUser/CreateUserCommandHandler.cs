@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Helper;
@@ -42,13 +43,16 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
             "Creating new user with phone: {PhoneNumber}",
             request.PhoneNumber);
 
+        // Batch 48b: بررسی تکرار و ذخیره فقط با شکل استاندارد 09…؛ +98… و ارقام فارسی همان شماره‌اند.
+        var phone = IranianPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
         try
         {
             var exists = await _unitOfWork.Repository<User>()
                 .AnyAsync(
-                    x => x.PhoneNumber == request.PhoneNumber,
+                    x => x.PhoneNumber == phone,
                     cancellationToken);
 
             if (exists)
@@ -69,6 +73,7 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
             }
 
             var user = _mapper.Map<User>(request);
+            user.PhoneNumber = phone;
             user.PasswordHash = _passwordHasher.Hash(request.Password);
             user.SecurityStamp = Guid.NewGuid().ToString();
             user.IsActive = true;

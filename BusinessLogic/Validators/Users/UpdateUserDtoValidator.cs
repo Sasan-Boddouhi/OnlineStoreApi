@@ -3,6 +3,7 @@ using FluentValidation;
 using BusinessLogic.DTOs.User;
 using System.Globalization;
 using BusinessLogic.Common.Validation;
+using BusinessLogic.Validators.Common;
 
 namespace BusinessLogic.Validators.Users;
 
@@ -23,7 +24,7 @@ public class UpdateUserDtoValidator : AbstractValidator<UpdateUserDto>
 
         RuleFor(x => x.PhoneNumber)
             .NotEmpty().WithMessage("شماره تماس الزامی است")
-            .Matches(@"^09\d{9}$").WithMessage("شماره موبایل معتبر نیست (مثال: 09123456789)");
+            .MustBeIranianMobile(); // Batch 48b: همان قاعدهٔ مشترک؛ +98… هم پذیرفته و در سرویس نرمال می‌شود
 
         RuleFor(x => x.Email)
             .EmailAddress().When(x => !string.IsNullOrEmpty(x.Email))

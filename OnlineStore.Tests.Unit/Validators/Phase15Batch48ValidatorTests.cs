@@ -218,8 +218,9 @@ public class Phase15Batch48ValidatorTests
     // ---------- Phone ----------
     [Theory]
     [InlineData("09123456789", true)]
-    [InlineData("+989123456789", false)]
-    [InlineData("9123456789", false)]
+    // Batch 48b: owner overruled the strict rule; +98… and the 10-digit 9… form are normalised to 09…, not rejected.
+    [InlineData("+989123456789", true)]
+    [InlineData("9123456789", true)]
     [InlineData("0912345678", false)]
     [InlineData("091234567890", false)]
     [InlineData("08123456789", false)]
@@ -233,7 +234,10 @@ public class Phase15Batch48ValidatorTests
         var reg = new RegisterDto { FirstName = "a", LastName = "b", PhoneNumber = "0912", Password = "123456" };
         new RegisterDtoValidator().Validate(reg).IsValid.Should().BeFalse();
         var co = ValidCheckout();
+        // Batch 48b: owner overruled the strict rule; +98… is now accepted (and normalised), a landline is still rejected.
         co.ShippingPhoneNumber = "+989123456789";
+        new CheckoutDtoValidator().Validate(co).IsValid.Should().BeTrue();
+        co.ShippingPhoneNumber = "02112345678";
         new CheckoutDtoValidator().Validate(co).IsValid.Should().BeFalse();
     }
 

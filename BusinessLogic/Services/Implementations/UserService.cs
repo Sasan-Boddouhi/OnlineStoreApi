@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
@@ -166,8 +167,13 @@ public sealed class UserService : IUserService
     {
         _logger.LogDebug("Retrieving user by phone: {PhoneNumber}", phoneNumber);
 
+        // Batch 48b: فقط شکل استاندارد 09… ذخیره شده است؛ ورودی غیرقابل نرمال‌سازی کاربری ندارد.
+        var phone = IranianPhoneNumber.NormalizeOrNull(phoneNumber);
+        if (phone is null)
+            return null;
+
         var spec = new Spec<User>()
-            .Where(u => u.PhoneNumber == phoneNumber)
+            .Where(u => u.PhoneNumber == phone)
             .Where(u => u.IsActive);
 
         return await _unitOfWork.Repository<User>()
@@ -206,6 +212,9 @@ public sealed class UserService : IUserService
             return null;
         }
 
+        // Batch 48b: مقایسه، بررسی تکرار و ذخیره فقط با شکل استاندارد 09….
+        var phone = IranianPhoneNumber.NormalizeOrThrow(dto.PhoneNumber);
+
         // Batch 11b: ادمین معمولی با عوض کردن موبایل یا ایمیل یک مدیر ارشد (و سپس بازیابی رمز)
         // حساب او را تصاحب می‌کرد. حساب مدیر ارشد را فقط مدیر ارشد ویرایش می‌کند → 403 ADMIN_CANNOT_MODIFY_SUPERADMIN.
         await EnsureSuperAdminTargetAllowedAsync(
@@ -214,10 +223,10 @@ public sealed class UserService : IUserService
             losesSuperAdmin: false,
             cancellationToken);
 
-        if (user.PhoneNumber != dto.PhoneNumber)
+        if (user.PhoneNumber != phone)
         {
             var exists = await _unitOfWork.Repository<User>()
-                .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber && x.UserId != dto.UserId, cancellationToken);
+                .AnyAsync(x => x.PhoneNumber == phone && x.UserId != dto.UserId, cancellationToken);
             if (exists)
                 throw new ConflictException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
             user.SecurityStamp = Guid.NewGuid().ToString();
@@ -232,6 +241,7 @@ public sealed class UserService : IUserService
         }
 
         _mapper.Map(dto, user);
+        user.PhoneNumber = phone;
 
         if (!string.IsNullOrWhiteSpace(dto.DateOfBirth))
         {

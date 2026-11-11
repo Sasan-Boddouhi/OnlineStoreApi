@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -480,6 +481,9 @@ namespace BusinessLogic.Services.Implementations
                 || string.IsNullOrWhiteSpace(dto.ShippingPhoneNumber))
                 throw new BusinessException("اطلاعات ارسال سفارش کامل نیست.", "CHECKOUT_SHIPPING_REQUIRED");
 
+            // Batch 48b: شمارهٔ تحویل‌گیرنده فقط به شکل استاندارد 09… روی سفارش ذخیره می‌شود.
+            var shippingPhone = IranianPhoneNumber.NormalizeOrThrow(dto.ShippingPhoneNumber);
+
             var customer = await _unitOfWork.Repository<Customer>()
                 .FirstOrDefaultAsync(
                     new Spec<Customer>().Where(c => c.UserId == userId.Value),
@@ -618,7 +622,7 @@ namespace BusinessLogic.Services.Implementations
                     customer.CustomerId,
                     dto.ShippingFullName,
                     dto.ShippingAddress,
-                    dto.ShippingPhoneNumber,
+                    shippingPhone,
                     dto.IdempotencyKey,
                     cancellationToken);
 
