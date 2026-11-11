@@ -186,7 +186,7 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/{id}
-    /// <summary>ویرایش مشخصات کاربر توسط ادمین.</summary>
+    /// <summary>ویرایش مشخصات کاربر توسط ادمین. حساب مدیر ارشد را فقط مدیر ارشد ویرایش می‌کند (403 ADMIN_CANNOT_MODIFY_SUPERADMIN)؛ موبایل یا ایمیل تکراری 409.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

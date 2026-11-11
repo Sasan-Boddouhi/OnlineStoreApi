@@ -215,7 +215,7 @@ ForwardedHeaders__ForwardLimit
 |---|---|---|---|
 | `Login` | `POST /api/v1/auth/login` | client IP | 5 / 60 s |
 | `Register` | `POST /api/v1/auth/register` | client IP | 5 / 60 s |
-| `Refresh` | `POST /api/v1/auth/refresh` | client IP | 20 / 60 s |
+| `Refresh` | `POST /api/v1/auth/refresh` | client IP | 60 / 60 s (raised from 20 in Batch 11b: 15-minute access tokens, many mobile users share one carrier IP) |
 | `Checkout` | `POST /api/v1/carts/checkout` | user id, else IP | 5 / 60 s |
 | `PaymentInitiate` | `POST /api/v1/payments/initiate` | user id, else IP | 10 / 60 s |
 

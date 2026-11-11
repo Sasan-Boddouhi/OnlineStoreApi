@@ -92,7 +92,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task Register_DuplicatePhone_ReturnsBadRequest()
+    public async Task Register_DuplicatePhone_ReturnsConflict()
     {
         var registerDto = new
         {
@@ -109,8 +109,8 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
 
         // تلاش دوباره با همان شماره
         var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
-        // BusinessException -> 400 BadRequest
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        // Batch 11b: duplicate phone is a conflict (409), same as duplicate email; it was 400.
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
     [Fact]

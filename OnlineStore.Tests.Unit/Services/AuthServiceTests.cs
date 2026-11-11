@@ -119,7 +119,7 @@ public class AuthServiceTests
     // REGISTER - DUPLICATE PHONE
     // ---------------------------------------------------------------
     [Fact]
-    public async Task RegisterAsync_DuplicatePhone_ThrowsBusinessException()
+    public async Task RegisterAsync_DuplicatePhone_ThrowsConflictException()
     {
         var dto = new RegisterDto
         {
@@ -133,7 +133,8 @@ public class AuthServiceTests
                      .ReturnsAsync(true);
 
         Func<Task> act = () => _service.RegisterAsync(dto, Client);
-        await act.Should().ThrowAsync<BusinessException>()
+        // Batch 11b: duplicate phone is a ConflictException (409); it was a BusinessException (400).
+        await act.Should().ThrowAsync<ConflictException>()
                  .WithMessage("*شماره تماس تکراری*");
 
         _uowMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);

@@ -13,7 +13,9 @@ public sealed class RateLimitingOptions
 
     public FixedWindowLimitOptions Register { get; set; } = new() { PermitLimit = 5, WindowSeconds = 60 };
 
-    public FixedWindowLimitOptions Refresh { get; set; } = new() { PermitLimit = 20, WindowSeconds = 60 };
+    // Batch 11b: 20 → 60. توکن دسترسی ۱۵ دقیقه‌ای است (تازه‌سازی بیشتر) و کاربران موبایل زیادی پشت
+    // یک IP مشترک اپراتور (CGNAT) هستند؛ این سقف برای هر IP است.
+    public FixedWindowLimitOptions Refresh { get; set; } = new() { PermitLimit = 60, WindowSeconds = 60 };
 
     public FixedWindowLimitOptions Checkout { get; set; } = new() { PermitLimit = 5, WindowSeconds = 60 };
 

@@ -437,7 +437,7 @@ uses the `RefreshLimiter` policy, partitioned per client IP.
 Defaults (configurable through `RateLimiting:Refresh`):
 
 ```text
-PermitLimit = 20
+PermitLimit = 60
 WindowSeconds = 60
 QueueLimit = 0
 ```
@@ -561,9 +561,10 @@ Admin guards (`UserService`):
 |---|---|
 | An admin deactivates or deletes their own account | `409 CANNOT_DEACTIVATE_SELF` |
 | Deactivating, deleting or removing the SuperAdmin role from the last active SuperAdmin | `409 LAST_SUPERADMIN` |
-| A non-SuperAdmin deactivates, reactivates, deletes or changes the roles of a SuperAdmin | `403 ADMIN_CANNOT_MODIFY_SUPERADMIN` |
+| A non-SuperAdmin deactivates, reactivates, deletes, edits (`PUT /api/users/{id}`: phone, email, name) or changes the roles of a SuperAdmin | `403 ADMIN_CANNOT_MODIFY_SUPERADMIN` |
+| A non-SuperAdmin assigns the SuperAdmin role to anyone, including themselves | `403 ADMIN_CANNOT_ASSIGN_SUPERADMIN` |
 
-Registration, admin user creation and admin user update return `409 USER_EMAIL_EXISTS` for an email that another user already has. An invalid Persian date of birth on register returns `422`.
+Registration, admin user creation and admin user update return `409 USER_EMAIL_EXISTS` for an email and `409 USER_PHONE_EXISTS` for a phone number that another user already has (the phone case was `400` before Batch 11b). An invalid Persian date of birth on register returns `422`.
 
 ## 26. Authorization
 

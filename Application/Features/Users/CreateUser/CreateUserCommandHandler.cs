@@ -53,7 +53,8 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
 
             if (exists)
             {
-                throw new BusinessException(
+                // Batch 11b: موبایل تکراری مانند ایمیل تکراری 409 است.
+                throw new ConflictException(
                     "شماره موبایل قبلاً ثبت شده است.",
                     "USER_PHONE_EXISTS");
             }

@@ -206,12 +206,20 @@ public sealed class UserService : IUserService
             return null;
         }
 
+        // Batch 11b: ادمین معمولی با عوض کردن موبایل یا ایمیل یک مدیر ارشد (و سپس بازیابی رمز)
+        // حساب او را تصاحب می‌کرد. حساب مدیر ارشد را فقط مدیر ارشد ویرایش می‌کند → 403 ADMIN_CANNOT_MODIFY_SUPERADMIN.
+        await EnsureSuperAdminTargetAllowedAsync(
+            user,
+            _currentUserService.GetCurrentUserId(),
+            losesSuperAdmin: false,
+            cancellationToken);
+
         if (user.PhoneNumber != dto.PhoneNumber)
         {
             var exists = await _unitOfWork.Repository<User>()
                 .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber && x.UserId != dto.UserId, cancellationToken);
             if (exists)
-                throw new BusinessException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
+                throw new ConflictException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
             user.SecurityStamp = Guid.NewGuid().ToString();
         }
 

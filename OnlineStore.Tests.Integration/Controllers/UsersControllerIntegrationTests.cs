@@ -158,7 +158,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateUser_DuplicatePhone_ReturnsBadRequest()
+    public async Task CreateUser_DuplicatePhone_ReturnsConflict()
     {
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -173,7 +173,8 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/users", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        // Batch 11b: duplicate phone is a conflict (409), same as duplicate email; it was 400.
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
     // ============================================================

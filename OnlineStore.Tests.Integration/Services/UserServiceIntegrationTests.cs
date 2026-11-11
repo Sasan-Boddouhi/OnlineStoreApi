@@ -64,7 +64,7 @@ public class UserServiceIntegrationTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task CreateUserCommand_DuplicatePhone_ThrowsBusinessException()
+    public async Task CreateUserCommand_DuplicatePhone_ThrowsConflictException()
     {
         var dto = new CreateUserDto
         {
@@ -94,7 +94,8 @@ public class UserServiceIntegrationTests : BaseIntegrationTest
                         a.ExtraDescription,
                         a.IsDefault))
                     .ToList()));
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*قبلاً ثبت شده*");
+        // Batch 11b: duplicate phone is a ConflictException (409 USER_PHONE_EXISTS); it was a BusinessException (400).
+        (await act.Should().ThrowAsync<ConflictException>().WithMessage("*قبلاً ثبت شده*")).Which.Code.Should().Be("USER_PHONE_EXISTS");
     }
 
     [Fact]

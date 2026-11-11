@@ -119,7 +119,7 @@ public class CreateUserCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_DuplicatePhone_ThrowsBusinessException()
+    public async Task Handle_DuplicatePhone_ThrowsConflictException()
     {
         var command = CreateCommand();
 
@@ -131,7 +131,8 @@ public class CreateUserCommandHandlerTests
 
         var act = () => _handler.Handle(command, CancellationToken.None);
 
-        var exception = await act.Should().ThrowAsync<BusinessException>();
+        // Batch 11b: duplicate phone is a ConflictException (409); it was a BusinessException (400).
+        var exception = await act.Should().ThrowAsync<ConflictException>();
         exception.Which.Code.Should().Be("USER_PHONE_EXISTS");
 
         _uowMock.Verify(

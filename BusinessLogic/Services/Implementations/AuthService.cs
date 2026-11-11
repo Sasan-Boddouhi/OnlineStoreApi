@@ -68,7 +68,8 @@ public sealed class AuthService : IAuthService
             if (exists)
             {
                 activity?.SetStatus(ActivityStatusCode.Error, "Phone already exists");
-                throw new BusinessException("شماره تماس تکراری است.", "USER_PHONE_EXISTS");
+                // Batch 11b: موبایل تکراری مانند ایمیل تکراری تعارض است (409)، نه ورودی نامعتبر.
+                throw new ConflictException("شماره تماس تکراری است.", "USER_PHONE_EXISTS");
             }
 
             // Batch 11 (F-41): ایمیل در دیتابیس یکتاست؛ تکرار آن پیش‌تر به خطای ذخیره‌سازی می‌رسید.
