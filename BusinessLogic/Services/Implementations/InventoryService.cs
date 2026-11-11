@@ -77,7 +77,8 @@ public sealed class InventoryService : IInventoryService
             _logger.LogWarning(
                 "Insufficient stock for listing {ListingId}. Requested={Requested}, Available={Available}",
                 listingId, quantity, available);
-            throw new BusinessException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
+            // Batch 7b: کمبود موجودی تعارض وضعیت است (409)، هم‌سو با Inventory.Reserve در دامنه.
+            throw new ConflictException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
         }
 
         var remaining = quantity;

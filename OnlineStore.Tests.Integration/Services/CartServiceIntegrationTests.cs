@@ -208,7 +208,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
         var act = () => CartService.AddItemAsync(
             null, sessionId, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 3 });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.And.Code.Should().Be("INSUFFICIENT_STOCK");
     }
 
@@ -402,7 +402,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.And.Code.Should().Be("INSUFFICIENT_STOCK");
 
         // هیچ سفارش نیمه‌کاری ساخته نشده است.

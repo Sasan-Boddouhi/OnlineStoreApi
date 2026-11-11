@@ -214,7 +214,8 @@ namespace BusinessLogic.Services.Implementations
 
             var available = await _inventoryService.GetAvailableAsync(listingId, cancellationToken);
             if (available < quantity)
-                throw new BusinessException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
+                // Batch 7b: کمبود موجودی تعارض وضعیت است (409)، هم‌سو با Inventory.Reserve در دامنه.
+                throw new ConflictException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
         }
 
         /// <summary>

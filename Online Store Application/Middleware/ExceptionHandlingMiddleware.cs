@@ -73,7 +73,7 @@ public sealed class ExceptionHandlingMiddleware
 
             await WriteConflictAsync(context, "CONCURRENCY_CONFLICT", "تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.");
         }
-        catch (DbUpdateException ex) when (DatabaseErrorClassifier.IsUniqueViolation(ex))
+        catch (Exception ex) when (DatabaseErrorClassifier.IsUniqueViolation(ex))
         {
             // جزئیات دیتابیس (نام جدول/ایندکس) عمداً در پاسخ نمی‌آید.
             _logger.LogWarning(ex, "Unique constraint violation");

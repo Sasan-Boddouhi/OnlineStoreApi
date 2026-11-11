@@ -220,7 +220,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task AddItemToOrderAsync_InsufficientStock_ThrowsBusinessException()
+    public async Task AddItemToOrderAsync_InsufficientStock_ThrowsConflictException()
     {
         var (customer, user) = await CreateCustomerAsync();
         SetCurrentUser(user.UserId);
@@ -241,7 +241,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
 
         await FluentActions
             .Awaiting(() => OrderService.AddItemToOrderAsync(orderDto.OrderId, itemDto))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
     }
 
     [Fact]
