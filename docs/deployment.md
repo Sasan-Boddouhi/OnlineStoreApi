@@ -602,6 +602,7 @@ row to `Pending`.
 | `PaymentGatewaySettings__VerifyRetryAfterSeconds` | no (default 5, 1-300) | `Retry-After` value on `503 PAYMENT_VERIFY_RETRY`. |
 | `PaymentGatewaySettings__OpenPaymentReuseMinutes` | no (default 15, 0-60) | A repeated initiate for the same order returns the open payment (same authority, `isReplay=true`) if it is younger than this; an older open payment is cancelled and a new one is created. `0` never reuses. |
 | `Database__AutoMigrate` | staging only | `true` applies migrations at startup (with retry). Never enable in production. |
+| `ProductImages__AllowedExternalHosts__0` (`__1`, ...) | no (default empty = adding a product image by external URL is off) | Host names (no scheme, path, port, space or wildcard, e.g. `cdn.example.com`) allowed in `POST /products/{id}/images/url`. Exact, case-insensitive match; https on the default port only, no user-info. An invalid entry stops start-up in every environment. Uploaded files (`/uploads/...`) are not affected (Batch 48c). |
 | `AbandonedPaymentSettings__ScanIntervalMinutes` | no (default 15) | Cleanup job cadence. |
 | `AbandonedPaymentSettings__TimeoutMinutes` | no (default 30) | Age after which a `Pending` payment is cancelled. |
 | `AbandonedPaymentSettings__Enabled` | no (default true) | Turn the cleanup job off. |

@@ -187,6 +187,7 @@ builder.Services.Configure<CommissionSettings>(
 
 builder.Services.Configure<StorageSettings>(
     builder.Configuration.GetSection(StorageSettings.SectionName));
+builder.Services.AddProductImageUrlOptions(builder.Configuration);
 
 // LocalStorageService از قرارداد نام‌گذاری XService/IXService پیروی نمی‌کند
 // (IStorageService ≠ ILocalStorageService)، پس ثبت دستی لازم است؛

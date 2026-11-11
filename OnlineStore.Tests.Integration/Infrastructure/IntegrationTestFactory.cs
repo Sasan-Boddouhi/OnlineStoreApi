@@ -56,6 +56,9 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["Swagger:Enabled"] = "true",
                 ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:",
                 ["PaymentGatewaySettings:WebhookSecret"] = "test-webhook-secret-for-integration-tests",
+                // Batch 48c: میزبان‌های مجاز تصویر خارجی در تست‌ها.
+                ["ProductImages:AllowedExternalHosts:0"] = "cdn.example.test",
+                ["ProductImages:AllowedExternalHosts:1"] = "images.example.test",
                 // F-03: سقف‌های بزرگ تا تست‌های عادی (که همه از یک IP می‌آیند) به محدودیت نرخ نخورند.
                 // سقف‌های واقعی و کوچک در RateLimitingTestFactory سنجیده می‌شوند.
                 ["RateLimiting:Login:PermitLimit"] = "10000",
