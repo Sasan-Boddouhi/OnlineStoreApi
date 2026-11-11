@@ -76,7 +76,9 @@ public class AuthServiceTests
             _jwtMock.Object,
             _hasherMock.Object,
             _mapperMock.Object,
-            _loggerMock.Object);
+            _loggerMock.Object,
+            TimeProvider.System,
+            Microsoft.Extensions.Options.Options.Create(new Application.Options.UserSessionOptions()));
     }
 
     // ---------------------------------------------------------------

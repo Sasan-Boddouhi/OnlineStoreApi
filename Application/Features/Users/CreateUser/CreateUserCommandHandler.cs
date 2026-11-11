@@ -58,6 +58,15 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
                     "USER_PHONE_EXISTS");
             }
 
+            // Batch 11 (F-41): ایمیل در دیتابیس یکتاست؛ تکرار آن پیش‌تر به خطای ذخیره‌سازی می‌رسید.
+            if (!string.IsNullOrWhiteSpace(request.Email)
+                && await _unitOfWork.Repository<User>().AnyAsync(x => x.Email == request.Email, cancellationToken))
+            {
+                throw new ConflictException(
+                    "این ایمیل قبلاً ثبت شده است.",
+                    "USER_EMAIL_EXISTS");
+            }
+
             var user = _mapper.Map<User>(request);
             user.PasswordHash = _passwordHasher.Hash(request.Password);
             user.SecurityStamp = Guid.NewGuid().ToString();
@@ -115,7 +124,7 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
 
             return user.UserId;
         }
-        catch (Exception ex) when (ex is not BusinessException)
+        catch (Exception ex) when (ex is not AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
 

@@ -230,13 +230,20 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
         var token = await GetAdminTokenAsync();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var patchDto = new { userId = 1, isActive = false };
-        var response = await Client.PatchAsJsonAsync("/api/v1/users/1", patchDto);
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        // Batch 11: ادمین دیگر نمی‌تواند حساب خودش (کاربر ۱) را غیرفعال کند؛ وضعیت کاربر دیگری تغییر می‌کند.
+        var createResponse = await Client.PostAsJsonAsync("/api/v1/users", new CreateUserDto
+        {
+            PhoneNumber = "09120004444",
+            Password = "Strong@123",
+            FirstName = "To",
+            LastName = "Deactivate",
+            DateOfBirth = "1370/01/01"
+        });
+        var created = await createResponse.Content.ReadFromJsonAsync<UserDto>();
 
-        // Restore active status for other tests
-        var restoreDto = new { userId = 1, isActive = true };
-        await Client.PatchAsJsonAsync("/api/v1/users/1", restoreDto);
+        var patchDto = new { userId = created!.UserId, isActive = false };
+        var response = await Client.PatchAsJsonAsync($"/api/v1/users/{created.UserId}", patchDto);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
     // ============================================================

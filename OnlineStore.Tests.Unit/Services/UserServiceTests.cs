@@ -57,6 +57,22 @@ public class UserServiceTests
         _uowMock.Setup(u => u.Repository<User>()).Returns(_userRepoMock.Object);
         _uowMock.Setup(u => u.Repository<Address>()).Returns(_addressRepoMock.Object);
 
+        // Batch 11: غیرفعال‌سازی نشست‌ها و توکن‌ها را باطل می‌کند و گاردهای مدیر ارشد نقش‌ها را می‌خوانند.
+        var roleRepoMock = new Mock<IGenericRepository<Role>>();
+        var userRoleRepoMock = new Mock<IGenericRepository<UserRole>>();
+        var sessionRepoMock = new Mock<IGenericRepository<UserSession>>();
+        var refreshTokenRepoMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
+        roleRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Role>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Role?)null);
+        sessionRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<UserSession>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<UserSession>());
+        refreshTokenRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<RefreshTokenEntity>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RefreshTokenEntity>());
+        _uowMock.Setup(u => u.Repository<Role>()).Returns(roleRepoMock.Object);
+        _uowMock.Setup(u => u.Repository<UserRole>()).Returns(userRoleRepoMock.Object);
+        _uowMock.Setup(u => u.Repository<UserSession>()).Returns(sessionRepoMock.Object);
+        _uowMock.Setup(u => u.Repository<RefreshTokenEntity>()).Returns(refreshTokenRepoMock.Object);
+
         _uowMock.Setup(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -209,7 +225,7 @@ public class UserServiceTests
 
     // ---- DeleteAsync ----
     [Fact]
-    public async Task DeleteAsync_UserExists_ReturnsTrue()
+    public async Task DeleteAsync_UserExists_DeactivatesInsteadOfDeleting()
     {
         var user = CreateValidUser(1);
         _userRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
@@ -217,7 +233,9 @@ public class UserServiceTests
 
         var result = await _service.DeleteAsync(1);
         result.Should().BeTrue();
-        _userRepoMock.Verify(r => r.Delete(user), Times.Once);
+        // Batch 11: حذف نرم؛ کاربر غیرفعال می‌شود و ردیفش حذف نمی‌شود.
+        _userRepoMock.Verify(r => r.Delete(It.IsAny<User>()), Times.Never);
+        user.IsActive.Should().BeFalse();
     }
 
     [Fact]

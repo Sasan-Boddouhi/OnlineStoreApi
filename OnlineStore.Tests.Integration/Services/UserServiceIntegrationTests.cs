@@ -137,25 +137,45 @@ public class UserServiceIntegrationTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task DeleteAsync_ExistingUser_ReturnsTrue()
+    public async Task DeleteAsync_ExistingUser_DeactivatesInsteadOfDeleting()
     {
-        var user = await DbContext.User.FirstAsync(u => u.PhoneNumber == "09123456789");
+        // Batch 11: حذف کاربر حذف نرم است و ادمین جاری (کاربر ۱) نمی‌تواند خودش را حذف کند؛ پس کاربر دیگری حذف می‌شود.
+        var user = await CreateOtherUserAsync();
         var result = await UserService.DeleteAsync(user.UserId);
         result.Should().BeTrue();
 
-        var deleted = await DbContext.User.FindAsync(user.UserId);
-        deleted.Should().BeNull();
+        var deleted = await DbContext.User.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == user.UserId);
+        deleted.Should().NotBeNull();
+        deleted!.IsActive.Should().BeFalse();
     }
 
     [Fact]
     public async Task SetActiveStatusAsync_ChangesActiveStatus()
     {
-        var admin = await DbContext.User.FirstAsync(u => u.PhoneNumber == "09123456789");
-        var result = await UserService.SetActiveStatusAsync(admin.UserId, false);
+        // Batch 11: غیرفعال‌سازی حساب خود ممنوع است (CANNOT_DEACTIVATE_SELF)؛ پس کاربر دیگری غیرفعال می‌شود.
+        var user = await CreateOtherUserAsync();
+        var result = await UserService.SetActiveStatusAsync(user.UserId, false);
         result.Should().BeTrue();
 
-        var updated = await DbContext.User.FindAsync(admin.UserId);
-        updated!.IsActive.Should().BeFalse();
+        var updated = await DbContext.User.AsNoTracking().FirstAsync(u => u.UserId == user.UserId);
+        updated.IsActive.Should().BeFalse();
+    }
+
+    private async Task<User> CreateOtherUserAsync()
+    {
+        var user = new User
+        {
+            FirstName = "Other",
+            LastName = "User",
+            PhoneNumber = $"0915{Random.Shared.Next(1000000, 9999999):D7}",
+            PasswordHash = "hash",
+            UserType = UserType.Customer,
+            IsActive = true,
+            SecurityStamp = Guid.NewGuid().ToString()
+        };
+        DbContext.User.Add(user);
+        await DbContext.SaveChangesAsync();
+        return user;
     }
 
     [Fact]

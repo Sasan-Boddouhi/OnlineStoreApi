@@ -107,7 +107,7 @@ public class ProductionConfigurationRulesTests
     }
 
     [Fact]
-    public void JwtTokenService_MissingExpireMinutes_FallsBackToSixtyMinutes()
+    public void JwtTokenService_MissingExpireMinutes_FallsBackToFifteenMinutes()
     {
         // ExpireMinutes در تنظیمات نیامده؛ مقدار پیش‌فرض JwtOptions باید اعمال شود (قبلاً int.Parse(null) می‌ترکید).
         var options = Microsoft.Extensions.Options.Options.Create(new JwtOptions
@@ -122,6 +122,7 @@ public class ProductionConfigurationRulesTests
         var token = service.GenerateToken(new List<System.Security.Claims.Claim>());
         var jwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(token);
 
-        jwt.ValidTo.Should().BeCloseTo(before.AddMinutes(60), TimeSpan.FromSeconds(5));
+        // Batch 11: پیش‌فرض access token از ۶۰ به ۱۵ دقیقه کاهش یافت (نشست با refresh زنده می‌ماند).
+        jwt.ValidTo.Should().BeCloseTo(before.AddMinutes(15), TimeSpan.FromSeconds(5));
     }
 }

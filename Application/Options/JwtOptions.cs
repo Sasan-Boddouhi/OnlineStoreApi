@@ -11,5 +11,11 @@ public class JwtOptions
     public string Key { get; set; } = string.Empty;
     public string Issuer { get; set; } = string.Empty;
     public string Audience { get; set; } = string.Empty;
-    public int ExpireMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// Batch 11 (F-13): طول عمر access token. کوتاه است چون نشست با refresh زنده می‌ماند
+    /// (<see cref="UserSessionOptions"/>)؛ کلاینت باید پیش از انقضا یا پس از 401 refresh کند.
+    /// </summary>
+    [Range(1, 1440, ErrorMessage = "Jwt:ExpireMinutes must be between 1 and 1440.")]
+    public int ExpireMinutes { get; set; } = 15;
 }

@@ -382,7 +382,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
 
     // 6. User Deletion with Sessions & RefreshTokens
     [Fact]
-    public async Task UserService_DeleteAsync_DeletesUserWithTokens_WithoutFKCrash()
+    public async Task UserService_DeleteAsync_DeactivatesUserAndRevokesTokens_WithoutFKCrash()
     {
         var user = new User
         {
@@ -427,9 +427,10 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         var deleted = await UserService.DeleteAsync(user.UserId);
         deleted.Should().BeTrue();
 
-        (await DbContext.User.AnyAsync(u => u.UserId == user.UserId)).Should().BeFalse();
-        (await DbContext.UserSession.AnyAsync(s => s.UserId == user.UserId)).Should().BeFalse();
-        (await DbContext.RefreshToken.AnyAsync(r => r.UserId == user.UserId)).Should().BeFalse();
+        // Batch 11: حذف کاربر حذف نرم است؛ ردیف‌ها می‌مانند ولی کاربر غیرفعال و نشست و توکن‌هایش باطل می‌شوند.
+        (await DbContext.User.AsNoTracking().SingleAsync(u => u.UserId == user.UserId)).IsActive.Should().BeFalse();
+        (await DbContext.UserSession.AsNoTracking().SingleAsync(s => s.UserId == user.UserId)).Status.Should().Be(UserSession.SessionStatus.Revoked);
+        (await DbContext.RefreshToken.AsNoTracking().SingleAsync(r => r.UserId == user.UserId)).IsRevoked.Should().BeTrue();
     }
 
     // 7. UnitOfWork Rollback clears ChangeTracker

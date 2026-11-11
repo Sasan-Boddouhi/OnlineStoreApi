@@ -31,14 +31,14 @@ public sealed class UserSession
         = new List<RefreshTokenEntity>();
 
 
-    public bool IsIdleExpired(TimeSpan idleTimeout)
+    public bool IsIdleExpired(TimeSpan idleTimeout, DateTime nowUtc)
     {
-        return LastActivityUtc.Add(idleTimeout) <= DateTime.UtcNow;
+        return LastActivityUtc.Add(idleTimeout) <= nowUtc;
     }
 
-    public bool IsAbsoluteExpired()
+    public bool IsAbsoluteExpired(DateTime nowUtc)
     {
-        return AbsoluteExpiryUtc <= DateTime.UtcNow;
+        return AbsoluteExpiryUtc <= nowUtc;
     }
 
 

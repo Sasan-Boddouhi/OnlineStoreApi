@@ -239,10 +239,8 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
 
-builder.Services.AddOptions<Application.Options.JwtOptions>()
-    .Bind(builder.Configuration.GetSection(Application.Options.JwtOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+// Batch 11 (F-13): JwtOptions و سیاست نشست (Session) با قید «بی‌کاری > عمر access token» هنگام راه‌اندازی سنجیده می‌شوند.
+builder.Services.AddUserSessionOptions(builder.Configuration);
 
 builder.Services.AddAuthentication(options =>
 {

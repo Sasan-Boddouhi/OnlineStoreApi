@@ -25,6 +25,7 @@ public sealed class UserService : IUserService
     private readonly ICacheService _cacheService;
     private readonly IMapper _mapper;
     private readonly IAuditService _auditService;
+    private readonly TimeProvider _timeProvider;
 
     private const string USER_FULL_CACHE_KEY_PREFIX = "UserFull_";
     private const string ALL_USERS_FULL_CACHE_KEY = "AllUsersFull";
@@ -37,7 +38,8 @@ public sealed class UserService : IUserService
         ILogger<UserService> logger,
         ICacheService cacheService,
         IMapper mapper,
-        IAuditService auditService)
+        IAuditService auditService,
+        TimeProvider? timeProvider = null)
     {
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
@@ -46,6 +48,7 @@ public sealed class UserService : IUserService
         _cacheService = cacheService;
         _mapper = mapper;
         _auditService = auditService;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     #region GetByQueryAsync (متد اصلی جستجو)
@@ -212,6 +215,14 @@ public sealed class UserService : IUserService
             user.SecurityStamp = Guid.NewGuid().ToString();
         }
 
+        // Batch 11 (F-41): ایمیل در دیتابیس یکتاست؛ تکرار آن پیش‌تر به خطای ذخیره‌سازی می‌رسید.
+        if (!string.IsNullOrWhiteSpace(dto.Email)
+            && await _unitOfWork.Repository<User>()
+                .AnyAsync(x => x.Email == dto.Email && x.UserId != dto.UserId, cancellationToken))
+        {
+            throw new ConflictException("این ایمیل قبلاً ثبت شده است.", "USER_EMAIL_EXISTS");
+        }
+
         _mapper.Map(dto, user);
 
         if (!string.IsNullOrWhiteSpace(dto.DateOfBirth))
@@ -257,9 +268,13 @@ public sealed class UserService : IUserService
 
     #region DeleteAsync
 
+    /// <summary>
+    /// Batch 11 (F-22): «حذف» کاربر حذف نرم است: غیرفعال‌سازی + باطل کردن همهٔ نشست‌ها.
+    /// حذف واقعی با سفارش‌ها و سوابق مالی کاربر (کلید خارجی Restrict) به 500 می‌رسید و تاریخچه را از بین می‌برد.
+    /// </summary>
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Deleting user with ID: {UserId}", id);
+        _logger.LogInformation("Soft-deleting (deactivating) user with ID: {UserId}", id);
         var user = await _unitOfWork.Repository<User>().GetByIdAsync(id, cancellationToken);
         if (user is null)
         {
@@ -267,41 +282,10 @@ public sealed class UserService : IUserService
             return false;
         }
 
-        // M7.12: Explicitly delete user's RefreshTokens and Sessions first to avoid FK Restrict violation
-        var tokenRepo = _unitOfWork.Repository<RefreshTokenEntity>();
-        if (tokenRepo != null)
-        {
-            var refreshTokens = await tokenRepo
-                .ListAsync(new Spec<RefreshTokenEntity>().Where(r => r.UserId == id).AsTracking(), cancellationToken);
-            if (refreshTokens != null)
-            {
-                foreach (var token in refreshTokens)
-                {
-                    tokenRepo.Delete(token);
-                }
-            }
-        }
+        await EnsureCanChangeAccountAsync(user, removesAccess: true, cancellationToken);
+        await DeactivateAndRevokeSessionsAsync(user, cancellationToken);
 
-        var sessionRepo = _unitOfWork.Repository<UserSession>();
-        if (sessionRepo != null)
-        {
-            var sessions = await sessionRepo
-                .ListAsync(new Spec<UserSession>().Where(s => s.UserId == id).AsTracking(), cancellationToken);
-            if (sessions != null)
-            {
-                foreach (var session in sessions)
-                {
-                    sessionRepo.Delete(session);
-                }
-            }
-        }
-
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        _unitOfWork.Repository<User>().Delete(user);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation("User deleted successfully: {UserId}", id);
+        _logger.LogInformation("User {UserId} deactivated by delete request", id);
         await InvalidateUserCache(id, cancellationToken);
         return true;
     }
@@ -320,14 +304,133 @@ public sealed class UserService : IUserService
             return false;
         }
 
-        user.IsActive = isActive;
-        user.SecurityStamp = Guid.NewGuid().ToString();
-        _unitOfWork.Repository<User>().Update(user);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await EnsureCanChangeAccountAsync(user, removesAccess: !isActive, cancellationToken);
+
+        if (isActive)
+        {
+            user.IsActive = true;
+            user.SecurityStamp = Guid.NewGuid().ToString();
+            _unitOfWork.Repository<User>().Update(user);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            await DeactivateAndRevokeSessionsAsync(user, cancellationToken);
+        }
 
         _logger.LogInformation("User {UserId} active status updated to: {IsActive}", id, isActive);
         await InvalidateUserCache(id, cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Batch 11 (F-22): غیرفعال‌سازی، SecurityStamp را عوض می‌کند (access tokenهای موجود در درخواست بعدی رد می‌شوند)
+    /// و همهٔ نشست‌ها و refresh tokenهای کاربر را در همان SaveChanges باطل می‌کند.
+    /// </summary>
+    private async Task DeactivateAndRevokeSessionsAsync(User user, CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        user.IsActive = false;
+        user.SecurityStamp = Guid.NewGuid().ToString();
+        _unitOfWork.Repository<User>().Update(user);
+
+        var sessions = await _unitOfWork.Repository<UserSession>().ListAsync(
+            new Spec<UserSession>()
+                .Where(s => s.UserId == user.UserId && s.Status == UserSession.SessionStatus.Active)
+                .AsTracking(),
+            cancellationToken);
+        foreach (var session in sessions)
+        {
+            session.Status = UserSession.SessionStatus.Revoked;
+            session.RevokedAtUtc = now;
+        }
+
+        var tokens = await _unitOfWork.Repository<RefreshTokenEntity>().ListAsync(
+            new Spec<RefreshTokenEntity>()
+                .Where(t => t.UserId == user.UserId && !t.IsRevoked)
+                .AsTracking(),
+            cancellationToken);
+        foreach (var token in tokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAtUtc = now;
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        _logger.LogWarning(
+            "User {UserId} deactivated; {SessionCount} sessions and {TokenCount} refresh tokens revoked",
+            user.UserId, sessions.Count, tokens.Count);
+    }
+
+    /// <summary>
+    /// Batch 11 (F-22): گاردهای تغییر حساب کاربری توسط ادمین. ترتیب بررسی:
+    ///  ۱. غیرفعال‌سازی یا حذف حساب خود → 409 CANNOT_DEACTIVATE_SELF
+    ///  ۲. از دست رفتن آخرین مدیر ارشد فعال → 409 LAST_SUPERADMIN
+    ///  ۳. تغییر حساب مدیر ارشد توسط کسی که خودش مدیر ارشد نیست → 403 ADMIN_CANNOT_MODIFY_SUPERADMIN
+    /// </summary>
+    private async Task EnsureCanChangeAccountAsync(User target, bool removesAccess, CancellationToken cancellationToken)
+    {
+        var currentUserId = _currentUserService.GetCurrentUserId();
+
+        if (removesAccess && currentUserId == target.UserId)
+        {
+            _logger.LogWarning("User {UserId} attempted to deactivate or delete their own account", currentUserId);
+            throw new ConflictException(
+                "نمی‌توانید حساب کاربری خودتان را غیرفعال یا حذف کنید.",
+                "CANNOT_DEACTIVATE_SELF");
+        }
+
+        await EnsureSuperAdminTargetAllowedAsync(target, currentUserId, losesSuperAdmin: removesAccess, cancellationToken);
+    }
+
+    private async Task EnsureSuperAdminTargetAllowedAsync(
+        User target,
+        int currentUserId,
+        bool losesSuperAdmin,
+        CancellationToken cancellationToken)
+    {
+        var superAdminRole = await _unitOfWork.Repository<Role>().FirstOrDefaultAsync(
+            new Spec<Role>().Where(r => r.Code == SuperAdminRoleCode), cancellationToken);
+        if (superAdminRole is null)
+            return;
+
+        var superAdminRoleId = superAdminRole.RoleId;
+        var userRoles = _unitOfWork.Repository<UserRole>();
+
+        var targetIsSuperAdmin = await userRoles.AnyAsync(
+            ur => ur.UserId == target.UserId && ur.RoleId == superAdminRoleId, cancellationToken);
+        if (!targetIsSuperAdmin)
+            return;
+
+        if (losesSuperAdmin && target.IsActive)
+        {
+            var anotherActiveSuperAdmin = await userRoles.AnyAsync(
+                ur => ur.RoleId == superAdminRoleId && ur.UserId != target.UserId && ur.User.IsActive,
+                cancellationToken);
+            if (!anotherActiveSuperAdmin)
+            {
+                _logger.LogWarning(
+                    "User {CurrentUserId} attempted to remove the last active SuperAdmin {TargetUserId}",
+                    currentUserId, target.UserId);
+                throw new ConflictException(
+                    "آخرین مدیر ارشد فعال را نمی‌توان غیرفعال، حذف یا از نقش مدیر ارشد خارج کرد.",
+                    "LAST_SUPERADMIN");
+            }
+        }
+
+        var currentUserIsSuperAdmin = await userRoles.AnyAsync(
+            ur => ur.UserId == currentUserId && ur.RoleId == superAdminRoleId, cancellationToken);
+        if (!currentUserIsSuperAdmin)
+        {
+            _logger.LogWarning(
+                "User {CurrentUserId} (non-SuperAdmin) attempted to modify SuperAdmin {TargetUserId}",
+                currentUserId, target.UserId);
+            throw new ForbiddenException(
+                "فقط مدیر ارشد می‌تواند حساب یا نقش یک مدیر ارشد را تغییر دهد.",
+                "ADMIN_CANNOT_MODIFY_SUPERADMIN");
+        }
     }
 
     #endregion
@@ -409,6 +512,13 @@ public sealed class UserService : IUserService
             _logger.LogWarning("User {UserId} attempted to remove their own SuperAdmin role", userId);
             throw new BusinessException("CANNOT_REVOKE_OWN_SUPERADMIN", "CANNOT_REVOKE_OWN_SUPERADMIN");
         }
+
+        // Batch 11 (F-22): نقش‌های یک مدیر ارشد را فقط مدیر ارشد تغییر می‌دهد و آخرین مدیر ارشد فعال تنزل نمی‌یابد.
+        await EnsureSuperAdminTargetAllowedAsync(
+            user,
+            currentUserId,
+            losesSuperAdmin: !roleIds.Contains(superAdminRole.RoleId),
+            cancellationToken);
 
         // --- Transaction wrapper (Q2 fix) ---
         // Q5 trade-off: User has no RowVersion column, so we rely on explicit transaction
