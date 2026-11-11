@@ -176,6 +176,11 @@ public sealed class ProductService : IProductService
         activity?.SetTag("product.subcategory_id", dto.SubcategoryId);
 
         _logger.LogInformation("Creating product with name: {ProductName}", dto.Name);
+
+        // Batch 49 (F-30): پیش از تراکنش، تا 422 در catch عمومی به PRODUCT_CREATE_ERROR تبدیل نشود.
+        if (dto.BrandId.HasValue)
+            await EnsureBrandAssignableAsync(dto.BrandId.Value, cancellationToken);
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
         try
@@ -247,6 +252,11 @@ public sealed class ProductService : IProductService
                 if (exists)
                     throw new BusinessException("محصولی با این نام قبلاً ثبت شده است", "PRODUCT_NAME_DUPLICATE");
             }
+
+            // Batch 49 (F-30): فقط برند تازه بررسی می‌شود؛ ذخیرهٔ دوبارهٔ محصولی که برندش بعداً
+            // غیرفعال شده، نباید رد شود. null یعنی «بدون تغییر» (ProductProfile).
+            if (dto.BrandId.HasValue && dto.BrandId != entity.BrandId)
+                await EnsureBrandAssignableAsync(dto.BrandId.Value, cancellationToken);
 
             // Phase 9 (R40): تغییر قیمت باید ردپا داشته باشد.
             // قیمت مهم‌ترین فیلد تجاری است و تا امروز هیچ سابقه‌ای از تغییرش نبود.
@@ -374,6 +384,18 @@ public sealed class ProductService : IProductService
             .AnyAsync(x => x.Name == dto.Name, cancellationToken);
         if (duplicateName)
             throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.", "PRODUCT_NAME_DUPLICATE");
+    }
+
+    /// <summary>
+    /// Batch 49 (F-30): برند انتخاب‌شده باید وجود داشته باشد و فعال باشد.
+    /// </summary>
+    private async Task EnsureBrandAssignableAsync(int brandId, CancellationToken cancellationToken)
+    {
+        var assignable = await _unitOfWork.Repository<Brand>()
+            .AnyAsync(b => b.BrandId == brandId && b.IsActive, cancellationToken);
+
+        if (!assignable)
+            throw new UnprocessableEntityException("برند انتخاب‌شده وجود ندارد یا غیرفعال است.", "INVALID_BRAND");
     }
 
     #endregion

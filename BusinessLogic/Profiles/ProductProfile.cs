@@ -38,7 +38,9 @@ public class ProductProfile : Profile
         CreateMap<CreateProductDto, Product>()
             .ConfigureDbDestination()
             .ForMember(dest => dest.ProductId, opt => opt.Ignore())
-            .ForMember(dest => dest.BrandId, opt => opt.Ignore())
+            // Batch 49 (F-30): BrandId پیش‌تر Ignore می‌شد و برند هرگز ثبت نمی‌شد.
+            // اعتبار برند (موجود و فعال) در ProductService بررسی می‌شود.
+            .ForMember(dest => dest.BrandId, opt => opt.MapFrom(src => src.BrandId))
             .ForMember(dest => dest.IsActive, opt => opt.MapFrom(src => true))
             // Phase 9 (R33): کش امتیاز ورودی کاربر نیست.
             .ForMember(dest => dest.AverageRating, opt => opt.Ignore())
@@ -48,7 +50,12 @@ public class ProductProfile : Profile
         // تا Update جزئی، مقدار فعلی را صفر/خالی نکند.
         CreateMap<UpdateProductDto, Product>()
             .ConfigureDbDestination()
-            .ForMember(dest => dest.BrandId, opt => opt.Ignore())
+            // Batch 49 (F-30): مانند Unit/IsActive، null یعنی «بدون تغییر»، نه «حذف برند».
+            .ForMember(dest => dest.BrandId, opt =>
+            {
+                opt.PreCondition(src => src.BrandId.HasValue);
+                opt.MapFrom(src => src.BrandId);
+            })
             .ForMember(dest => dest.IsActive, opt =>
             {
                 opt.PreCondition(src => src.IsActive.HasValue);

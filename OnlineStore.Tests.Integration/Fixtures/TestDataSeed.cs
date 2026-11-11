@@ -128,7 +128,45 @@ public static class TestDataSeed
             });
             await db.SaveChangesAsync();
         }
+
+        // ۵. انبار پلتفرم (Batch 49، F-29): InventoryService دیگر استان/شهر/آدرس «Platform»
+        // را خودکار نمی‌سازد؛ در محیط واقعی مدیر پس از استقرار انبار پلتفرم را می‌سازد
+        // (docs/deployment.md §8). تست‌ها همان وضعیت «پیکربندی‌شده» را از اینجا می‌گیرند.
+        if (adminUser != null && !await db.Warehouse.AnyAsync(w => w.SellerId == null && w.Name == PlatformWarehouseName))
+        {
+            var province = new Province { ProvinceName = "استان انبار پلتفرم (تست)" };
+            db.Province.Add(province);
+            await db.SaveChangesAsync();
+
+            var city = new City { CityName = "شهر انبار پلتفرم (تست)", ProvinceId = province.ProvinceId };
+            db.City.Add(city);
+            await db.SaveChangesAsync();
+
+            var address = new Address
+            {
+                CityId = city.CityId,
+                Plaque = "1",
+                Unit = "1",
+                PostalCode = "1111111111",
+                RecipientFirstName = "انبار",
+                RecipientLastName = "پلتفرم",
+                UserId = adminUser.UserId
+            };
+            db.Address.Add(address);
+            await db.SaveChangesAsync();
+
+            db.Warehouse.Add(new Warehouse
+            {
+                Name = PlatformWarehouseName,
+                AddressId = address.AddressId,
+                SellerId = null
+            });
+            await db.SaveChangesAsync();
+        }
     }
+
+    /// <summary>نام انبار پلتفرمی که Seed تست می‌سازد (Batch 49).</summary>
+    public const string PlatformWarehouseName = "Platform Warehouse (test seed)";
 
     private static async Task<Dictionary<string, Role>> SeedRbacAsync(AppDbContext db)
     {

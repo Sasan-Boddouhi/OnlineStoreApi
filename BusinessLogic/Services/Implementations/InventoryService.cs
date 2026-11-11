@@ -130,6 +130,8 @@ public sealed class InventoryService : IInventoryService
     ///    اعمال می‌شود.
     /// 2) انبار اختیاری: فروشندهٔ تازه هیچ انباری ندارد و ساخت انبار خودش
     ///    یک فرآیند چندمرحله‌ای است. بدون پیش‌فرض، R49 دوباره ساخته می‌شد.
+    ///    (Batch 49: پیش‌فرض، انبار پلتفرمِ موجود است و دیگر ساخته نمی‌شود؛
+    ///    انبار صریح باید مال فروشندهٔ Listing یا انبار پلتفرم باشد.)
     /// 3) حالت سخت‌گیرانه: موجودی باید مثبت باشد؛ «افزودن صفر» بی‌معناست
     ///    و «افزودن منفی» باید از مسیر موجودی‌سنجی رد شود، نه اینجا.
     /// </summary>
@@ -153,6 +155,8 @@ public sealed class InventoryService : IInventoryService
         var warehouse = await _unitOfWork.Repository<Warehouse>()
             .GetByIdAsync(targetWarehouseId, cancellationToken)
             ?? throw new NotFoundException("انبار یافت نشد.", "WAREHOUSE_NOT_FOUND");
+
+        EnsureWarehouseUsableForListing(warehouse, listing);
 
         var row = await _unitOfWork.Repository<Inventory>()
             .FirstOrDefaultAsync(
@@ -227,6 +231,8 @@ public sealed class InventoryService : IInventoryService
             .GetByIdAsync(warehouseId, cancellationToken)
             ?? throw new NotFoundException("انبار یافت نشد.", "WAREHOUSE_NOT_FOUND");
 
+        EnsureWarehouseUsableForListing(warehouse, listing);
+
         var row = await _unitOfWork.Repository<Inventory>()
             .FirstOrDefaultAsync(
                 new Spec<Inventory>()
@@ -296,11 +302,23 @@ public sealed class InventoryService : IInventoryService
     }
 
     /// <summary>
-    /// انبار پیش‌فرض پلتفرم (SellerId == null). اگر وجود نداشته باشد ساخته می‌شود.
+    /// Batch 49 (F-29): موجودی یک Listing فقط در انبار فروشندهٔ همان Listing یا در انبار
+    /// پلتفرم (SellerId == null) ثبت می‌شود — برای مدیر هم. موجودیِ نشسته در انبار
+    /// فروشندهٔ دیگر، کالایی است که فروشندهٔ Listing اصلاً در اختیار ندارد.
+    /// </summary>
+    private static void EnsureWarehouseUsableForListing(Warehouse warehouse, SellerProduct listing)
+    {
+        if (warehouse.SellerId is not null && warehouse.SellerId != listing.SellerId)
+            throw new ForbiddenException(
+                "این انبار متعلق به فروشندهٔ این پیشنهاد فروش نیست.", "WAREHOUSE_FORBIDDEN");
+    }
+
+    /// <summary>
+    /// انبار پیش‌فرض پلتفرم (SellerId == null)، از داده‌ای که از قبل وجود دارد.
     ///
-    /// ساختن خودکار عمدی است: بدون آن، اولین فروشندهٔ یک نصب تازه هرگز
-    /// نمی‌تواند موجودی بگذارد و R49 فقط ظاهراً حل می‌شود. لاگ هشدار
-    /// می‌دهد تا این «ساختن ضمنی» در تاریکی نماند.
+    /// Batch 49 (F-29): پیش‌تر اگر انبار پلتفرم نبود، استان/شهر/آدرس «Platform» به‌صورت ضمنی
+    /// ساخته می‌شد و در فهرست عمومی استان‌ها و شهرها پیدا می‌شد. اکنون مدیر پس از استقرار
+    /// انبار پلتفرم را می‌سازد (docs/deployment.md §8) و تا آن زمان پاسخ 409 است.
     /// </summary>
     private async Task<int> ResolveDefaultWarehouseIdAsync(CancellationToken cancellationToken)
     {
@@ -315,54 +333,13 @@ public sealed class InventoryService : IInventoryService
             return warehouse.WarehouseId;
 
         _logger.LogWarning(
-            "No platform warehouse found; provisioning one so that stock can be recorded.");
+            "No platform warehouse is configured; stock without an explicit warehouse cannot be recorded.");
 
-        // شناسه‌ها identity هستند، پس بعد از هر Add باید SaveChanges بزنیم؛
-        // وگرنه ProvinceId/CityId همچنان صفر می‌ماند و FK می‌شکند.
-        var now = DateTime.UtcNow;
-
-        var province = new Province { ProvinceName = "Platform", CreatedOn = now, ModifiedOn = now };
-        await _unitOfWork.Repository<Province>().AddAsync(province, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var city = new City
-        {
-            CityName = "Platform",
-            ProvinceId = province.ProvinceId,
-            CreatedOn = now,
-            ModifiedOn = now
-        };
-        await _unitOfWork.Repository<City>().AddAsync(city, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var address = new Address
-        {
-            CityId = city.CityId,
-            Plaque = "1",
-            Unit = "1",
-            PostalCode = "0000000000",
-            RecipientFirstName = "Platform",
-            RecipientLastName = "Warehouse",
-            UserId = _currentUser.GetCurrentUserId(),
-            CreatedOn = now,
-            ModifiedOn = now
-        };
-        await _unitOfWork.Repository<Address>().AddAsync(address, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var created = new Warehouse
-        {
-            Name = "Platform Warehouse",
-            AddressId = address.AddressId,
-            SellerId = null,
-            CreatedOn = now,
-            ModifiedOn = now
-        };
-        await _unitOfWork.Repository<Warehouse>().AddAsync(created, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return created.WarehouseId;
+        throw new ConflictException(
+            "انبار پیش‌فرض پلتفرم تعریف نشده است. انبار مقصد را مشخص کنید یا از مدیر بخواهید انبار پلتفرم را ثبت کند.",
+            "PLATFORM_WAREHOUSE_NOT_CONFIGURED");
     }
+
     private async Task<IReadOnlyList<Inventory>> GetActiveRowsAsync(int listingId, CancellationToken cancellationToken)
     {
         var spec = new Spec<Inventory>()

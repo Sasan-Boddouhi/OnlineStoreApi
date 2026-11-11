@@ -77,13 +77,21 @@ public class Phase10InventoryTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task AddStock_NoWarehouseGiven_ProvisionsPlatformWarehouseOnce()
+    public async Task AddStock_NoWarehouseGiven_ReusesExistingPlatformWarehouse()
     {
+        // Batch 49 (F-29): انبار پلتفرم دیگر ضمنی ساخته نمی‌شود؛ از Seed تست می‌آید
+        // (در محیط واقعی مدیر آن را می‌سازد). این تست پیش‌تر «ساختن یک‌باره» را قفل می‌کرد.
         var (seller, listingId) = await CreateReadyListingAsync();
         SetCurrentUser(seller.UserId);
 
-        await InventoryService.AddStockAsync(listingId, null, 5m);
-        await InventoryService.AddStockAsync(listingId, null, 5m);
+        var seeded = await DbContext.Warehouse.AsNoTracking()
+            .SingleAsync(w => w.SellerId == null && w.Name == TestDataSeed.PlatformWarehouseName);
+
+        var first = await InventoryService.AddStockAsync(listingId, null, 5m);
+        var second = await InventoryService.AddStockAsync(listingId, null, 5m);
+
+        first.WarehouseId.Should().Be(seeded.WarehouseId);
+        second.WarehouseId.Should().Be(seeded.WarehouseId);
 
         var platformWarehouses = await DbContext.Warehouse.AsNoTracking()
             .Where(w => w.SellerId == null).ToListAsync();

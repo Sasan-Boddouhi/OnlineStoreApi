@@ -255,6 +255,8 @@ Retry delay = 5 seconds
 
 This allows the API container to start while SQL Server is still becoming ready.
 
+**Platform warehouse (Batch 49).** Migrations do not create a platform warehouse, and the API no longer invents a "Platform" province, city and address when stock is added without a warehouse. After the first deployment an admin must create one real platform warehouse: create an address for the admin account (`POST /api/v1/users/me/addresses`) and then `POST /api/v1/warehouses` as admin with that `addressId` and no `sellerId`. Until it exists, adding stock without a `warehouseId` returns `409 PLATFORM_WAREHOUSE_NOT_CONFIGURED`; stock sent to a seller's own warehouse keeps working. Old "Platform" province/city rows created by earlier versions are left in place and can be renamed or reused by an admin.
+
 ## 9. Health Endpoint
 
 The API exposes:
