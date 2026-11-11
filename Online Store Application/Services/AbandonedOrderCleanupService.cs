@@ -2,6 +2,7 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Interfaces;
 using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Services.Implementations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -165,6 +166,26 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             return false;
         }
 
+        // Batch 5 (F-07): Verify یک پرداخت آغاز شده و نتیجه‌اش نامعلوم است (مثلاً timeout)؛ شاید پول برداشته
+        // شده باشد. سفارش لغو و موجودی آزاد نمی‌شود؛ فقط یک بار برای بررسی دستی ثبت می‌شود. تأیید دوبارهٔ همان
+        // پرداخت (توسط مشتری یا ادمین) وضعیت را قطعی می‌کند و اجرای بعدی جاب بر همان اساس عمل می‌کند.
+        var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(unitOfWork, order.Payments, cancellationToken);
+        if (unresolved.Count > 0)
+        {
+            var auditService = scope.ServiceProvider.GetRequiredService<IAuditService>();
+            foreach (var payment in order.Payments.Where(p => unresolved.Contains(p.PaymentId)))
+            {
+                await FlagForReviewOnceAsync(
+                    unitOfWork,
+                    auditService,
+                    order,
+                    payment,
+                    "the payment's verification outcome is unknown (verify started, no definitive gateway answer); cleanup skipped the order — verify the payment again to resolve it",
+                    cancellationToken);
+            }
+            return false;
+        }
+
         order.Cancel();
 
         foreach (var group in order.SellerGroups)
@@ -177,14 +198,12 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             await inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
         }
 
-        foreach (var payment in order.Payments)
-        {
-            if (payment.State is PaymentState.Pending or PaymentState.Initiated)
-            {
-                payment.TransitionTo(PaymentState.Cancelled, "abandoned: order cancelled by timeout");
-                unitOfWork.Repository<Payment>().Update(payment);
-            }
-        }
+        await PaymentLifecycle.CancelOpenPaymentsAsync(
+            unitOfWork,
+            scope.ServiceProvider.GetRequiredService<IAuditService>(),
+            order.Payments,
+            "abandoned: order cancelled by timeout",
+            cancellationToken);
 
         // M7.13: Restore coupon quota if abandoned order is cancelled
         if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
@@ -220,9 +239,30 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         Payment payment,
         CancellationToken cancellationToken)
     {
+        await FlagForReviewOnceAsync(
+            unitOfWork,
+            auditService,
+            order,
+            payment,
+            "order is still Pending although the payment Succeeded; cleanup skipped it",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// یک مورد Payment.ReviewRequired برای پرداخت ثبت می‌کند، مگر اینکه قبلاً (اینجا یا در مسیر verify/webhook)
+    /// ثبت شده باشد. Batch 5 همین را برای پرداختی که نتیجهٔ تأییدش نامعلوم است به کار می‌برد.
+    /// </summary>
+    private async Task FlagForReviewOnceAsync(
+        IUnitOfWork unitOfWork,
+        IAuditService auditService,
+        Order order,
+        Payment payment,
+        string issue,
+        CancellationToken cancellationToken)
+    {
         _logger.LogError(
-            "Order {OrderId} is Pending but payment {PaymentId} already Succeeded; skipped by the abandoned-order cleanup (no cancel, no stock release). Needs manual review.",
-            order.OrderId, payment.PaymentId);
+            "Abandoned-order cleanup skipped order {OrderId} (payment {PaymentId}): {Issue}. Needs manual review.",
+            order.OrderId, payment.PaymentId, issue);
 
         var paymentKey = payment.PaymentId.ToString();
         var alreadyFlagged = await unitOfWork.Repository<AuditLog>()
@@ -240,7 +280,7 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             nameof(Payment),
             paymentKey,
             $"source=abandoned-order cleanup | order={order.OrderId} | amount={payment.Amount} " +
-            $"| paymentState={payment.State} | issues: order is still Pending although the payment Succeeded; cleanup skipped it",
+            $"| paymentState={payment.State} | issues: {issue}",
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

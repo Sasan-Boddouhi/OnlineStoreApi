@@ -679,7 +679,24 @@ public sealed class OrderService : IOrderService
         {
             var order = await GetCancellableOrderAsync(orderId, cancellationToken);
 
+            // Batch 5 (F-05): پرداخت‌های باز سفارش هم لغو می‌شوند تا Authority بازمانده دیگر Verify (برداشت) نشود؛
+            // زرین‌پال پول تأییدنشده را خودکار به خریدار برمی‌گرداند. اما اگر Verify یکی از آن‌ها آغاز شده و نتیجه‌اش
+            // نامعلوم است، شاید پول برداشته شده باشد؛ لغو بی‌صدای آن پول را بی‌ردپا می‌کند ⇒ 409.
+            var orderPayments = (await _unitOfWork.Repository<Payment>().ListAsync(
+                    new Spec<Payment>().Where(p => p.OrderId == orderId).AsTracking(),
+                    cancellationToken))
+                .ToList();
+
+            var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, orderPayments, cancellationToken);
+            if (unresolved.Count > 0)
+                throw new ConflictException(
+                    "پرداخت این سفارش در حال تأیید است و هنوز نتیجهٔ قطعی ندارد؛ ابتدا تأیید پرداخت را تکرار کنید.",
+                    "PAYMENT_VERIFICATION_PENDING");
+
             order.Cancel();
+
+            await PaymentLifecycle.CancelOpenPaymentsAsync(
+                _unitOfWork, _auditService, orderPayments, "order cancelled", cancellationToken);
 
             // R6: گروه‌های فروشنده هم باید لغو شوند، وگرنه سفارش لغوشده در گزارش
             // تسویه با وضعیت Processing می‌ماند و پول پرداخت‌نشده نشان می‌دهد.

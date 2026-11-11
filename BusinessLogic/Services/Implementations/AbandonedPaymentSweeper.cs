@@ -52,7 +52,14 @@ public sealed class AbandonedPaymentSweeper : IAbandonedPaymentSweeper
         if (stale.Count == 0)
             return 0;
 
-        foreach (var payment in stale)
+        // Batch 5 (F-07): Verify این پرداخت‌ها آغاز شده و نتیجه‌اش نامعلوم است؛ شاید پول برداشته شده باشد.
+        // لغو نمی‌شوند، فقط یک بار برای بررسی دستی ثبت می‌شوند. تأیید دوباره وضعیت را قطعی می‌کند.
+        var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, stale, cancellationToken);
+        foreach (var payment in stale.Where(p => unresolved.Contains(p.PaymentId)))
+            await FlagUnresolvedOnceAsync(payment, cancellationToken);
+
+        var cancelled = 0;
+        foreach (var payment in stale.Where(p => !unresolved.Contains(p.PaymentId)))
         {
             payment.TransitionTo(PaymentState.Cancelled, "abandoned: no gateway confirmation");
 
@@ -64,12 +71,38 @@ public sealed class AbandonedPaymentSweeper : IAbandonedPaymentSweeper
                 cancellationToken);
 
             _unitOfWork.Repository<Payment>().Update(payment);
+            cancelled++;
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogWarning("Cancelled {Count} abandoned payments older than {Cutoff:u}", stale.Count, cutoff);
+        _logger.LogWarning("Cancelled {Count} abandoned payments older than {Cutoff:u}", cancelled, cutoff);
 
-        return stale.Count;
+        return cancelled;
+    }
+
+    private async Task FlagUnresolvedOnceAsync(Payment payment, CancellationToken cancellationToken)
+    {
+        _logger.LogError(
+            "Payment {PaymentId} is Pending with an unknown verification outcome; the abandoned-payment sweep skipped it. Needs manual review.",
+            payment.PaymentId);
+
+        var paymentKey = payment.PaymentId.ToString();
+        var alreadyFlagged = await _unitOfWork.Repository<AuditLog>().AnyAsync(
+            new Spec<AuditLog>().Where(a => a.Action == PaymentLifecycle.ReviewRequiredAction
+                                         && a.EntityName == nameof(Payment)
+                                         && a.EntityId == paymentKey),
+            cancellationToken);
+
+        if (alreadyFlagged)
+            return;
+
+        await _auditService.RecordAsync(
+            PaymentLifecycle.ReviewRequiredAction,
+            nameof(Payment),
+            paymentKey,
+            $"source=abandoned-payment sweep | order={payment.OrderId} | amount={payment.Amount} | paymentState={payment.State} " +
+            "| issues: the payment's verification outcome is unknown (verify started, no definitive gateway answer); the sweep skipped it — verify the payment again to resolve it",
+            cancellationToken);
     }
 }

@@ -109,7 +109,7 @@ public sealed class PaymentService : IPaymentService
     {
         var issues = new List<string>();
 
-        await SyncOrderAfterCaptureAsync(payment, issues);
+        await SyncOrderAfterCaptureAsync(payment, issues, gatewayCapture: false);
 
         if (issues.Count > 0)
             await RecordReviewRequiredAsync(payment, payment.TransactionId, "manual", issues);
@@ -117,6 +117,14 @@ public sealed class PaymentService : IPaymentService
 
     // ==================== Initiate ====================
 
+    /// <summary>
+    /// شروع پرداخت. Batch 5 (F-06):
+    ///  • سفارشی که پرداخت موفق دارد → 409 ORDER_ALREADY_PAID؛ سفارش لغوشده/ارسال‌شده/… → 409 ORDER_NOT_PAYABLE.
+    ///  • اگر Verify یکی از پرداخت‌های باز سفارش آغاز شده و نتیجه‌اش نامعلوم است → 409 PAYMENT_VERIFICATION_PENDING.
+    ///  • پرداخت باز جوان‌تر از <see cref="PaymentGatewaySettings.OpenPaymentReuseMinutes"/> با همان مبلغ دوباره
+    ///    برگردانده می‌شود (isReplay=true، همان Authority)؛ پرداخت باز قدیمی‌تر لغو و پرداخت تازه ساخته می‌شود.
+    ///  • مبلغ، ریال صحیح است: مبلغ ذخیره‌شده روی Payment دقیقاً همانی است که به درگاه فرستاده و در Verify تکرار می‌شود.
+    /// </summary>
     public async Task<InitiatePaymentResultDto> InitiateAsync(
         int orderId,
         string? idempotencyKey,
@@ -148,31 +156,38 @@ public sealed class PaymentService : IPaymentService
                 _logger.LogInformation(
                     "Idempotent replay for key {Key}, payment {PaymentId}", key, existing.PaymentId);
 
-                return new InitiatePaymentResultDto
-                {
-                    PaymentId = existing.PaymentId,
-                    OrderId = orderId,
-                    Amount = existing.Amount,
-                    State = existing.State,
-                    Authority = existing.TransactionId,
-                    RedirectUrl = existing.TransactionId is null
-                        ? null
-                        : new Uri(new Uri(_settings.BaseUrl), $"pg/StartPay/{existing.TransactionId}").ToString(),
-                    IsReplay = true
-                };
+                return ToReplayResult(existing, orderId);
             }
         }
 
-        // وضعیت سفارش: پرداخت برای سفارش در انتظار یا در حال پردازش معنا دارد.
-        if (order.Status is not (OrderStatus.Pending or OrderStatus.Processing))
-            throw new ConflictException(
-                "این سفارش در وضعیتی نیست که بتوان برایش پرداخت کرد.",
-                "ORDER_NOT_PAYABLE");
+        var payments = await ListOrderPaymentsAsync(orderId, cancellationToken);
+        var refusal = GetPayabilityRefusal(order, payments, payment: null);
+        if (refusal is not null)
+            throw new ConflictException(refusal.Value.Message, refusal.Value.Code);
 
-        var amount = order.TotalAmount;
+        var amount = ToWholeRial(order.TotalAmount, orderId);
 
         if (amount <= 0)
             throw new BusinessException("مبلغ سفارش نامعتبر است.", "INVALID_PAYMENT_AMOUNT");
+
+        var openPayments = payments.Where(PaymentLifecycle.IsOpen).ToList();
+        if (openPayments.Count > 0)
+        {
+            var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, openPayments, cancellationToken);
+            if (unresolved.Count > 0)
+                throw new ConflictException(
+                    "تأیید پرداخت قبلی این سفارش هنوز نتیجهٔ قطعی ندارد؛ ابتدا همان پرداخت را دوباره تأیید کنید.",
+                    "PAYMENT_VERIFICATION_PENDING");
+
+            var reusable = FindReusableOpenPayment(openPayments, amount);
+            if (reusable is not null)
+            {
+                _logger.LogInformation(
+                    "Initiate for order {OrderId} returns open payment {PaymentId} instead of creating a second one",
+                    orderId, reusable.PaymentId);
+                return ToReplayResult(reusable, orderId);
+            }
+        }
 
         // ---- فراخوانی درگاه (ابتدا درگاه صدا زده می‌شود تا در صورت شکست فاکتور بی‌مصرف ساخته نشود) ----
         var initiation = await _gateway.InitiateAsync(
@@ -196,6 +211,10 @@ public sealed class PaymentService : IPaymentService
         {
             var invoice = await EnsureInvoiceAsync(order, cancellationToken);
 
+            // Batch 5 (F-06): در هر لحظه حداکثر یک پرداخت باز برای سفارش؛ پرداخت باز قدیمی دیگر Verify نمی‌شود.
+            await PaymentLifecycle.CancelOpenPaymentsAsync(
+                _unitOfWork, _auditService, openPayments, "superseded by a new payment initiation", cancellationToken);
+
             payment = new Payment
             {
                 Amount = amount,
@@ -216,12 +235,12 @@ public sealed class PaymentService : IPaymentService
 
             // ثبت شروع پرداخت در AuditLog (بعد از دریافت شناسه از دیتابیس).
             await AuditAsync(
-                "Payment.Initiated", payment.PaymentId, $"order={orderId}", cancellationToken);
+                "Payment.Initiated", payment.PaymentId, $"order={orderId} | amount={amount} IRR", cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
         }
-        catch (DbUpdateException ex) when (key is not null)
+        catch (DbUpdateException ex) when (key is not null && ex is not DbUpdateConcurrencyException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogWarning(ex, "Concurrent payment insert for key {Key}; returning existing", key);
@@ -231,16 +250,7 @@ public sealed class PaymentService : IPaymentService
             if (winner is null)
                 throw;
 
-            return new InitiatePaymentResultDto
-            {
-                PaymentId = winner.PaymentId,
-                OrderId = winner.OrderId ?? orderId,
-                Amount = winner.Amount,
-                State = winner.State,
-                Authority = winner.TransactionId,
-                RedirectUrl = initiation.RedirectUrl,
-                IsReplay = true
-            };
+            return ToReplayResult(winner, orderId);
         }
         catch
         {
@@ -258,6 +268,49 @@ public sealed class PaymentService : IPaymentService
             RedirectUrl = initiation.RedirectUrl,
             IsReplay = false
         };
+    }
+
+    private InitiatePaymentResultDto ToReplayResult(Payment existing, int orderId) => new()
+    {
+        PaymentId = existing.PaymentId,
+        OrderId = existing.OrderId ?? orderId,
+        Amount = existing.Amount,
+        State = existing.State,
+        Authority = existing.TransactionId,
+        // Batch 5 (F-28): آدرس صفحهٔ پرداخت فقط از درگاه ساخته می‌شود (همان آدرس شروع اول، سندباکس‌آگاه).
+        RedirectUrl = existing.TransactionId is null ? null : _gateway.BuildRedirectUrl(existing.TransactionId),
+        IsReplay = true
+    };
+
+    private Payment? FindReusableOpenPayment(IEnumerable<Payment> openPayments, decimal amount)
+    {
+        if (_settings.OpenPaymentReuseMinutes <= 0)
+            return null;
+
+        var cutoff = DateTime.UtcNow.AddMinutes(-_settings.OpenPaymentReuseMinutes);
+
+        return openPayments
+            .Where(p => p.State == PaymentState.Pending
+                        && p.TransactionId is not null
+                        && p.Amount == amount
+                        && p.LastStateChangedAtUtc >= cutoff)
+            .OrderByDescending(p => p.PaymentId)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Batch 5 (F-27): مبالغ به ریال‌اند و درگاه فقط عدد صحیح می‌گیرد. اگر جمع سفارش کسر ریال داشته باشد
+    /// (مثلاً تخفیف درصدی که تا دو رقم اعشار گرد می‌شود — مدل پول در Batch 10)، کسر حذف می‌شود؛ همان رفتار
+    /// قبلیِ (long) در درگاه، با این تفاوت که اکنون مبلغ ذخیره‌شدهٔ Payment با مبلغ برداشت‌شده یکی است.
+    /// </summary>
+    private decimal ToWholeRial(decimal orderTotal, int orderId)
+    {
+        var whole = decimal.Floor(orderTotal);
+        if (whole != orderTotal)
+            _logger.LogWarning(
+                "Order {OrderId} total {Total} has a fraction of a rial; payment amount is {Whole} IRR",
+                orderId, orderTotal, whole);
+        return whole;
     }
 
     // ==================== Verify ====================
@@ -288,34 +341,232 @@ public sealed class PaymentService : IPaymentService
         if (payment.State == PaymentState.Succeeded)
             return _mapper.Map<PaymentDto>(payment);
 
-        if (payment.State != PaymentState.Pending)
-            throw new ConflictException(
-                "این پرداخت در وضعیت قابل تأیید نیست.",
-                "PAYMENT_NOT_VERIFIABLE");
+        return await VerifyWithGatewayAsync(payment, "verify");
+    }
 
-        var verification = await _gateway.VerifyAsync(authority, payment.Amount, cancellationToken);
+    /// <summary>
+    /// Batch 5 — مسیر واحد تأیید برای verify و webhook:
+    ///  ۱) F-05/F-06: اگر سفارش دیگر قابل پرداخت نیست (لغو/منقضی/ارسال‌شده) یا پرداخت موفق دیگری دارد، Verify
+    ///     صدا زده نمی‌شود؛ پرداخت با دلیل روشن Cancelled و در AuditLog (Payment.NotVerified) ثبت می‌شود و زرین‌پال
+    ///     پولِ تأییدنشده را خودکار به خریدار برمی‌گرداند. → 409 ORDER_NOT_PAYABLE / ORDER_ALREADY_PAID
+    ///  ۲) F-06 (رقابت): پیش از Verify، پرداخت «ادعا» می‌شود: پرداخت‌های باز دیگر سفارش لغو و خود پرداخت با
+    ///     RowVersion به‌روزرسانی می‌شود، در یک تراکنش. از دو Verify هم‌زمان برای دو پرداخت یک سفارش فقط یکی به
+    ///     درگاه می‌رسد؛ دیگری تعارض هم‌زمانی می‌گیرد و پس از بارگذاری دوباره رد می‌شود.
+    ///  ۳) F-07: Verified/AlreadyVerified ⇒ ثبت قطعی (Batch 4b). Rejected ⇒ Failed. TransientError ⇒ پرداخت
+    ///     Pending می‌ماند و 503 PAYMENT_VERIFY_RETRY با Retry-After؛ تکرار بعدی idempotent است (101 ⇒ موفق).
+    /// </summary>
+    private async Task<PaymentDto> VerifyWithGatewayAsync(Payment payment, string source)
+    {
+        var ct = CancellationToken.None;
+        const int maxClaimAttempts = 2;
 
-        if (!verification.Success)
+        for (var attempt = 1; ; attempt++)
         {
-            payment.TransitionTo(
-                PaymentState.Failed,
-                verification.ErrorMessage ?? verification.ErrorCode);
+            if (payment.State == PaymentState.Succeeded)
+                return _mapper.Map<PaymentDto>(payment);
 
-            _unitOfWork.Repository<Payment>().Update(payment);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            var payments = payment.OrderId is null
+                ? new List<Payment> { payment }
+                : await ListOrderPaymentsAsync(payment.OrderId.Value, ct);
+            var order = payment.OrderId is null
+                ? null
+                : await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(
+                    new Spec<Order>().Where(o => o.OrderId == payment.OrderId.Value).AsTracking(), ct);
 
-            _logger.LogWarning(
-                "Payment {PaymentId} failed verification: {Code}", payment.PaymentId, verification.ErrorCode);
+            var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, payments, ct);
+            var verifyAlreadyStarted = unresolved.Contains(payment.PaymentId);
 
-            // عمداً موجودی آزاد نمی‌شود: کاربر باید بتواند دوباره تلاش کند.
-            // آزادسازی رزرو فقط با لغو صریح سفارش انجام می‌شود.
-            throw new BusinessException(
-                verification.ErrorMessage ?? "پرداخت تأیید نشد.",
-                verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
+            var refusal = order is null ? null : GetPayabilityRefusal(order, payments, payment);
+            if (refusal is not null && !verifyAlreadyStarted)
+                await RefuseVerificationAsync(payment, refusal.Value.Code, refusal.Value.Message, source);
+
+            if (payment.State != PaymentState.Pending)
+                throw new ConflictException(
+                    "این پرداخت در وضعیت قابل تأیید نیست.",
+                    "PAYMENT_NOT_VERIFIABLE");
+
+            if (unresolved.Any(id => id != payment.PaymentId))
+                throw new ServiceUnavailableException(
+                    "پرداخت دیگری از همین سفارش در حال تأیید است؛ کمی بعد دوباره تلاش کنید.",
+                    "PAYMENT_VERIFY_RETRY",
+                    _settings.VerifyRetryAfterSeconds);
+
+            // اگر Verify این پرداخت قبلاً آغاز شده بود (پاسخ نامعلوم)، شاید پول برداشته شده باشد؛ حتی اگر سفارش
+            // دیگر قابل پرداخت نباشد، تکرار Verify تنها راه دانستن است (101 ⇒ ثبت Succeeded + بررسی دستی/برگشت).
+            if (await TryClaimForVerificationAsync(payment, payments, source, releaseSiblings: refusal is null, attempt < maxClaimAttempts))
+                break;
+
+            payment = await GetByAuthorityAsync(payment.TransactionId!, ct);
         }
 
-        // Batch 4b: از اینجا پول برداشته شده است؛ ثبت پرداخت نباید شکست بخورد.
-        return await CompleteCapturedPaymentAsync(payment, verification.ReferenceId, "verify");
+        var verification = await _gateway.VerifyAsync(payment.TransactionId!, payment.Amount, ct);
+
+        switch (verification.Outcome)
+        {
+            case PaymentVerificationOutcome.Verified:
+            case PaymentVerificationOutcome.AlreadyVerified:
+                // Batch 4b: از اینجا پول برداشته شده است؛ ثبت پرداخت نباید شکست بخورد.
+                return await CompleteCapturedPaymentAsync(payment, verification.ReferenceId, source);
+
+            case PaymentVerificationOutcome.Rejected:
+                return await MarkVerificationRejectedAsync(payment, verification);
+
+            default:
+                await AuditAsync(
+                    PaymentLifecycle.VerificationPendingAction,
+                    payment.PaymentId,
+                    $"source={source} | code={verification.ErrorCode} | {verification.ErrorMessage}",
+                    ct);
+                await _unitOfWork.SaveChangesAsync(ct);
+
+                _logger.LogWarning(
+                    "Payment {PaymentId} verification outcome unknown ({Code}); left Pending for retry",
+                    payment.PaymentId, verification.ErrorCode);
+
+                throw new ServiceUnavailableException(
+                    "نتیجهٔ تأیید پرداخت هنوز از درگاه دریافت نشده است. پرداخت شما ثبت مانده است؛ چند ثانیه بعد دوباره تلاش کنید.",
+                    "PAYMENT_VERIFY_RETRY",
+                    _settings.VerifyRetryAfterSeconds);
+        }
+    }
+
+    /// <summary>
+    /// سفارش برای این پرداخت قابل پرداخت است؟ پاسخ null یعنی بله.
+    /// «پرداخت‌شده» یعنی پرداخت Succeeded دارد (نه فقط وضعیت Processing): سفارش Processing بدون پرداخت
+    /// موفق (تأیید ادمین پیش از Batch 7) هنوز قابل پرداخت است و تضمین Batch 4b برای آن برقرار می‌ماند.
+    /// </summary>
+    private static (string Code, string Message)? GetPayabilityRefusal(
+        Order order, IReadOnlyList<Payment> payments, Payment? payment)
+    {
+        var paid = payments.FirstOrDefault(p => p.State == PaymentState.Succeeded
+                                                && (payment is null || p.PaymentId != payment.PaymentId));
+        if (paid is not null)
+            return ("ORDER_ALREADY_PAID", "این سفارش قبلاً پرداخت شده است.");
+
+        if (order.Status is not (OrderStatus.Pending or OrderStatus.Processing))
+            return ("ORDER_NOT_PAYABLE", "این سفارش در وضعیتی نیست که بتوان برایش پرداخت کرد.");
+
+        return null;
+    }
+
+    /// <summary>
+    /// F-05/F-06: Verify صدا زده نمی‌شود. پرداخت باز با دلیل Cancelled می‌شود (پول تأییدنشده را زرین‌پال
+    /// خودکار برمی‌گرداند) و تلاش در AuditLog ثبت می‌شود؛ سپس 409.
+    /// </summary>
+    private async Task RefuseVerificationAsync(Payment payment, string code, string message, string source)
+    {
+        var ct = CancellationToken.None;
+        var reason = $"not verified: {code} (order {payment.OrderId}); the gateway returns the unverified payment to the payer";
+
+        if (PaymentLifecycle.IsOpen(payment))
+        {
+            payment.TransitionTo(PaymentState.Cancelled, reason);
+            _unitOfWork.Repository<Payment>().Update(payment);
+        }
+
+        await AuditAsync(
+            PaymentLifecycle.NotVerifiedAction,
+            payment.PaymentId,
+            $"source={source} | {reason} | paymentState={payment.State} | amount={payment.Amount}",
+            ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        _logger.LogWarning(
+            "Payment {PaymentId} was not verified: {Code}. Gateway Verify was not called.", payment.PaymentId, code);
+
+        throw new ConflictException(message, code);
+    }
+
+    /// <summary>
+    /// «ادعای» پرداخت پیش از Verify، در یک تراکنش: پرداخت‌های باز دیگر همین سفارش لغو می‌شوند (حداکثر یک پرداخت
+    /// به درگاه می‌رسد)، خود پرداخت با کنترل RowVersion به‌روزرسانی و رکورد Payment.VerificationStarted ثبت می‌شود.
+    /// تعارض هم‌زمانی ⇒ false (یک بار دیگر با دادهٔ تازه) یا در تلاش آخر 503 قابل تکرار.
+    /// </summary>
+    private async Task<bool> TryClaimForVerificationAsync(
+        Payment payment,
+        IReadOnlyList<Payment> payments,
+        string source,
+        bool releaseSiblings,
+        bool canRetry)
+    {
+        var ct = CancellationToken.None;
+
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            if (releaseSiblings)
+            {
+                await PaymentLifecycle.CancelOpenPaymentsAsync(
+                    _unitOfWork,
+                    _auditService,
+                    payments.Where(p => p.PaymentId != payment.PaymentId),
+                    $"superseded: payment {payment.PaymentId} of the same order is being verified",
+                    ct);
+            }
+
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await AuditAsync(
+                PaymentLifecycle.VerificationStartedAction,
+                payment.PaymentId,
+                $"source={source} | order={payment.OrderId} | amount={payment.Amount} IRR",
+                ct);
+
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            _logger.LogWarning(ex,
+                "Concurrent change while claiming payment {PaymentId} for verification via {Source}", payment.PaymentId, source);
+
+            if (canRetry)
+                return false;
+
+            throw new ServiceUnavailableException(
+                "پرداخت دیگری از همین سفارش هم‌زمان در حال تأیید است؛ کمی بعد دوباره تلاش کنید.",
+                "PAYMENT_VERIFY_RETRY",
+                _settings.VerifyRetryAfterSeconds);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+    }
+
+    /// <summary>F-07: فقط ردِ قطعی درگاه پرداخت را Failed می‌کند.</summary>
+    private async Task<PaymentDto> MarkVerificationRejectedAsync(Payment payment, PaymentVerificationResult verification)
+    {
+        var ct = CancellationToken.None;
+
+        payment.TransitionTo(PaymentState.Failed, verification.ErrorMessage ?? verification.ErrorCode);
+        _unitOfWork.Repository<Payment>().Update(payment);
+        await AuditAsync("Payment.Failed", payment.PaymentId, verification.ErrorCode, ct);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // درخواست رقیب هم‌زمان همین پرداخت را ثبت کرده است (مثلاً تأیید موفق تکراری)؛ همان را برگردان.
+            _logger.LogWarning(ex, "Concurrent update while failing payment {PaymentId}; reloading", payment.PaymentId);
+            var reloaded = await GetByAuthorityAsync(payment.TransactionId!, ct);
+            if (reloaded.State == PaymentState.Succeeded)
+                return _mapper.Map<PaymentDto>(reloaded);
+            throw;
+        }
+
+        _logger.LogWarning(
+            "Payment {PaymentId} failed verification: {Code}", payment.PaymentId, verification.ErrorCode);
+
+        // عمداً موجودی آزاد نمی‌شود: کاربر باید بتواند دوباره تلاش کند.
+        // آزادسازی رزرو فقط با لغو صریح سفارش انجام می‌شود.
+        throw new BusinessException(
+            verification.ErrorMessage ?? "پرداخت تأیید نشد.",
+            verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
     }
 
     // ==================== Webhook ====================
@@ -356,29 +607,22 @@ public sealed class PaymentService : IPaymentService
             return _mapper.Map<PaymentDto>(payment);
         }
 
+        if (parsed.IsSuccessful)
+        {
+            // حتی با webhook، نتیجهٔ درگاه دوباره راستی‌آزمایی می‌شود؛ همان گاردهای verify (Batch 5).
+            return await VerifyWithGatewayAsync(payment, "webhook");
+        }
+
         if (payment.State != PaymentState.Pending)
             throw new ConflictException("این پرداخت در وضعیت قابل تأیید نیست.", "PAYMENT_NOT_VERIFIABLE");
 
-        if (parsed.IsSuccessful)
+        // Batch 5 (F-07): اگر Verify این پرداخت آغاز شده و نتیجه‌اش نامعلوم است، پیام «ناموفق» آن را Failed نمی‌کند.
+        var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, new[] { payment }, cancellationToken);
+        if (unresolved.Contains(payment.PaymentId))
         {
-            // حتی با webhook، نتیجهٔ درگاه دوباره راستی‌آزمایی می‌شود.
-            var verification = await _gateway.VerifyAsync(
-                parsed.Authority, payment.Amount, cancellationToken);
-
-            if (!verification.Success)
-            {
-                payment.TransitionTo(PaymentState.Failed, note: verification.ErrorCode);
-            await AuditAsync("Payment.Failed", payment.PaymentId, verification.ErrorCode, cancellationToken);
-                _unitOfWork.Repository<Payment>().Update(payment);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                throw new BusinessException(
-                    verification.ErrorMessage ?? "پرداخت تأیید نشد.",
-                    verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
-            }
-
-            // Batch 4b: از اینجا پول برداشته شده است؛ ثبت پرداخت نباید شکست بخورد.
-            return await CompleteCapturedPaymentAsync(payment, verification.ReferenceId, "webhook");
+            _logger.LogWarning(
+                "Failure webhook for payment {PaymentId} ignored: its verification outcome is still unknown", payment.PaymentId);
+            return _mapper.Map<PaymentDto>(payment);
         }
 
         payment.TransitionTo(PaymentState.Failed, note: parsed.Status);
@@ -399,6 +643,10 @@ public sealed class PaymentService : IPaymentService
         return _mapper.Map<PaymentDto>(payment);
     }
 
+    /// <summary>
+    /// پرداخت سفارش: پرداخت موفق اگر هست، وگرنه آخرین پرداخت. (Batch 5: با لغو پرداخت‌های جایگزین‌شده، یک سفارش
+    /// چند پرداخت دارد و قدیمی‌ترین دیگر نمایندهٔ وضعیت نیست.)
+    /// </summary>
     public async Task<PaymentDto?> GetByOrderAsync(int orderId, CancellationToken cancellationToken = default)
     {
         var order = await _unitOfWork.Repository<Order>().GetByIdAsync(orderId, cancellationToken);
@@ -407,15 +655,21 @@ public sealed class PaymentService : IPaymentService
 
         await EnsureOrderBelongsToCurrentUserAsync(order, cancellationToken);
 
-        var payment = await _unitOfWork.Repository<Payment>()
-            .FirstOrDefaultAsync(
-                new Spec<Payment>()
-                    .Where(p => p.OrderId == orderId)
-                    .OrderBy(p => p.PaymentId),
-                cancellationToken);
+        var payments = await _unitOfWork.Repository<Payment>()
+            .ListAsync(new Spec<Payment>().Where(p => p.OrderId == orderId), cancellationToken);
+
+        var payment = payments.FirstOrDefault(p => p.State == PaymentState.Succeeded)
+                      ?? payments.OrderByDescending(p => p.PaymentId).FirstOrDefault();
 
         return payment is null ? null : _mapper.Map<PaymentDto>(payment);
     }
+
+    /// <summary>همهٔ پرداخت‌های سفارش، ردیابی‌شده (برای لغو/ادعا در همان واحد کار).</summary>
+    private async Task<List<Payment>> ListOrderPaymentsAsync(int orderId, CancellationToken cancellationToken)
+        => (await _unitOfWork.Repository<Payment>().ListAsync(
+                new Spec<Payment>().Where(p => p.OrderId == orderId).AsTracking(),
+                cancellationToken))
+            .ToList();
 
     /// <summary>
     /// Phase 9 (R40): ثبت رویداد از مسیر واحد IAuditService انجام می‌شود.
@@ -493,7 +747,7 @@ public sealed class PaymentService : IPaymentService
         payment = await PersistCapturedPaymentAsync(payment, referenceId, source, issues);
 
         if (payment.State == PaymentState.Succeeded)
-            await SyncOrderAfterCaptureAsync(payment, issues);
+            await SyncOrderAfterCaptureAsync(payment, issues, gatewayCapture: true);
 
         if (issues.Count > 0)
             await RecordReviewRequiredAsync(payment, referenceId, source, issues);
@@ -569,7 +823,7 @@ public sealed class PaymentService : IPaymentService
     /// هیچ متد دامنه‌ای خارج از گذار مجازش صدا زده نمی‌شود؛ هر وضعیت غیرمنتظره به‌جای
     /// InvalidOperationException به فهرست بررسی دستی اضافه می‌شود.
     /// </summary>
-    private async Task SyncOrderAfterCaptureAsync(Payment payment, List<string> issues)
+    private async Task SyncOrderAfterCaptureAsync(Payment payment, List<string> issues, bool gatewayCapture)
     {
         if (payment.OrderId is null)
             return;
@@ -593,6 +847,16 @@ public sealed class PaymentService : IPaymentService
                 await _unitOfWork.RollbackTransactionAsync(ct);
                 return;
             }
+
+            // Batch 5 (F-06): درگاه پول دوم را برای سفارشی برداشته که قبلاً پرداخت شده (فقط اگر Verify پیش از گارد آغاز شده بود)؛
+            // ثبت Succeeded می‌ماند (Batch 4b) و برگشت آن به بررسی دستی (Batch 8) می‌رود. پرداخت دستی می‌تواند چندبخشی باشد، پس بررسی نمی‌شود.
+            var otherSucceeded = gatewayCapture && await _unitOfWork.Repository<Payment>().AnyAsync(
+                new Spec<Payment>().Where(p => p.OrderId == order.OrderId
+                                            && p.PaymentId != payment.PaymentId
+                                            && p.State == PaymentState.Succeeded),
+                ct);
+            if (otherSucceeded)
+                issues.Add($"order {order.OrderId} already had another succeeded payment; this capture needs a refund");
 
             ApplyPaidStatus(order, issues);
             _unitOfWork.Repository<Order>().Update(order);
@@ -683,6 +947,10 @@ public sealed class PaymentService : IPaymentService
     {
         var details = $"source={source} | order={payment.OrderId?.ToString() ?? "none"} | amount={payment.Amount} " +
                       $"| reference={referenceId} | paymentState={payment.State} | issues: {string.Join("; ", issues)}";
+
+        // Batch 5: برچسب صریح برای گردش‌کار برگشت وجه (Batch 8).
+        if (issues.Any(i => i.Contains("refund", StringComparison.OrdinalIgnoreCase)))
+            details += " | refundNeeded=true";
 
         _logger.LogError(
             "Captured payment {PaymentId} needs manual review: {Details}", payment.PaymentId, details);

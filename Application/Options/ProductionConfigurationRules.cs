@@ -31,6 +31,19 @@ public static class ProductionConfigurationRules
     {
         var errors = new List<string>();
 
+        // Batch 5: در همهٔ محیط‌ها.
+        if (settings.RequestTimeoutSeconds is < 1 or > 120)
+            errors.Add("PaymentGatewaySettings:RequestTimeoutSeconds باید بین 1 و 120 باشد.");
+
+        if (settings.VerifyRetryAfterSeconds is < 1 or > 300)
+            errors.Add("PaymentGatewaySettings:VerifyRetryAfterSeconds باید بین 1 و 300 باشد.");
+
+        if (settings.OpenPaymentReuseMinutes is < 0 or > 60)
+            errors.Add("PaymentGatewaySettings:OpenPaymentReuseMinutes باید بین 0 و 60 باشد.");
+
+        if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
+            errors.Add($"PaymentGatewaySettings:BaseUrl باید آدرس مطلق https باشد؛ مقدار فعلی «{settings.BaseUrl}».");
+
         if (!AllowsFakePaymentGateway(environmentName)
             && !string.Equals(settings.Provider, "Zarinpal", StringComparison.OrdinalIgnoreCase))
         {

@@ -17,8 +17,11 @@ public class PaymentGatewaySettings
     /// <summary>راز امضای webhook. اگر خالی باشد، webhook غیرفعال است.</summary>
     public string? WebhookSecret { get; set; }
 
-    /// <summary>آدرس پایهٔ API درگاه.</summary>
-    public string BaseUrl { get; set; } = "https://api.zarinpal.com";
+    /// <summary>
+    /// آدرس پایهٔ درگاه زرین‌پال؛ هم API (pg/v4/payment/*.json) و هم صفحهٔ پرداخت (pg/StartPay/{authority})
+    /// از همین یک تنظیم ساخته می‌شوند (Batch 5، F-28). مستند v4 زرین‌پال: https://payment.zarinpal.com
+    /// </summary>
+    public string BaseUrl { get; set; } = "https://payment.zarinpal.com";
 
     /// <summary>
     /// Staging: استفاده از سندباکس زرین‌پال.
@@ -39,4 +42,22 @@ public class PaymentGatewaySettings
 
     /// <summary>اگر true باشد، درگاه واقعی اجازهٔ فراخوانی دارد.</summary>
     public bool EnableRealGateway { get; set; }
+
+    /// <summary>
+    /// Batch 5: سقف زمان هر فراخوانی درگاه (ثانیه). timeout در تأیید «نتیجهٔ نامعلوم» است، نه شکست.
+    /// </summary>
+    public int RequestTimeoutSeconds { get; set; } = 20;
+
+    /// <summary>
+    /// Batch 5 (F-07): مقدار هدر Retry-After در پاسخ 503 PAYMENT_VERIFY_RETRY (ثانیه).
+    /// </summary>
+    public int VerifyRetryAfterSeconds { get; set; } = 5;
+
+    /// <summary>
+    /// Batch 5 (F-06): شروع دوبارهٔ پرداخت برای سفارشی که پرداخت باز (Pending) جوان‌تر از این مقدار
+    /// دارد، همان پرداخت و همان Authority را برمی‌گرداند (isReplay=true)؛ پرداخت باز قدیمی‌تر لغو و
+    /// پرداخت تازه ساخته می‌شود. عمر Authority در مستند زرین‌پال ذکر نشده است؛ مقدار کوتاه امن‌تر است.
+    /// 0 یعنی هرگز استفادهٔ مجدد نکن.
+    /// </summary>
+    public int OpenPaymentReuseMinutes { get; set; } = 15;
 }

@@ -35,6 +35,9 @@ public class ProductionStartupValidationTests
             _settings = settings;
         }
 
+        // Batch 5: این تست‌ها درگاهی را می‌سنجند که خودِ برنامه از روی تنظیمات می‌سازد.
+        protected override bool UseScriptedPaymentGateway => false;
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);

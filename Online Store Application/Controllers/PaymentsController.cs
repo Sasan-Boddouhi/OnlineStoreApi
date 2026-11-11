@@ -31,6 +31,8 @@ public class PaymentsController : ControllerBase
     /// IdempotencyKey از هدر `Idempotency-Key` یا بدنه خوانده می‌شود.
     /// اگر کلاینت به‌خاطر قطعی شبکه دوباره درخواست بدهد، همان پرداخت قبلی برمی‌گردد
     /// و پول دوباره از حساب کاربر کم نمی‌شود.
+    /// Batch 5: درخواست تکراری برای سفارشی که پرداخت باز دارد همان پرداخت را برمی‌گرداند (isReplay=true)؛
+    /// 409 ORDER_ALREADY_PAID / ORDER_NOT_PAYABLE / PAYMENT_VERIFICATION_PENDING.
     /// </summary>
     [HttpPost("initiate")]
     [Authorize]
@@ -39,6 +41,7 @@ public class PaymentsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<InitiatePaymentResultDto>> Initiate(
         [FromBody] InitiatePaymentRequest body,
         CancellationToken cancellationToken)
@@ -50,12 +53,18 @@ public class PaymentsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>تأیید پرداخت پس از بازگشت کاربر از درگاه.</summary>
+    /// <summary>
+    /// تأیید پرداخت پس از بازگشت کاربر از درگاه. Batch 5: سفارش لغوشده یا پرداخت‌شده → 409 ORDER_NOT_PAYABLE /
+    /// ORDER_ALREADY_PAID و درگاه صدا زده نمی‌شود؛ نتیجهٔ نامعلوم درگاه → 503 PAYMENT_VERIFY_RETRY با هدر Retry-After
+    /// (پرداخت Pending می‌ماند و تکرار همین درخواست آن را قطعی می‌کند).
+    /// </summary>
     [HttpPost("verify")]
     [Authorize]
     [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<PaymentDto>> Verify(
         [FromQuery] string authority,
         CancellationToken cancellationToken)

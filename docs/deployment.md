@@ -582,6 +582,10 @@ row to `Pending`.
 | `PaymentGatewaySettings__EnableRealGateway` | when real gateway | `false` refuses all live calls. Set to `true` only after the runbook checklist. |
 | `PaymentGatewaySettings__CallbackUrl` | when real gateway | Absolute URL the gateway redirects to. |
 | `PaymentGatewaySettings__UseSandbox` | staging | `true` forces `https://sandbox.zarinpal.com` and **overrides** `BaseUrl`, so a sandbox merchant id can never reach the live gateway. |
+| `PaymentGatewaySettings__BaseUrl` | no (default `https://payment.zarinpal.com`) | Zarinpal v4 host. Both the API calls (`/pg/v4/payment/*.json`) and the payment page (`/pg/StartPay/{authority}`) are built from it (Batch 5, F-28). Must be absolute `https`. |
+| `PaymentGatewaySettings__RequestTimeoutSeconds` | no (default 20, 1-120) | Timeout of each gateway call. A timeout on verify is an unknown outcome, not a failure. |
+| `PaymentGatewaySettings__VerifyRetryAfterSeconds` | no (default 5, 1-300) | `Retry-After` value on `503 PAYMENT_VERIFY_RETRY`. |
+| `PaymentGatewaySettings__OpenPaymentReuseMinutes` | no (default 15, 0-60) | A repeated initiate for the same order returns the open payment (same authority, `isReplay=true`) if it is younger than this; an older open payment is cancelled and a new one is created. `0` never reuses. |
 | `Database__AutoMigrate` | staging only | `true` applies migrations at startup (with retry). Never enable in production. |
 | `AbandonedPaymentSettings__ScanIntervalMinutes` | no (default 15) | Cleanup job cadence. |
 | `AbandonedPaymentSettings__TimeoutMinutes` | no (default 30) | Age after which a `Pending` payment is cancelled. |
@@ -648,3 +652,25 @@ correct outcome: serving traffic on an old schema is worse than being down.
 Runs three phases: webhook signature enforcement, staging configuration
 resolution, and (with `-OrderId`) the full initiate → verify → idempotency path.
 See the script header for what each phase can and cannot prove.
+### A.8 Payment lifecycle (Batch 5)
+
+Amounts are whole **rials** (owner decision D2). The Zarinpal adapter sends `amount` as an integer and `currency = "IRR"` on request; verify sends the same integer amount (the verify call has no currency field). A payment's stored `Amount` is exactly what was sent to the gateway; an order total with a fraction of a rial (percentage coupon rounding) is paid as the whole-rial part.
+
+All Zarinpal details stay in `ZarinpalPaymentGateway`. `IPaymentGateway.VerifyAsync` returns a provider-neutral outcome and `PaymentService` branches only on it:
+
+| Outcome | Zarinpal | Payment | API |
+|---|---|---|---|
+| `Verified` | code `100` | `Succeeded` (Batch 4b capture path) | `200` |
+| `AlreadyVerified` | code `101` | `Succeeded` (idempotent) | `200` |
+| `Rejected` | `-50` amount mismatch, `-51` not paid, `-53` other merchant, `-54` invalid authority | `Failed` | `400` with the gateway code |
+| `TransientError` | timeout, network error, HTTP 5xx, unreadable body, any other code (e.g. `-9`, `-10`, `-12`, `-52`), gateway disabled | stays `Pending` | `503 PAYMENT_VERIFY_RETRY` + `Retry-After` |
+
+Guards:
+
+- `POST payments/initiate`: `409 ORDER_ALREADY_PAID` if the order has a `Succeeded` payment; `409 ORDER_NOT_PAYABLE` if the order is cancelled, shipped, delivered or returned; `409 PAYMENT_VERIFICATION_PENDING` if a verify of an open payment has no definitive answer yet. A repeated initiate returns the open payment (see `OpenPaymentReuseMinutes`).
+- `POST payments/verify` and the webhook: if the order is no longer payable or already paid, the gateway verify is **not** called; the payment is cancelled with a reason (`Payment.NotVerified` in the audit log) and the API returns `409 ORDER_NOT_PAYABLE` / `409 ORDER_ALREADY_PAID`. Zarinpal returns money it was never asked to verify to the payer.
+- Before calling verify the payment is claimed in one transaction (other open payments of the order are cancelled, the payment row is updated under its `RowVersion`, `Payment.VerificationStarted` is written). Two verifies for two payments of the same order cannot both reach the gateway.
+- While a verify has no definitive answer (`Payment.VerificationStarted` on a `Pending` payment), nothing cancels that payment: order cancel returns `409 PAYMENT_VERIFICATION_PENDING`, and the abandoned-order cleanup and the abandoned-payment sweep skip it and write one `Payment.ReviewRequired` entry. Verifying the payment again (customer or admin) resolves it.
+- If money is captured for an order that is no longer payable (only possible when verify had already started), the payment is still recorded `Succeeded` and `Payment.ReviewRequired` gets `refundNeeded=true` for the refund workflow (Batch 8).
+
+Not confirmed in Zarinpal's documentation (verified 2026-11-11): the time window after which an unverified payment is returned to the payer, how long after the callback verify may still be called, the default `currency` when omitted, the exact sandbox StartPay URL (inferred from "replace the host with sandbox.zarinpal.com"), and the lifetime of an authority.

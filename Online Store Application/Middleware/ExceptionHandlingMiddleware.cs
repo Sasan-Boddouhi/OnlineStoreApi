@@ -55,6 +55,13 @@ public sealed class ExceptionHandlingMiddleware
                 problem.Extensions["remainingSeconds"] = lockedOut.RemainingSeconds;
             }
 
+            // Batch 5 (F-07): 503 قابل تکرار؛ کلاینت پس از Retry-After ثانیه دوباره تلاش می‌کند.
+            if (ex is ServiceUnavailableException unavailable && !context.Response.HasStarted)
+            {
+                context.Response.Headers.RetryAfter = unavailable.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                problem.Extensions["retryAfterSeconds"] = unavailable.RetryAfterSeconds;
+            }
+
             if (!context.Response.HasStarted)
             {
                 await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
@@ -164,6 +171,7 @@ public sealed class ExceptionHandlingMiddleware
         409 => "Conflict",
         422 => "Unprocessable Entity",
         500 => "Internal Server Error",
+        503 => "Service Unavailable",
         _ => "Error"
     };
 }

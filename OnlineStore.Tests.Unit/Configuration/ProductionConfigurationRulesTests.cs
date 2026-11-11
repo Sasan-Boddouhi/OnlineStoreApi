@@ -41,6 +41,31 @@ public class ProductionConfigurationRulesTests
     }
 
     [Theory]
+    [InlineData("Production")]
+    [InlineData("Development")]
+    public void Batch05_OutOfRangeTimingSettings_AreRejected_InEveryEnvironment(string environment)
+    {
+        var settings = ValidZarinpal();
+        settings.RequestTimeoutSeconds = 0;
+        settings.VerifyRetryAfterSeconds = 0;
+        settings.OpenPaymentReuseMinutes = -1;
+        settings.BaseUrl = "http://payment.zarinpal.com";
+
+        ProductionConfigurationRules.ValidatePaymentGateway(settings, environment)
+            .Should().HaveCount(4);
+    }
+
+    [Fact]
+    public void Batch05_Defaults_PointAtTheDocumentedZarinpalHost_AndAreValid()
+    {
+        var settings = new PaymentGatewaySettings();
+
+        settings.BaseUrl.Should().Be("https://payment.zarinpal.com");
+        settings.VerifyRetryAfterSeconds.Should().BeInRange(1, 300);
+        ProductionConfigurationRules.ValidatePaymentGateway(settings, "Development").Should().BeEmpty();
+    }
+
+    [Theory]
     [InlineData("Development")]
     [InlineData("Testing")]
     public void DevelopmentAndTesting_DefaultSettings_AreValid(string environment)

@@ -25,6 +25,12 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
     /// <summary>Phase 9: ساعت مشترک تست. از بیرون قابل جلو بردن است.</summary>
     public TestTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
 
+    /// <summary>Batch 5: درگاه پرداخت قابل برنامه‌ریزی؛ پیش‌فرض همان FakePaymentGateway. در هر تست بازنشانی می‌شود.</summary>
+    public ScriptedPaymentGateway PaymentGateway { get; } = new();
+
+    /// <summary>تست‌هایی که انتخاب درگاه توسط خودِ برنامه را می‌سنجند، جایگزینی را خاموش می‌کنند.</summary>
+    protected virtual bool UseScriptedPaymentGateway => true;
+
     private static SqliteConnection CreateInMemoryConnection()
     {
         var connection = new SqliteConnection("DataSource=:memory:");
@@ -93,12 +99,21 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
 
+            // Batch 5: درگاه پرداخت قابل برنامه‌ریزی (بدون شبکه).
+            if (UseScriptedPaymentGateway)
+            {
+                services.RemoveAll<IPaymentGateway>();
+                services.AddScoped<IPaymentGateway>(_ => PaymentGateway);
+            }
+
             services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
         });
     }
 
     public async Task InitializeDatabaseAsync()
     {
+        PaymentGateway.Reset();
+
         var cache = Services.GetService<ICacheService>() as FakeCacheService;
         cache?.Clear();
 

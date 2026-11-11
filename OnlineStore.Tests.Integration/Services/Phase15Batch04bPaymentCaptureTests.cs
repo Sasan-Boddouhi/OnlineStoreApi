@@ -132,8 +132,14 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
 
         SetCurrentUser(seeded.BuyerUserId, "Customer");
         var initiation = await PaymentService.InitiateAsync(seeded.OrderId, null);
-        await OrderService.CancelOrderAsync(seeded.OrderId);
-        DbContext.ChangeTracker.Clear();
+
+        // Batch 5 (F-05): Verify پس از لغو سفارش دیگر درگاه را صدا نمی‌زند (Phase15Batch05PaymentLifecycleTests).
+        // تضمین Batch 4b هنوز برای حالتی لازم است که Verify پیش از لغو آغاز شده بود (پاسخ اول نامعلوم) و تکرار آن پول
+        // را برداشته نشان می‌دهد؛ لغو در این فاصله با داده تحمیل می‌شود چون مسیرهای لغو اکنون آن را رد می‌کنند.
+        Factory.PaymentGateway.EnqueueVerifyResult(PaymentVerificationResult.TransientError("GATEWAY_TIMEOUT", "timeout"));
+        var firstVerify = () => PaymentService.VerifyAsync(initiation.Authority!);
+        await firstVerify.Should().ThrowAsync<Application.Exceptions.ServiceUnavailableException>();
+        await ForceOrderCancelledAsync(seeded.OrderId);
 
         var result = await PaymentService.VerifyAsync(initiation.Authority!);
 
@@ -143,7 +149,7 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
 
         var review = await ReviewEntriesAsync(initiation.PaymentId);
         review.Should().ContainSingle()
-            .Which.Should().Contain("order was Cancelled");
+            .Which.Should().Contain("order was Cancelled").And.Contain("refundNeeded=true");
     }
 
     // ==================== خطای زیرساخت پس از برداشت پول ====================
@@ -261,6 +267,15 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
     {
         var group = await DbContext.OrderSellerGroup.AsTracking().SingleAsync(g => g.OrderSellerGroupId == groupId);
         DbContext.Entry(group).Property(nameof(OrderSellerGroup.Status)).CurrentValue = status;
+        await DbContext.SaveChangesAsync();
+        DbContext.ChangeTracker.Clear();
+    }
+
+    private async Task ForceOrderCancelledAsync(int orderId)
+    {
+        DbContext.ChangeTracker.Clear();
+        var order = await DbContext.Order.AsTracking().SingleAsync(o => o.OrderId == orderId);
+        DbContext.Entry(order).Property(nameof(Order.Status)).CurrentValue = OrderStatus.Cancelled;
         await DbContext.SaveChangesAsync();
         DbContext.ChangeTracker.Clear();
     }
@@ -513,6 +528,9 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
             _cts.Cancel();
             return result;
         }
+
+        // Batch 5: IPaymentGateway آدرس صفحهٔ پرداخت را هم می‌سازد (F-28).
+        public string BuildRedirectUrl(string authority) => _inner.BuildRedirectUrl(authority);
 
         public Task<bool> RefundAsync(string authority, decimal amount, CancellationToken cancellationToken = default)
             => _inner.RefundAsync(authority, amount, cancellationToken);
