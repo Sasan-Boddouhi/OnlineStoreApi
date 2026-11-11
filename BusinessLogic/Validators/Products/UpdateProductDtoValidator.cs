@@ -12,7 +12,7 @@ public class UpdateProductDtoValidator : AbstractValidator<UpdateProductDto>
 
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("نام محصول الزامی است")
-            .MaximumLength(200);
+            .MaximumLength(100).WithMessage("نام محصول حداکثر 100 کاراکتر می‌تواند باشد");
 
         RuleFor(x => x.Price)
             .GreaterThan(0).WithMessage("قیمت محصول باید بزرگتر از صفر باشد");

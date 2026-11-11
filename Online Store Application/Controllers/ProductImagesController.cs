@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using BusinessLogic.DTOs.Media;
 using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Validators.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -109,8 +110,20 @@ public class ProductImagesController : ControllerBase
     }
 }
 
-public class AddProductImageUrlRequest
+public class AddProductImageUrlRequest : System.ComponentModel.DataAnnotations.IValidatableObject
 {
+    // Batch 48 (SEC-12): only absolute https URLs; the model-state pipeline turns this into 422 VALIDATION_ERROR.
+    public IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> Validate(
+        System.ComponentModel.DataAnnotations.ValidationContext validationContext)
+    {
+        if (!HttpsUrl.IsValid(Url))
+            yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                "آدرس تصویر باید یک آدرس مطلق با پروتکل https باشد.", new[] { nameof(Url) });
+        else if (Url.Length > 500)
+            yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                "آدرس تصویر نباید بیش از ۵۰۰ کاراکتر باشد.", new[] { nameof(Url) });
+    }
+
     public string Url { get; set; } = null!;
     public string? Alt { get; set; }
     public bool IsPrimary { get; set; }

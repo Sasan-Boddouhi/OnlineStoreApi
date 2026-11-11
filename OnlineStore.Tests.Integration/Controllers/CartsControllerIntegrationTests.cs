@@ -116,7 +116,7 @@ public class CartsControllerIntegrationTests : ControllerIntegrationTestBase
     {
         Client.DefaultRequestHeaders.Authorization = null;
         Client.DefaultRequestHeaders.Remove("X-Cart-Session");
-        Client.DefaultRequestHeaders.Add("X-Cart-Session", $"session-{Guid.NewGuid():N}");
+        Client.DefaultRequestHeaders.Add("X-Cart-Session", Guid.NewGuid().ToString());
 
         var response = await Client.GetAsync("/api/v1/carts/current");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -129,7 +129,7 @@ public class CartsControllerIntegrationTests : ControllerIntegrationTestBase
 
         Client.DefaultRequestHeaders.Authorization = null;
         Client.DefaultRequestHeaders.Remove("X-Cart-Session");
-        Client.DefaultRequestHeaders.Add("X-Cart-Session", $"session-{Guid.NewGuid():N}");
+        Client.DefaultRequestHeaders.Add("X-Cart-Session", Guid.NewGuid().ToString());
 
         var dto = new AddCartItemDto
         {
@@ -146,7 +146,7 @@ public class CartsControllerIntegrationTests : ControllerIntegrationTestBase
     {
         Client.DefaultRequestHeaders.Authorization = null;
         Client.DefaultRequestHeaders.Remove("X-Cart-Session");
-        Client.DefaultRequestHeaders.Add("X-Cart-Session", $"session-{Guid.NewGuid():N}");
+        Client.DefaultRequestHeaders.Add("X-Cart-Session", Guid.NewGuid().ToString());
 
         var response = await Client.DeleteAsync("/api/v1/carts/current");
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);

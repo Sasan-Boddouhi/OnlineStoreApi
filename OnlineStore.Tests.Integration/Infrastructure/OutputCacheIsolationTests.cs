@@ -39,8 +39,8 @@ public sealed class OutputCacheIsolationTests : IClassFixture<OutputCacheEnabled
     [Fact]
     public async Task GetCurrentCart_TwoGuestsWithDifferentSessions_EachGetsOwnCart()
     {
-        using var guestA = CreateGuestClient($"guest-a-{Guid.NewGuid():N}");
-        using var guestB = CreateGuestClient($"guest-b-{Guid.NewGuid():N}");
+        using var guestA = CreateGuestClient(Guid.NewGuid().ToString());
+        using var guestB = CreateGuestClient(Guid.NewGuid().ToString());
 
         var responseA = await guestA.GetAsync("/api/v1/carts/current");
         responseA.StatusCode.Should().Be(HttpStatusCode.OK);

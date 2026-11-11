@@ -11,6 +11,6 @@ public class InitiatePaymentRequestValidator : AbstractValidator<InitiatePayment
             .GreaterThan(0).WithMessage("شناسه سفارش باید بزرگتر از صفر باشد.");
 
         RuleFor(x => x.IdempotencyKey)
-            .MaximumLength(256).WithMessage("کلید یکتایی نباید بیش از ۲۵۶ کاراکتر باشد.");
+            .MaximumLength(64).WithMessage("کلید یکتایی نباید بیش از ۶۴ کاراکتر باشد.");
     }
 }

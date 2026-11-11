@@ -9,7 +9,7 @@ public class CreateProductDtoValidator : AbstractValidator<CreateProductDto>
     {
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("نام محصول الزامی است")
-            .MaximumLength(200).WithMessage("نام محصول حداکثر 200 کاراکتر می‌تواند باشد");
+            .MaximumLength(100).WithMessage("نام محصول حداکثر 100 کاراکتر می‌تواند باشد");
 
         RuleFor(x => x.Price)
             .GreaterThan(0).WithMessage("قیمت محصول باید بزرگتر از صفر باشد");
@@ -18,11 +18,11 @@ public class CreateProductDtoValidator : AbstractValidator<CreateProductDto>
             .GreaterThan(0).WithMessage("شناسه زیردسته‌بندی نامعتبر است");
 
         RuleFor(x => x.Description)
-            .MaximumLength(1000).WithMessage("توضیحات حداکثر 1000 کاراکتر می‌تواند باشد")
+            .MaximumLength(250).WithMessage("توضیحات حداکثر 250 کاراکتر می‌تواند باشد")
             .When(x => !string.IsNullOrEmpty(x.Description));
 
         RuleFor(x => x.Barcode)
-            .MaximumLength(50).WithMessage("بارکد حداکثر 50 کاراکتر است")
+            .MaximumLength(20).WithMessage("بارکد حداکثر 20 کاراکتر است")
             .When(x => !string.IsNullOrEmpty(x.Barcode));
     }
 }
