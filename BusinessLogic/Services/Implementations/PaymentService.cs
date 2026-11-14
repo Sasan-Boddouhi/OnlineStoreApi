@@ -33,6 +33,8 @@ public sealed class PaymentService : IPaymentService
     private readonly IPaymentSignatureValidator _signatureValidator;
     private readonly ICurrentUserService _currentUser;
     private readonly IAuditService _auditService;
+    private readonly IOrderReversalService _orderReversalService;
+    private readonly TimeProvider _timeProvider;
     private readonly PaymentGatewaySettings _settings;
     private readonly ILogger<PaymentService> _logger;
 
@@ -43,6 +45,8 @@ public sealed class PaymentService : IPaymentService
         IPaymentSignatureValidator signatureValidator,
         ICurrentUserService currentUser,
         IAuditService auditService,
+        IOrderReversalService orderReversalService,
+        TimeProvider timeProvider,
         IOptions<PaymentGatewaySettings> settings,
         ILogger<PaymentService> logger)
     {
@@ -52,68 +56,14 @@ public sealed class PaymentService : IPaymentService
         _signatureValidator = signatureValidator;
         _currentUser = currentUser;
         _auditService = auditService;
+        _orderReversalService = orderReversalService;
+        _timeProvider = timeProvider;
         _settings = settings.Value;
         _logger = logger;
     }
 
-    // ==================== فاز ۰: ثبت دستی پرداخت ====================
-
-    /// <summary>
-    /// ثبت دستی پرداخت روی فاکتور (حفظ رفتار فاز ۰).
-    /// از همان مسیر ماشین حالت عبور می‌کند تا پرداخت دستی هم State معتبر داشته باشد.
-    /// </summary>
-    public async Task<PaymentDto> RecordPaymentAsync(
-        int invoiceId,
-        decimal amount,
-        string transactionId,
-        CancellationToken cancellationToken = default)
-    {
-        var invoice = await _unitOfWork.Repository<Invoice>().GetByIdAsync(invoiceId, cancellationToken);
-
-        if (invoice is null)
-            throw new BusinessException("فاکتور یافت نشد.", "INVOICE_NOT_FOUND");
-
-        var payment = new Payment
-        {
-            InvoiceId = invoiceId,
-            OrderId = invoice.OrderId,
-            Amount = amount,
-            TransactionId = transactionId,
-            PaymentDate = DateTime.UtcNow,
-            Gateway = PaymentGatewayType.Manual,
-            State = PaymentState.Initiated
-        };
-
-        // پرداخت دستی دو گام دارد: ثبت در انتظار، سپس تأیید.
-        // ماشین حالت عمداً میان‌بر Initiated → Succeeded را نمی‌پذیرد.
-        payment.TransitionTo(PaymentState.Pending);
-        payment.TransitionTo(PaymentState.Succeeded, "Manual payment record.");
-        await AuditAsync("Payment.Recorded", payment.PaymentId, transactionId, cancellationToken);
-
-        invoice.MarkAsPaid();
-
-        await _unitOfWork.Repository<Payment>().AddAsync(payment, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        // Batch 4c: پرداخت دستی هم «پولِ دریافت‌شده» است؛ همان همگام‌سازی idempotent مسیر verify
-        // (تأیید سفارش، گروه‌های Pending ← Processing با کمیسیون، فاکتور) اجرا می‌شود تا سفارش
-        // Pending نماند. ناسازگاری‌ها به‌جای خطا، با Payment.ReviewRequired ثبت می‌شوند.
-        await SyncManualPaymentOrderAsync(payment);
-
-        _logger.LogInformation("Payment recorded for invoice {InvoiceId}", invoiceId);
-        return _mapper.Map<PaymentDto>(payment);
-    }
-
-    /// <summary>گام همگام‌سازی سفارش برای پرداخت دستی؛ شکست آن پرداخت ثبت‌شده را برنمی‌گرداند.</summary>
-    private async Task SyncManualPaymentOrderAsync(Payment payment)
-    {
-        var issues = new List<string>();
-
-        await SyncOrderAfterCaptureAsync(payment, issues, gatewayCapture: false);
-
-        if (issues.Count > 0)
-            await RecordReviewRequiredAsync(payment, payment.TransactionId, "manual", issues);
-    }
+    // Batch 41 (FIN-15): ثبت دستی پرداخت (RecordPaymentAsync، فاز ۰) حذف شد. هیچ فراخوانی در کد محصول نداشت و
+    // می‌توانست فاکتور را با هر مبلغی «پرداخت‌شده» کند. پول فقط از مسیر درگاه (Initiate → Verify/Webhook) ثبت می‌شود.
 
     // ==================== Initiate ====================
 
@@ -173,7 +123,7 @@ public sealed class PaymentService : IPaymentService
         var openPayments = payments.Where(PaymentLifecycle.IsOpen).ToList();
         if (openPayments.Count > 0)
         {
-            var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, openPayments, cancellationToken);
+            var unresolved = PaymentLifecycle.FindUnresolvedVerifications(openPayments);
             if (unresolved.Count > 0)
                 throw new ConflictException(
                     "تأیید پرداخت قبلی این سفارش هنوز نتیجهٔ قطعی ندارد؛ ابتدا همان پرداخت را دوباره تأیید کنید.",
@@ -373,7 +323,7 @@ public sealed class PaymentService : IPaymentService
                 : await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(
                     new Spec<Order>().Where(o => o.OrderId == payment.OrderId.Value).AsTracking(), ct);
 
-            var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, payments, ct);
+            var unresolved = PaymentLifecycle.FindUnresolvedVerifications(payments);
             var verifyAlreadyStarted = unresolved.Contains(payment.PaymentId);
 
             var refusal = order is null ? null : GetPayabilityRefusal(order, payments, payment);
@@ -479,8 +429,9 @@ public sealed class PaymentService : IPaymentService
 
     /// <summary>
     /// «ادعای» پرداخت پیش از Verify، در یک تراکنش: پرداخت‌های باز دیگر همین سفارش لغو می‌شوند (حداکثر یک پرداخت
-    /// به درگاه می‌رسد)، خود پرداخت با کنترل RowVersion به‌روزرسانی و رکورد Payment.VerificationStarted ثبت می‌شود.
-    /// تعارض هم‌زمانی ⇒ false (یک بار دیگر با دادهٔ تازه) یا در تلاش آخر 503 قابل تکرار.
+    /// به درگاه می‌رسد)، خود پرداخت با کنترل RowVersion به‌روزرسانی می‌شود و «تأیید آغازشده» روی خودِ پرداخت
+    /// (<see cref="Payment.VerifyStartedAtUtc"/>، Batch 41/FIN-11) نوشته می‌شود؛ رکورد Payment.VerificationStarted در
+    /// AuditLog فقط مدرک است. تعارض هم‌زمانی ⇒ false (یک بار دیگر با دادهٔ تازه) یا در تلاش آخر 503 قابل تکرار.
     /// </summary>
     private async Task<bool> TryClaimForVerificationAsync(
         Payment payment,
@@ -504,6 +455,8 @@ public sealed class PaymentService : IPaymentService
                     ct);
             }
 
+            // اولین آغاز نگه داشته می‌شود؛ تکرار Verify همان لحظهٔ نخست را دارد.
+            payment.VerifyStartedAtUtc ??= _timeProvider.GetUtcNow().UtcDateTime;
             _unitOfWork.Repository<Payment>().Update(payment);
             await AuditAsync(
                 PaymentLifecycle.VerificationStartedAction,
@@ -600,8 +553,8 @@ public sealed class PaymentService : IPaymentService
 
         var payment = await GetByAuthorityAsync(parsed.Authority, cancellationToken);
 
-        // 3) idempotent: webhook تکراری نباید وضعیت را عقب ببرد.
-        if (payment.State is PaymentState.Succeeded or PaymentState.Refunded)
+        // 3) idempotent: webhook تکراری نباید وضعیت را عقب ببرد (پرداختِ در انتظار برگشت وجه هم قبلاً ثبت شده است).
+        if (payment.State is PaymentState.Succeeded or PaymentState.RefundPending or PaymentState.Refunded)
         {
             _logger.LogInformation("Duplicate webhook for payment {PaymentId} ignored", payment.PaymentId);
             return _mapper.Map<PaymentDto>(payment);
@@ -617,8 +570,7 @@ public sealed class PaymentService : IPaymentService
             throw new ConflictException("این پرداخت در وضعیت قابل تأیید نیست.", "PAYMENT_NOT_VERIFIABLE");
 
         // Batch 5 (F-07): اگر Verify این پرداخت آغاز شده و نتیجه‌اش نامعلوم است، پیام «ناموفق» آن را Failed نمی‌کند.
-        var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, new[] { payment }, cancellationToken);
-        if (unresolved.Contains(payment.PaymentId))
+        if (PaymentLifecycle.IsVerificationUnresolved(payment))
         {
             _logger.LogWarning(
                 "Failure webhook for payment {PaymentId} ignored: its verification outcome is still unknown", payment.PaymentId);
@@ -747,7 +699,7 @@ public sealed class PaymentService : IPaymentService
         payment = await PersistCapturedPaymentAsync(payment, referenceId, source, issues);
 
         if (payment.State == PaymentState.Succeeded)
-            await SyncOrderAfterCaptureAsync(payment, issues, gatewayCapture: true);
+            await SyncOrderAfterCaptureAsync(payment, issues);
 
         if (issues.Count > 0)
             await RecordReviewRequiredAsync(payment, referenceId, source, issues);
@@ -771,7 +723,7 @@ public sealed class PaymentService : IPaymentService
         for (var attempt = 1; ; attempt++)
         {
             // درخواست رقیب پیش‌تر ثبت کرده است ⇒ کار ما تمام است.
-            if (payment.State is PaymentState.Succeeded or PaymentState.Refunded)
+            if (payment.State is PaymentState.Succeeded or PaymentState.RefundPending or PaymentState.Refunded)
                 return payment;
 
             if (payment.State != PaymentState.Pending)
@@ -823,7 +775,7 @@ public sealed class PaymentService : IPaymentService
     /// هیچ متد دامنه‌ای خارج از گذار مجازش صدا زده نمی‌شود؛ هر وضعیت غیرمنتظره به‌جای
     /// InvalidOperationException به فهرست بررسی دستی اضافه می‌شود.
     /// </summary>
-    private async Task SyncOrderAfterCaptureAsync(Payment payment, List<string> issues, bool gatewayCapture)
+    private async Task SyncOrderAfterCaptureAsync(Payment payment, List<string> issues)
     {
         if (payment.OrderId is null)
             return;
@@ -849,8 +801,8 @@ public sealed class PaymentService : IPaymentService
             }
 
             // Batch 5 (F-06): درگاه پول دوم را برای سفارشی برداشته که قبلاً پرداخت شده (فقط اگر Verify پیش از گارد آغاز شده بود)؛
-            // ثبت Succeeded می‌ماند (Batch 4b) و برگشت آن به بررسی دستی (Batch 8) می‌رود. پرداخت دستی می‌تواند چندبخشی باشد، پس بررسی نمی‌شود.
-            var otherSucceeded = gatewayCapture && await _unitOfWork.Repository<Payment>().AnyAsync(
+            // ثبت Succeeded می‌ماند (Batch 4b) و برگشت آن به بررسی دستی می‌رود (برگشت وجه ادمین، Batch 41: سفارش دست نمی‌خورد).
+            var otherSucceeded = await _unitOfWork.Repository<Payment>().AnyAsync(
                 new Spec<Payment>().Where(p => p.OrderId == order.OrderId
                                             && p.PaymentId != payment.PaymentId
                                             && p.State == PaymentState.Succeeded),
@@ -1018,21 +970,22 @@ public sealed class PaymentService : IPaymentService
             || string.Equals(Status, "ok", StringComparison.OrdinalIgnoreCase);
     }
 
-        // ==================== Phase 9 (R43) — برگشت وجه ادمین ====================
+    // ==================== Phase 9 (R43) / Batch 41 — برگشت وجه ادمین ====================
 
     /// <summary>
-    /// ثبت برگشت وجه توسط ادمین.
+    /// ثبت برگشت وجه توسط ادمین: «پول را دستی برگردانده‌ام».
     ///
-    /// این متد <b>پول را جابه‌جا نمی‌کند</b> و این عمدی است: زرین‌پال
-    /// <c>RefundPaymentAsync</c> ندارد، پس تنها راه واقعی برگشت، پنل بانکی است.
-    /// کاری که اینجا انجام می‌شود هم‌راست کردن سیستم با واقعیت است — وگرنه
-    /// گزارش مالی می‌گوید پول نزد ماست در حالی که برگشته.
+    /// این متد <b>پول را جابه‌جا نمی‌کند</b> و این عمدی است: زرین‌پال برگشت خودکار ندارد، پس تنها راه واقعی
+    /// برگشت، پنل بانکی است. کاری که اینجا انجام می‌شود هم‌راست کردن سیستم با واقعیت است.
     ///
-    /// چهار اثر جانبی، همه در یک تراکنش:
-    ///   1. Payment.Succeeded → Refunded
-    ///   2. Order → Returned (تحویل‌شده) یا Cancelled (پیش از تحویل)
-    ///   3. SellerPayoutهای Pending آن سفارش لغو می‌شوند
-    ///   4. AuditLog
+    /// Batch 41 (FIN-01):
+    ///   • پرداخت RefundPending (سفارش پرداخت‌شده‌ای که لغو یا مرجوع شده) ⇒ Refunded. سفارش پیش‌تر برگردانده شده
+    ///     است و دوباره دست نمی‌خورد.
+    ///   • پرداخت Succeeded ⇒ ابتدا همان روال برگرداندن سفارش (<see cref="IOrderReversalService"/>: سفارش، بسته‌ها،
+    ///     موجودی، کوپن، تسویه‌ها و بدهی‌ها) و RefundPending، سپس در همان تراکنش Refunded. هیچ میان‌بر
+    ///     Succeeded → Refunded وجود ندارد.
+    ///   • اگر سفارش پرداخت موفق دیگری هم دارد (برداشت تکراری)، فقط همین پرداخت برمی‌گردد و سفارش دست نمی‌خورد.
+    ///   • هر وضعیت دیگری ⇒ 409 PAYMENT_NOT_REFUNDABLE (کلیک دوباره هرگز چیزی را دوباره ثبت نمی‌کند).
     /// </summary>
     public async Task<PaymentDto> RefundPaymentAsync(
         int paymentId,
@@ -1051,26 +1004,29 @@ public sealed class PaymentService : IPaymentService
             if (payment is null)
                 throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
 
-            if (payment.State != PaymentState.Succeeded)
+            if (payment.State is not (PaymentState.Succeeded or PaymentState.RefundPending))
                 throw new ConflictException(
-                    $"فقط پرداخت موفق قابل برگشت است؛ وضعیت فعلی: {payment.State}.",
+                    $"فقط پرداخت موفق یا در انتظار برگشت وجه قابل برگشت است؛ وضعیت فعلی: {payment.State}.",
                     "PAYMENT_NOT_REFUNDABLE");
 
             var note = string.IsNullOrWhiteSpace(reason) ? "admin refund" : reason!.Trim();
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var confirmsPendingRefund = payment.State == PaymentState.RefundPending;
 
-            payment.TransitionTo(PaymentState.Refunded, $"admin refund: {note}");
+            var reversal = confirmsPendingRefund
+                ? new RefundReversalOutcome("already-reversed", 0, 0)
+                : await RequestRefundAndReverseOrderAsync(payment, note, now, cancellationToken);
+
+            payment.ConfirmRefund(now, reference: null, note: $"admin refund: {note}");
             _unitOfWork.Repository<Payment>().Update(payment);
 
-            var orderStatus = await UpdateOrderAfterRefundAsync(payment, note, cancellationToken);
-
-            var cancelledPayouts = await CancelOpenPayoutsAsync(payment, cancellationToken);
-
             await _auditService.RecordAsync(
-                "Payment.Refunded",
+                PaymentLifecycle.RefundedAction,
                 nameof(Payment),
                 payment.PaymentId.ToString(),
                 $"admin refund | amount={payment.Amount} | order={payment.OrderId?.ToString() ?? "none"} " +
-                $"| orderStatus={orderStatus} | cancelledPayouts={cancelledPayouts} | reason={note} " +
+                $"| orderStatus={reversal.OrderStatus} | cancelledPayouts={reversal.CancelledPayouts} " +
+                $"| clawbackDebts={reversal.ClawbackDebts} | confirmedPendingRefund={confirmsPendingRefund} | reason={note} " +
                 "| MONEY_MOVED_MANUALLY=true",
                 cancellationToken);
 
@@ -1078,8 +1034,8 @@ public sealed class PaymentService : IPaymentService
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogWarning(
-                "Payment {PaymentId} refunded by admin {AdminId}. Order status: {OrderStatus}, cancelled payouts: {Payouts}. Money must be returned manually.",
-                payment.PaymentId, _currentUser.TryGetCurrentUserId(), orderStatus, cancelledPayouts);
+                "Payment {PaymentId} refunded by admin {AdminId}. Order status: {OrderStatus}, cancelled payouts: {Payouts}, clawback debts: {Debts}. Money must be returned manually.",
+                payment.PaymentId, _currentUser.TryGetCurrentUserId(), reversal.OrderStatus, reversal.CancelledPayouts, reversal.ClawbackDebts);
 
             return _mapper.Map<PaymentDto>(payment);
         }
@@ -1095,122 +1051,76 @@ public sealed class PaymentService : IPaymentService
         }
     }
 
-    /// <summary>سفارش مرتبط را به وضعیت سازگار با برگشت وجه می‌برد.</summary>
-    private async Task<string> UpdateOrderAfterRefundAsync(
+    /// <summary>آنچه برگشت وجه بر سر سفارش آورد؛ فقط برای AuditLog و لاگ.</summary>
+    private sealed record RefundReversalOutcome(string OrderStatus, int CancelledPayouts, int ClawbackDebts);
+
+    /// <summary>
+    /// پرداخت موفق را به RefundPending می‌برد و سفارش مرتبط را از روال مشترک برمی‌گرداند.
+    /// سفارشی که پرداخت موفق دیگری دارد برگردانده نمی‌شود: این برگشتِ یک برداشت تکراری است و سفارش هنوز پرداخت‌شده است.
+    /// </summary>
+    private async Task<RefundReversalOutcome> RequestRefundAndReverseOrderAsync(
         Payment payment,
         string note,
+        DateTime now,
         CancellationToken cancellationToken)
     {
+        const string source = "admin refund";
+
         if (payment.OrderId is null)
-            return "no-order";
+        {
+            await PaymentLifecycle.RequestRefundAsync(_unitOfWork, _auditService, payment, now, note, source, cancellationToken);
+            return new RefundReversalOutcome("no-order", 0, 0);
+        }
 
         var order = await _unitOfWork.Repository<Order>()
             .FirstOrDefaultAsync(
-                new Spec<Order>().Where(o => o.OrderId == payment.OrderId.Value).AsTracking(),
+                new Spec<Order>()
+                    .Where(o => o.OrderId == payment.OrderId.Value)
+                    .Include(o => o.OrderItems)
+                    .Include(o => o.SellerGroups)
+                    .AsTracking(),
                 cancellationToken);
 
         if (order is null)
-            return "order-missing";
-
-        var previous = order.Status;
-
-        switch (order.Status)
         {
-            case OrderStatus.Delivered:
-                order.MarkReturned();
-                break;
-
-            case OrderStatus.Pending:
-            case OrderStatus.Processing:
-                order.Cancel();
-                break;
-
-            default:
-                // Shipped: نه لغو مجاز است نه مرجوعی. عمداً دست نمی‌زنیم و
-                // در حسابرسی ثبت می‌کنیم تا کسی تصور نکند فراموش شده.
-                _logger.LogWarning(
-                    "Refund for payment {PaymentId}: order {OrderId} is {Status}; leaving status untouched.",
-                    payment.PaymentId, order.OrderId, order.Status);
-
-                return $"{previous}-untouched";
+            await PaymentLifecycle.RequestRefundAsync(_unitOfWork, _auditService, payment, now, note, source, cancellationToken);
+            return new RefundReversalOutcome("order-missing", 0, 0);
         }
 
+        var paidByAnotherPayment = await _unitOfWork.Repository<Payment>().AnyAsync(
+            new Spec<Payment>().Where(p => p.OrderId == order.OrderId
+                                        && p.PaymentId != payment.PaymentId
+                                        && p.State == PaymentState.Succeeded),
+            cancellationToken);
+
+        if (paidByAnotherPayment)
+        {
+            _logger.LogWarning(
+                "Refund for payment {PaymentId}: order {OrderId} is still paid by another payment; the order is left untouched.",
+                payment.PaymentId, order.OrderId);
+
+            await PaymentLifecycle.RequestRefundAsync(_unitOfWork, _auditService, payment, now, note, source, cancellationToken);
+            return new RefundReversalOutcome($"{order.Status}-kept (paid by another payment)", 0, 0);
+        }
+
+        var result = await _orderReversalService.ReverseAsync(order, OrderReversalKind.AdminRefund, note, cancellationToken);
         _unitOfWork.Repository<Order>().Update(order);
 
-        _logger.LogInformation(
-            "Order {OrderId} moved {From} → {To} after refund ({Note}).",
-            order.OrderId, previous, order.Status, note);
+        // روال مشترک هر پرداخت موفق سفارش (از جمله همین پرداخت) را RefundPending کرده است؛ این فقط سد دوم است.
+        if (payment.State == PaymentState.Succeeded)
+            await PaymentLifecycle.RequestRefundAsync(_unitOfWork, _auditService, payment, now, note, source, cancellationToken);
 
-        return order.Status.ToString();
-    }
-
-    /// <summary>
-    /// تسویه‌های بازِ فروشنده را لغو می‌کند.
-    ///
-    /// چرا SellerPayout منفی ساخته نمی‌شود: سازندهٔ موجودیت مبلغ منفی را رد
-    /// می‌کند و آن محدودیت درست است — یک «تسویهٔ منفی» در گزارش فروشنده
-    /// معنایی ندارد. لغو تسویهٔ Pending همان اثر مالی را دارد بدون شکستن invariant.
-    ///
-    /// تسویه‌ای که قبلاً Paid شده قابل برگشت خودکار نیست؛ در لاگ هشدار داده می‌شود.
-    /// </summary>
-    private async Task<int> CancelOpenPayoutsAsync(Payment payment, CancellationToken cancellationToken)
-    {
-        if (payment.OrderId is null)
-            return 0;
-
-        var groupIds = (await _unitOfWork.Repository<OrderSellerGroup>()
-                .ListAsync(
-                    new Spec<OrderSellerGroup>().Where(g => g.OrderId == payment.OrderId.Value),
-                    cancellationToken))
-            .Select(g => g.OrderSellerGroupId)
-            .ToList();
-
-        if (groupIds.Count == 0)
-            return 0;
-
-        var payouts = await _unitOfWork.Repository<SellerPayout>()
-            .ListAsync(
-                new Spec<SellerPayout>()
-                    .Where(p => p.OrderSellerGroupId != null
-                             && groupIds.Contains(p.OrderSellerGroupId.Value)
-                             && p.Status == PayoutStatus.Pending)
-                    .AsTracking(),
-                cancellationToken);
-
-        foreach (var payout in payouts)
+        if (!result.OrderChanged)
         {
-            payout.Cancel();
-            _unitOfWork.Repository<SellerPayout>().Update(payout);
+            // Shipped: نه لغو مجاز است نه مرجوعی. عمداً دست نمی‌زنیم و در حسابرسی ثبت می‌کنیم تا کسی تصور نکند فراموش شده.
+            _logger.LogWarning(
+                "Refund for payment {PaymentId}: order {OrderId} is {Status}; leaving status untouched.",
+                payment.PaymentId, order.OrderId, order.Status);
         }
 
-        // M7.13: Harmonized clawback debt creation for already-paid payouts on refund
-        var paidPayouts = await _unitOfWork.Repository<SellerPayout>()
-            .ListAsync(
-                new Spec<SellerPayout>()
-                    .Where(p => p.OrderSellerGroupId != null
-                             && groupIds.Contains(p.OrderSellerGroupId.Value)
-                             && p.Status == PayoutStatus.Paid)
-                    .AsTracking(),
-                cancellationToken);
-
-        foreach (var payout in paidPayouts)
-        {
-            var debt = new SellerDebt
-            {
-                SellerId = payout.SellerId,
-                Amount = payout.Amount,
-                Reason = $"Clawback for refunded payment {payment.PaymentId}, order {payment.OrderId}",
-                CreatedAtUtc = DateTime.UtcNow,
-                IsSettled = false
-            };
-            await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
-            await AuditAsync(
-                "SellerDebt.Created",
-                debt.SellerDebtId,
-                $"order={payment.OrderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
-                cancellationToken);
-        }
-
-        return payouts.Count;
+        return new RefundReversalOutcome(
+            result.OrderChanged ? order.Status.ToString() : $"{order.Status}-untouched",
+            result.CancelledPayouts,
+            result.ClawbackDebts);
     }
 }

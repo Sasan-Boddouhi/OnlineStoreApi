@@ -23,7 +23,7 @@ public sealed class OrderService : IOrderService
     private readonly ILogger<OrderService> _logger;
     private readonly ICurrentUserService _currentUserService;
     private readonly IInventoryService _inventoryService;
-    private readonly IAuditService _auditService;
+    private readonly IOrderReversalService _orderReversalService;
     private readonly CommissionSettings _commissionSettings;
 
     private static readonly Expression<Func<Order, OrderDto>> OrderProjection = o => new OrderDto
@@ -75,12 +75,12 @@ public sealed class OrderService : IOrderService
         ILogger<OrderService> logger,
         ICurrentUserService currentUserService,
         IInventoryService inventoryService,
-        IAuditService auditService,
+        IOrderReversalService orderReversalService,
         IOptions<CommissionSettings> commissionSettings)
     {
         _unitOfWork = unitOfWork;
         _inventoryService = inventoryService;
-        _auditService = auditService;
+        _orderReversalService = orderReversalService;
         _commissionSettings = commissionSettings.Value;
         _mapper = mapper;
         _logger = logger;
@@ -128,14 +128,14 @@ public sealed class OrderService : IOrderService
     /// بقیه فقط سفارش خودشان را (<see cref="GetOwnedOrderAsync"/>) و برای سفارش دیگران 404 می‌گیرند.
     /// ادمین هم از گذارهای مجاز پرداخت و سفارش (مثلاً سفارش ارسال‌شده لغو نمی‌شود) عبور نمی‌کند.
     /// </summary>
-    private async Task<Order> GetCancellableOrderAsync(int orderId, CancellationToken cancellationToken)
+    private async Task<(Order Order, bool IsAdmin)> GetCancellableOrderAsync(int orderId, CancellationToken cancellationToken)
     {
         var role = _currentUserService.GetCurrentUserRole();
         var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
             || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
 
         if (!isAdmin)
-            return await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true);
+            return (await GetOwnedOrderAsync(orderId, cancellationToken, includeItems: true), false);
 
         var order = await _unitOfWork.Repository<Order>()
             .FirstOrDefaultAsync(
@@ -149,7 +149,7 @@ public sealed class OrderService : IOrderService
         if (order is null)
             throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
-        return order;
+        return (order, true);
     }
 
     /// <summary>
@@ -670,6 +670,11 @@ public sealed class OrderService : IOrderService
 
     #region CancelOrder
 
+    /// <summary>
+    /// لغو سفارش. Batch 41 (FIN-01، FIN-03): همهٔ اثرها (گروه‌ها، موجودی، سهمیهٔ کوپن، پرداخت‌های باز، درخواست
+    /// برگشت وجه) در <see cref="IOrderReversalService"/> نوشته شده‌اند. پرداخت موفقِ سفارش لغوشده RefundPending
+    /// می‌شود، نه Refunded: پول هنوز برنگشته است. مشتری پس از ارسال یا تحویل حتی یک بسته 409 ORDER_PARTLY_SHIPPED می‌گیرد.
+    /// </summary>
     public async Task<OrderDto> CancelOrderAsync(int orderId, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Cancelling order {OrderId}", orderId);
@@ -677,60 +682,12 @@ public sealed class OrderService : IOrderService
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
-            var order = await GetCancellableOrderAsync(orderId, cancellationToken);
+            var (order, isAdmin) = await GetCancellableOrderAsync(orderId, cancellationToken);
 
-            // Batch 5 (F-05): پرداخت‌های باز سفارش هم لغو می‌شوند تا Authority بازمانده دیگر Verify (برداشت) نشود؛
-            // زرین‌پال پول تأییدنشده را خودکار به خریدار برمی‌گرداند. اما اگر Verify یکی از آن‌ها آغاز شده و نتیجه‌اش
-            // نامعلوم است، شاید پول برداشته شده باشد؛ لغو بی‌صدای آن پول را بی‌ردپا می‌کند ⇒ 409.
-            var orderPayments = (await _unitOfWork.Repository<Payment>().ListAsync(
-                    new Spec<Payment>().Where(p => p.OrderId == orderId).AsTracking(),
-                    cancellationToken))
-                .ToList();
-
-            var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, orderPayments, cancellationToken);
-            if (unresolved.Count > 0)
-                throw new ConflictException(
-                    "پرداخت این سفارش در حال تأیید است و هنوز نتیجهٔ قطعی ندارد؛ ابتدا تأیید پرداخت را تکرار کنید.",
-                    "PAYMENT_VERIFICATION_PENDING");
-
-            order.Cancel();
-
-            await PaymentLifecycle.CancelOpenPaymentsAsync(
-                _unitOfWork, _auditService, orderPayments, "order cancelled", cancellationToken);
-
-            // R6: گروه‌های فروشنده هم باید لغو شوند، وگرنه سفارش لغوشده در گزارش
-            // تسویه با وضعیت Processing می‌ماند و پول پرداخت‌نشده نشان می‌دهد.
-            foreach (var group in order.SellerGroups)
-                group.Cancel();
-
-            foreach (var item in order.OrderItems)
-                await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
-
-            // Phase 8 (H): اگر سفارش پرداخت‌شده بود، پول باید برگردد.
-            // بدون این، پول مشتری نزد ما می‌ماند و گزارش مالی دروغ می‌گوید.
-            await RefundSucceededPaymentsAsync(orderId, cancellationToken);
-
-            // M7.13: بازگرداندن سهمیه کوپن در صورت لغو سفارش
-            if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
-            {
-                var coupon = await _unitOfWork.Repository<Coupon>()
-                    .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.CouponId == order.CouponId.Value).AsTracking(), cancellationToken);
-
-                if (coupon != null && coupon.UsedCount > 0)
-                {
-                    coupon.UsedCount--;
-                    _unitOfWork.Repository<Coupon>().Update(coupon);
-                }
-
-                order.CouponQuotaRefunded = true;
-            }
-
-            // Phase 9 (R40): لغو سفارش یک رویداد حساس است.
-            await _auditService.RecordAsync(
-                "Order.Cancelled",
-                nameof(Order),
-                orderId.ToString(),
-                $"amount={order.TotalAmount}",
+            await _orderReversalService.ReverseAsync(
+                order,
+                isAdmin ? OrderReversalKind.AdminCancel : OrderReversalKind.CustomerCancel,
+                isAdmin ? "order cancelled by admin" : "order cancelled by customer",
                 cancellationToken);
 
             _unitOfWork.Repository<Order>().Update(order);
@@ -751,6 +708,11 @@ public sealed class OrderService : IOrderService
         }
     }
 
+    /// <summary>
+    /// مرجوع کردن سفارش تحویل‌شده توسط ادمین. Batch 41 (FIN-01): از همان روال برگرداندن سفارش می‌گذرد؛ بسته‌ها
+    /// Returned، موجودی آزاد، تسویه‌های Pending لغو، برای تسویه‌های Paid بدهی بازپس‌گیری ثبت و پرداخت موفق
+    /// RefundPending می‌شود (پیش‌تر مرجوعی هیچ برگشت وجهی ثبت نمی‌کرد).
+    /// </summary>
     public async Task<OrderDto> MarkReturnedAsync(int orderId, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Marking order {OrderId} as returned", orderId);
@@ -768,58 +730,8 @@ public sealed class OrderService : IOrderService
             if (order is null)
                 throw new NotFoundException("سفارش یافت نشد.", "ORDER_NOT_FOUND");
 
-            order.MarkReturned();
-
-            foreach (var group in order.SellerGroups)
-            {
-                if (group.Status == SellerGroupStatus.Delivered)
-                    group.MarkReturned();
-                else
-                    group.Cancel();
-            }
-
-            foreach (var item in order.OrderItems)
-                await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
-
-            var payouts = await _unitOfWork.Repository<SellerPayout>()
-                .ListAsync(new Spec<SellerPayout>()
-                    .Where(p => p.OrderSellerGroup != null && p.OrderSellerGroup.OrderId == orderId)
-                    .AsTracking(),
-                    cancellationToken);
-
-            foreach (var payout in payouts)
-            {
-                if (payout.Status == PayoutStatus.Pending)
-                {
-                    payout.Cancel();
-                }
-                else if (payout.Status == PayoutStatus.Paid)
-                {
-                    // M7.12: Clawback debt creation for already-paid payouts on returned orders
-                    var debt = new SellerDebt
-                    {
-                        SellerId = payout.SellerId,
-                        Amount = payout.Amount,
-                        Reason = $"Clawback for returned order {orderId} (Payout {payout.SellerPayoutId})",
-                        CreatedAtUtc = DateTime.UtcNow,
-                        IsSettled = false
-                    };
-                    await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
-                    await _auditService.RecordAsync(
-                        "SellerDebt.Created",
-                        nameof(SellerDebt),
-                        payout.SellerId.ToString(),
-                        $"order={orderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
-                        cancellationToken);
-                }
-            }
-
-            await _auditService.RecordAsync(
-                "Order.Returned",
-                nameof(Order),
-                orderId.ToString(),
-                $"amount={order.TotalAmount}",
-                cancellationToken);
+            await _orderReversalService.ReverseAsync(
+                order, OrderReversalKind.AdminReturn, "order returned", cancellationToken);
 
             _unitOfWork.Repository<Order>().Update(order);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -836,39 +748,6 @@ public sealed class OrderService : IOrderService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
-        }
-    }
-
-    /// <summary>
-    /// Phase 8 (H): علامت‌زدن پرداخت‌های موفقِ یک سفارشِ لغوشده به Refunded.
-    ///
-    /// اینجا عمداً از مخزن استفاده می‌شود و نه از IPaymentService:
-    /// PaymentService برای «تأیید سفارش Pending» به OrderService وابسته است؛
-    /// اگر OrderService هم به PaymentService وابسته می‌شد، چرخهٔ DI می‌ساختیم.
-    /// </summary>
-    private async Task RefundSucceededPaymentsAsync(int orderId, CancellationToken cancellationToken)
-    {
-        var payments = await _unitOfWork.Repository<Payment>()
-            .ListAsync(
-                new Spec<Payment>()
-                    .Where(x => x.OrderId == orderId && x.State == PaymentState.Succeeded)
-                    .AsTracking(),
-                cancellationToken);
-
-        foreach (var payment in payments)
-        {
-            payment.TransitionTo(PaymentState.Refunded, note: "Order cancelled after successful payment.");
-            await _auditService.RecordAsync(
-                "Payment.Refunded",
-                nameof(Payment),
-                payment.PaymentId.ToString(),
-                $"order={orderId} cancelled after payment",
-                cancellationToken);
-            _unitOfWork.Repository<Payment>().Update(payment);
-
-            _logger.LogInformation(
-                "Payment {PaymentId} marked Refunded after cancellation of order {OrderId}",
-                payment.PaymentId, orderId);
         }
     }
 

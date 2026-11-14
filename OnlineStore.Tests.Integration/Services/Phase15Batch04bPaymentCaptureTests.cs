@@ -403,7 +403,7 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
         ISaveChangesInterceptor? interceptor = null,
         IPaymentGateway? gateway = null)
     {
-        var scope = Factory.Services.CreateScope();
+        var scope = Factory.Services.CreateAsyncScope();
         var sp = scope.ServiceProvider;
 
         var interceptors = sp.GetServices<ISaveChangesInterceptor>().ToList();
@@ -424,6 +424,10 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
             sp.GetRequiredService<IPaymentSignatureValidator>(),
             currentUser,
             new AuditService(unitOfWork, currentUser),
+            // Batch 41: دو وابستگی تازهٔ سازنده. این تست‌ها فقط verify/webhook را می‌سنجند و به برگشت وجه نمی‌رسند،
+            // پس روال برگرداندن سفارشِ همان scope کافی است؛ ساعت، ساعت تست کارخانه است.
+            sp.GetRequiredService<IOrderReversalService>(),
+            sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<IOptions<PaymentGatewaySettings>>(),
             NullLogger<PaymentService>.Instance);
 
@@ -433,9 +437,9 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
     private sealed class IsolatedPaymentService : IAsyncDisposable
     {
         private readonly AppDbContext _context;
-        private readonly IServiceScope _scope;
+        private readonly AsyncServiceScope _scope;
 
-        public IsolatedPaymentService(PaymentService service, AppDbContext context, IServiceScope scope)
+        public IsolatedPaymentService(PaymentService service, AppDbContext context, AsyncServiceScope scope)
         {
             Service = service;
             _context = context;
@@ -447,7 +451,8 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
         public async ValueTask DisposeAsync()
         {
             await _context.DisposeAsync();
-            _scope.Dispose();
+            // Batch 41: scope اکنون UnitOfWork دارد (برای IOrderReversalService) که فقط IAsyncDisposable است.
+            await _scope.DisposeAsync();
         }
     }
 

@@ -101,7 +101,8 @@ public class Phase15Batch04FulfilmentGuardTests : ControllerIntegrationTestBase
 
         var ex = await act.Should().ThrowAsync<ConflictException>();
         ex.Which.Code.Should().Be("ORDER_CANCELLED");
-        (await GroupStatusAsync(groupId)).Should().Be(SellerGroupStatus.Processing);
+        // Batch 41 (FIN-03): برگشت وجه سفارش Processing از روال مشترک می‌گذرد و بسته‌ها را لغو می‌کند؛ ارسال همچنان چیزی را تغییر نمی‌دهد.
+        (await GroupStatusAsync(groupId)).Should().Be(SellerGroupStatus.Cancelled);
     }
 
     // ==================== تحویل ====================
@@ -149,7 +150,9 @@ public class Phase15Batch04FulfilmentGuardTests : ControllerIntegrationTestBase
         SetCurrentUser(seller.UserId, "Seller");
         await DashboardService.ShipSellerGroupAsync(seeded.OrderId, groupId, ShipRequest());
 
-        SetCurrentUser(seeded.BuyerUserId, "Customer");
+        // Batch 41 (FIN-03 / N8): مشتری پس از ارسال یک بسته دیگر نمی‌تواند لغو کند (409 ORDER_PARTLY_SHIPPED)؛
+        // سفارش لغوشده با بستهٔ در راه فقط با لغو ادمین ساخته می‌شود.
+        SetCurrentUser(1, "Admin");
         await OrderService.CancelOrderAsync(seeded.OrderId);
 
         SetCurrentUser(seller.UserId, "Seller");

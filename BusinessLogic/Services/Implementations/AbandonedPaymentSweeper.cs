@@ -52,9 +52,9 @@ public sealed class AbandonedPaymentSweeper : IAbandonedPaymentSweeper
         if (stale.Count == 0)
             return 0;
 
-        // Batch 5 (F-07): Verify این پرداخت‌ها آغاز شده و نتیجه‌اش نامعلوم است؛ شاید پول برداشته شده باشد.
+        // Batch 5 (F-07): Verify این پرداخت‌ها آغاز شده (Payment.VerifyStartedAtUtc، Batch 41) و نتیجه‌اش نامعلوم است؛ شاید پول برداشته شده باشد.
         // لغو نمی‌شوند، فقط یک بار برای بررسی دستی ثبت می‌شوند. تأیید دوباره وضعیت را قطعی می‌کند.
-        var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(_unitOfWork, stale, cancellationToken);
+        var unresolved = PaymentLifecycle.FindUnresolvedVerifications(stale);
         foreach (var payment in stale.Where(p => unresolved.Contains(p.PaymentId)))
             await FlagUnresolvedOnceAsync(payment, cancellationToken);
 

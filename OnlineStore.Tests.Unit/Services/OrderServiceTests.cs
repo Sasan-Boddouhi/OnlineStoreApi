@@ -51,7 +51,7 @@ public class OrderServiceTests
         _uowMock.Setup(u => u.Repository<SellerProduct>()).Returns(_listingRepoMock.Object);
         _uowMock.Setup(u => u.Repository<Seller>()).Returns(_sellerRepoMock.Object);
 
-        // Phase 8: لغو سفارش، پرداخت‌های موفق را Refunded می‌کند.
+        // Batch 41: لغو سفارش از روال مشترک برگرداندن سفارش می‌گذرد که پرداخت‌های سفارش را می‌خواند (پرداخت موفق ⇒ RefundPending).
         _paymentRepoMock = new Mock<IGenericRepository<Payment>>();
         _paymentRepoMock
             .Setup(r => r.ListAsync(It.IsAny<Spec<Payment>>(), It.IsAny<CancellationToken>()))
@@ -70,7 +70,13 @@ public class OrderServiceTests
             _loggerMock.Object,
             _currentUserMock.Object,
             _inventoryMock.Object,
-            _auditMock.Object,
+            // Batch 41: OrderService دیگر خودش لغو/حسابرسی نمی‌کند؛ همان روال واقعی با همین mockها ساخته می‌شود تا تست لغو، رفتار واقعی را بسنجد.
+            new OrderReversalService(
+                _uowMock.Object,
+                _inventoryMock.Object,
+                _auditMock.Object,
+                TimeProvider.System,
+                Mock.Of<ILogger<OrderReversalService>>()),
             Options.Create(new CommissionSettings { DefaultRate = 10m }));
     }
 

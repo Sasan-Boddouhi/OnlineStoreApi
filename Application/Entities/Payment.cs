@@ -79,6 +79,29 @@ namespace Application.Entities
         [ForeignKey("InvoiceId")]
         public virtual Invoice Invoice { get; set; } = null!;
 
+        // ---------------- Batch 41 ----------------
+
+        /// <summary>
+        /// Batch 41 (FIN-11): لحظه‌ای که Verify درگاه برای این پرداخت آغاز شد.
+        /// پرداخت Pending که این مقدار را دارد «تأییدِ نامعلوم» است: شاید پول برداشته شده باشد و هرگز بی‌صدا لغو نمی‌شود.
+        /// رکورد <c>Payment.VerificationStarted</c> در AuditLog فقط مدرک است، نه منبع تصمیم.
+        /// </summary>
+        public DateTime? VerifyStartedAtUtc { get; set; }
+
+        /// <summary>Batch 41 (FIN-01): لحظهٔ ثبت درخواست برگشت وجه (ورود به <see cref="PaymentState.RefundPending"/>).</summary>
+        public DateTime? RefundRequestedAtUtc { get; set; }
+
+        /// <summary>Batch 41 (FIN-01): لحظه‌ای که ادمین برگشت واقعی پول را تأیید کرد (ورود به <see cref="PaymentState.Refunded"/>).</summary>
+        public DateTime? RefundedAtUtc { get; set; }
+
+        /// <summary>Batch 41 (FIN-01): شمارهٔ پیگیری بانکیِ برگشت وجه (در Batch 42 هنگام تأیید پر می‌شود).</summary>
+        [MaxLength(100)]
+        public string? RefundReference { get; set; }
+
+        /// <summary>Batch 41 (FIN-01): دلیل برگشت وجه (لغو سفارش، مرجوعی، برگشت دستی ادمین).</summary>
+        [MaxLength(500)]
+        public string? RefundReason { get; set; }
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = new byte[8];
 
@@ -86,24 +109,57 @@ namespace Application.Entities
         /// انتقال وضعیت با اعتبارسنجی.
         ///
         /// مسیر مجاز:
-        ///   Initiated → Pending | Failed | Cancelled
-        ///   Pending   → Succeeded | Failed | Cancelled
-        ///   Succeeded → Refunded
-        /// و هیچ‌چیز از Failed/Cancelled/Refunded به عقب برنمی‌گردد.
+        ///   Initiated     → Pending | Failed | Cancelled
+        ///   Pending       → Succeeded | Failed | Cancelled
+        ///   Succeeded     → RefundPending            (Batch 41: درخواست برگشت وجه؛ <see cref="RequestRefund"/>)
+        ///   RefundPending → Refunded                 (Batch 41: تأیید برگشت واقعی پول؛ <see cref="ConfirmRefund"/>)
+        /// و هیچ‌چیز از Failed/Cancelled/Refunded به عقب برنمی‌گردد. میان‌بر Succeeded → Refunded وجود ندارد:
+        /// پرداختی که پولش هنوز برنگشته هرگز «برگشت‌داده‌شده» نشان داده نمی‌شود.
         /// </summary>
-        public void TransitionTo(PaymentState next, string? note = null)
+        /// <param name="next">وضعیت مقصد.</param>
+        /// <param name="note">یادداشت اختیاری (در <see cref="Notes"/> ذخیره می‌شود).</param>
+        /// <param name="nowUtc">لحظهٔ تغییر از ساعت تزریق‌شده (TimeProvider)؛ اگر داده نشود ساعت سیستم.</param>
+        public void TransitionTo(PaymentState next, string? note = null, DateTime? nowUtc = null)
         {
             if (!IsAllowed(State, next))
                 throw new BusinessRuleViolationException($"Invalid payment transition: {State} → {next}.", "PAYMENT_INVALID_TRANSITION");
 
             State = next;
-            LastStateChangedAtUtc = DateTime.UtcNow;
+            LastStateChangedAtUtc = nowUtc ?? DateTime.UtcNow;
 
             if (note is not null)
                 Notes = note;
 
 
         }
+
+        /// <summary>
+        /// Batch 41 (FIN-01): پول این پرداخت باید به مشتری برگردد (لغو سفارش پرداخت‌شده، مرجوعی، برگشت دستی ادمین).
+        /// فقط از Succeeded؛ پرداخت در صف برگشت وجه می‌ماند تا برگشت واقعی پول با <see cref="ConfirmRefund"/> تأیید شود.
+        /// </summary>
+        public void RequestRefund(DateTime nowUtc, string reason)
+        {
+            TransitionTo(PaymentState.RefundPending, nowUtc: nowUtc);
+
+            RefundRequestedAtUtc = nowUtc;
+            RefundReason = Truncate(string.IsNullOrWhiteSpace(reason) ? "refund requested" : reason.Trim(), 500);
+        }
+
+        /// <summary>
+        /// Batch 41 (FIN-01): ادمین تأیید می‌کند که پول واقعاً به مشتری برگشته است. فقط از RefundPending.
+        /// </summary>
+        public void ConfirmRefund(DateTime nowUtc, string? reference = null, string? note = null)
+        {
+            TransitionTo(PaymentState.Refunded, note is null ? null : Truncate(note, 500), nowUtc);
+
+            RefundedAtUtc = nowUtc;
+
+            if (!string.IsNullOrWhiteSpace(reference))
+                RefundReference = Truncate(reference.Trim(), 100);
+        }
+
+        private static string Truncate(string value, int maxLength)
+            => value.Length <= maxLength ? value : value[..maxLength];
 
         public static bool IsAllowed(PaymentState from, PaymentState to) => (from, to) switch
         {
@@ -113,7 +169,8 @@ namespace Application.Entities
             (PaymentState.Pending, PaymentState.Succeeded) => true,
             (PaymentState.Pending, PaymentState.Failed) => true,
             (PaymentState.Pending, PaymentState.Cancelled) => true,
-            (PaymentState.Succeeded, PaymentState.Refunded) => true,
+            (PaymentState.Succeeded, PaymentState.RefundPending) => true,
+            (PaymentState.RefundPending, PaymentState.Refunded) => true,
             _ => false
         };
     }
@@ -136,7 +193,13 @@ namespace Application.Entities
         Succeeded = 2,
         Failed = 3,
         Cancelled = 4,
-        Refunded = 5
+        Refunded = 5,
+
+        /// <summary>
+        /// Batch 41 (FIN-01): پول باید به مشتری برگردد ولی هنوز برنگشته است (کار باز برای اپراتور).
+        /// فقط پس از تأیید برگشت واقعی پول به <see cref="Refunded"/> می‌رود.
+        /// </summary>
+        RefundPending = 6
     }
 
     /// <summary>Phase 8 — درگاه‌های پشتیبانی‌شده.</summary>

@@ -72,7 +72,12 @@ public class Phase8PaymentTests : BaseIntegrationTest
         payment.TransitionTo(PaymentState.Succeeded);
         payment.State.Should().Be(PaymentState.Succeeded);
 
+        // Batch 41 (FIN-01): برگشت وجه همیشه از RefundPending می‌گذرد؛ میان‌بر Succeeded → Refunded حذف شد.
+        payment.TransitionTo(PaymentState.RefundPending);
+        payment.State.Should().Be(PaymentState.RefundPending);
+
         payment.TransitionTo(PaymentState.Refunded);
+        payment.State.Should().Be(PaymentState.Refunded);
     }
 
     // ==================== Idempotency ====================
@@ -266,7 +271,7 @@ public class Phase8PaymentTests : BaseIntegrationTest
     // ==================== برگشت وجه ====================
 
     [Fact]
-    public async Task OrderCancelled_AfterPayment_PaymentIsRefunded()
+    public async Task OrderCancelled_AfterPayment_PaymentIsRefundPending()
     {
         var (order, buyerUser) = await CreatePayableOrderAsync(140m);
         SetCurrentUser(buyerUser, "Customer");
@@ -280,7 +285,8 @@ public class Phase8PaymentTests : BaseIntegrationTest
         var payment = await DbContext.Payment.AsNoTracking()
             .FirstAsync(p => p.PaymentId == initiation.PaymentId);
 
-        payment.State.Should().Be(PaymentState.Refunded);
+        // Batch 41 (FIN-01): پول هنوز برنگشته است؛ پرداخت در صف برگشت وجه می‌ماند تا ادمین برگشت را تأیید کند.
+        payment.State.Should().Be(PaymentState.RefundPending);
     }
 
     [Fact]
@@ -417,7 +423,8 @@ public class Phase8PaymentTests : BaseIntegrationTest
 
         actions.Should().Contain("Payment.Initiated");
         actions.Should().Contain("Payment.Succeeded");
-        actions.Should().Contain("Payment.Refunded");
+        // Batch 41 (FIN-01): لغو سفارش پرداخت‌شده فقط درخواست برگشت وجه ثبت می‌کند؛ «Payment.Refunded» پس از تأیید برگشت واقعی پول.
+        actions.Should().Contain("Payment.RefundRequested");
     }
 
     // ==================== Helpers ====================

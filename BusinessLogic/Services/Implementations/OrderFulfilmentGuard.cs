@@ -15,8 +15,8 @@ namespace BusinessLogic.Services.Implementations;
 /// </para>
 /// <para>
 /// وضعیت سفارش به‌تنهایی کافی نیست: تأیید ادمین (<c>ConfirmOrderAsync</c>) سفارش را
-/// بی‌پرداخت به Processing می‌برد. پرداخت موفق به‌تنهایی هم کافی نیست: ثبت دستی پرداخت
-/// سفارش را از Pending بیرون نمی‌آورد و برگشت وجه پرداخت را Refunded می‌کند.
+/// بی‌پرداخت به Processing می‌برد. پرداخت موفق به‌تنهایی هم کافی نیست: اگر همگام‌سازی سفارش پس از برداشت
+/// شکسته باشد سفارش Pending می‌ماند، و برگشت وجه پرداخت را RefundPending/Refunded می‌کند (Batch 41).
 /// </para>
 /// <para>
 /// همهٔ رد شدن‌ها <see cref="ConflictException"/> (409) هستند تا هیچ
@@ -47,13 +47,14 @@ internal static class OrderFulfilmentGuard
 
         if (!paymentStates.Contains(PaymentState.Succeeded))
         {
-            if (paymentStates.Contains(PaymentState.Refunded))
-                throw new ConflictException("وجه این سفارش به مشتری برگشت داده شده است و قابل ارسال یا تحویل نیست.", "ORDER_REFUNDED");
+            // Batch 41: برگشت وجهِ ثبت‌شده (Refunded) و برگشت وجهِ در انتظار (RefundPending) هر دو یعنی پول این سفارش برمی‌گردد.
+            if (paymentStates.Contains(PaymentState.Refunded) || paymentStates.Contains(PaymentState.RefundPending))
+                throw new ConflictException("وجه این سفارش به مشتری برگشت داده شده یا در انتظار برگشت است و قابل ارسال یا تحویل نیست.", "ORDER_REFUNDED");
 
             throw new ConflictException("این سفارش هنوز پرداخت نشده است و قابل ارسال یا تحویل نیست.", "ORDER_NOT_PAID");
         }
 
-        // پرداخت موفق دارد ولی هنوز به چرخهٔ پردازش وارد نشده (مثلاً ثبت دستی پرداخت بی‌تأیید).
+        // پرداخت موفق دارد ولی هنوز به چرخهٔ پردازش وارد نشده (همگام‌سازی سفارش پس از برداشت شکسته است).
         if (order.Status == OrderStatus.Pending)
             throw new ConflictException("این سفارش هنوز پرداخت و تأیید نهایی نشده است و قابل ارسال یا تحویل نیست.", "ORDER_NOT_PAID");
     }

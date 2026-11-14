@@ -136,7 +136,6 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
 
         var order = await unitOfWork.Repository<Order>()
             .FirstOrDefaultAsync(
@@ -169,7 +168,8 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         // Batch 5 (F-07): Verify یک پرداخت آغاز شده و نتیجه‌اش نامعلوم است (مثلاً timeout)؛ شاید پول برداشته
         // شده باشد. سفارش لغو و موجودی آزاد نمی‌شود؛ فقط یک بار برای بررسی دستی ثبت می‌شود. تأیید دوبارهٔ همان
         // پرداخت (توسط مشتری یا ادمین) وضعیت را قطعی می‌کند و اجرای بعدی جاب بر همان اساس عمل می‌کند.
-        var unresolved = await PaymentLifecycle.FindUnresolvedVerificationsAsync(unitOfWork, order.Payments, cancellationToken);
+        // Batch 41 (FIN-11): «تأیید آغازشده» از ستون Payment.VerifyStartedAtUtc خوانده می‌شود، نه از AuditLog.
+        var unresolved = PaymentLifecycle.FindUnresolvedVerifications(order.Payments);
         if (unresolved.Count > 0)
         {
             var auditService = scope.ServiceProvider.GetRequiredService<IAuditService>();
@@ -186,39 +186,13 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             return false;
         }
 
-        order.Cancel();
-
-        foreach (var group in order.SellerGroups)
-        {
-            group.Cancel();
-        }
-
-        foreach (var item in order.OrderItems)
-        {
-            await inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
-        }
-
-        await PaymentLifecycle.CancelOpenPaymentsAsync(
-            unitOfWork,
-            scope.ServiceProvider.GetRequiredService<IAuditService>(),
-            order.Payments,
+        // Batch 41 (FIN-01): همان روال لغو مشتری و ادمین — گروه‌ها، موجودی، پرداخت‌های باز، سهمیهٔ کوپن و AuditLog
+        // فقط یک‌جا نوشته شده‌اند. اگر روال رد کند (مثلاً گروهِ «تحویل‌شده» در سفارش Pending) هیچ‌چیز ذخیره نمی‌شود.
+        await scope.ServiceProvider.GetRequiredService<IOrderReversalService>().ReverseAsync(
+            order,
+            OrderReversalKind.AbandonedOrder,
             "abandoned: order cancelled by timeout",
             cancellationToken);
-
-        // M7.13: Restore coupon quota if abandoned order is cancelled
-        if (order.CouponId.HasValue && !order.CouponQuotaRefunded)
-        {
-            var coupon = await unitOfWork.Repository<Coupon>()
-                .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.CouponId == order.CouponId.Value).AsTracking(), cancellationToken);
-
-            if (coupon != null && coupon.UsedCount > 0)
-            {
-                coupon.UsedCount--;
-                unitOfWork.Repository<Coupon>().Update(coupon);
-            }
-
-            order.CouponQuotaRefunded = true;
-        }
 
         unitOfWork.Repository<Order>().Update(order);
         await unitOfWork.SaveChangesAsync(cancellationToken);

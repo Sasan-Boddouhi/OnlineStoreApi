@@ -6,16 +6,6 @@ namespace BusinessLogic.Services.Interfaces;
 public interface IPaymentService
 {
     /// <summary>
-    /// ثبت دستی پرداخت روی یک فاکتور (فاز ۰ — حفظ‌شده).
-    /// برای تسویه‌های خارج از درگاه استفاده می‌شود.
-    /// </summary>
-    Task<PaymentDto> RecordPaymentAsync(
-        int invoiceId,
-        decimal amount,
-        string transactionId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// شروع پرداخت برای سفارش.
     /// اگر idempotencyKey تکراری باشد، همان پرداخت قبلی برگردانده می‌شود.
     /// </summary>
@@ -36,11 +26,11 @@ public interface IPaymentService
     Task<PaymentDto?> GetByOrderAsync(int orderId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Phase 9 (R43) — ثبت برگشت وجه توسط ادمین.
+    /// Phase 9 (R43) / Batch 41 — ثبت برگشت وجه توسط ادمین («پول را دستی برگردانده‌ام»).
     ///
-    /// پول را جابه‌جا نمی‌کند (زرین‌پال برگشت خودکار ندارد)؛ آنچه انجام می‌دهد
-    /// این است که سیستم را با واقعیت هم‌راست کند: پرداخت Refunded، سفارش
-    /// Returned/Cancelled و تسویه‌های باز فروشنده لغو.
+    /// پول را جابه‌جا نمی‌کند (زرین‌پال برگشت خودکار ندارد). پرداخت RefundPending را Refunded می‌کند؛ پرداخت
+    /// Succeeded را ابتدا از روال مشترک برگرداندن سفارش (سفارش Returned/Cancelled، بسته‌ها، موجودی، کوپن،
+    /// تسویه‌ها و بدهی‌ها) به RefundPending و در همان تراکنش به Refunded می‌برد. وضعیت دیگر ⇒ 409 PAYMENT_NOT_REFUNDABLE.
     /// </summary>
     Task<PaymentDto> RefundPaymentAsync(
         int paymentId,

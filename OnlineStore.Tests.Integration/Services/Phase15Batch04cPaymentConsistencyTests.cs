@@ -2,6 +2,7 @@ using Application.Entities;
 using Application.Interfaces;
 using BusinessLogic.DTOs.Dashboard;
 using BusinessLogic.DTOs.OrderItem;
+using BusinessLogic.DTOs.Payment;
 using BusinessLogic.Services.Interfaces;
 using DataLayer.Context;
 using FluentAssertions;
@@ -20,7 +21,7 @@ namespace OnlineStore.Tests.Integration.Services;
 ///  1) Payment ابتدا Succeeded ذخیره می‌شود و سفارش جداگانه به‌روز می‌شود. اگر به‌روزرسانی سفارش
 ///     شکست بخورد، سفارش Pending می‌ماند و جاب «سفارش رهاشده» نباید آن را لغو کند
 ///     (لغو + آزادسازی موجودی برای سفارشی که پولش گرفته شده).
-///  2) ثبت دستی پرداخت (RecordPaymentAsync) باید همان همگام‌سازی idempotent پس از برداشت را اجرا کند،
+///  2) دریافت پول باید همان همگام‌سازی idempotent پس از برداشت را اجرا کند (Batch 41: ثبت دستی پرداخت حذف شد؛ مسیر درگاه)،
 ///     وگرنه سفارش Pending می‌ماند و ارسال/تحویل ممکن نیست.
 /// </summary>
 public class Phase15Batch04cPaymentConsistencyTests : ControllerIntegrationTestBase
@@ -89,32 +90,40 @@ public class Phase15Batch04cPaymentConsistencyTests : ControllerIntegrationTestB
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Cancelled);
     }
 
-    // ==================== 2) پرداخت دستی ====================
+    // ==================== 2) همگام‌سازی سفارش پس از دریافت پول ====================
+    //
+    // Batch 41 (FIN-15): ثبت دستی پرداخت (RecordPaymentAsync) حذف شد؛ هیچ فراخوانی در کد محصول نداشت و می‌توانست
+    // فاکتور را با هر مبلغی «پرداخت‌شده» کند. دو تست زیر همان انتظارها را روی تنها مسیر باقی‌ماندهٔ دریافت پول
+    // (درگاه: Initiate + Verify) نگه می‌دارند. دو تست دیگرِ این بخش فقط رفتار همان متد حذف‌شده را می‌سنجیدند و
+    // معادل درگاهی ندارند، چون درگاه پیش از برداشت جلوی آن حالت‌ها را می‌گیرد:
+    //   • «ثبت دستی روی سفارش لغوشده» ⇒ Verify برای سفارش لغوشده اصلاً صدا زده نمی‌شود
+    //     (Phase15Batch05: Verify_AfterCustomerCancelledOrder_DoesNotCallGateway_AndIsAudited)؛ برداشتی که پیش از لغو
+    //     آغاز شده بود در Phase15Batch04b: Verify_OrderCancelledWhilePaymentPending_RecordsSucceeded_AndFlagsForRefundReview.
+    //   • «ثبت دستی دوباره» ⇒ پرداخت دوم برای سفارش پرداخت‌شده رد می‌شود
+    //     (Phase15Batch05: Initiate_OnPaidOrder_Returns409OrderAlreadyPaid و Verify_SecondPaymentOfPaidOrder_IsNotVerified).
 
     [Fact]
-    public async Task RecordPayment_Manual_ConfirmsOrder_AppliesCommission_AndMarksInvoicePaid()
+    public async Task GatewayPayment_ConfirmsOrder_AppliesCommission_AndMarksInvoicePaid()
     {
         var seeded = await CreateOrderAsync(sellers: 2);
-        var invoiceId = await CreateInvoiceAsync(seeded.OrderId);
 
-        var recorded = await PaymentService.RecordPaymentAsync(invoiceId, 300m, $"TRX-{Guid.NewGuid():N}");
+        var paid = await PayThroughGatewayAsync(seeded);
 
-        recorded.State.Should().Be(PaymentState.Succeeded);
+        paid.State.Should().Be(PaymentState.Succeeded);
         DbContext.ChangeTracker.Clear();
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Processing);
         (await GroupStatusesAsync(seeded.OrderId)).Should().OnlyContain(s => s == SellerGroupStatus.Processing);
         (await CommissionsAsync(seeded.OrderId)).Should().OnlyContain(c => c > 0m);
-        (await DbContext.Invoice.AsNoTracking().SingleAsync(i => i.InvoiceId == invoiceId)).Status
+        (await DbContext.Invoice.AsNoTracking().SingleAsync(i => i.OrderId == seeded.OrderId)).Status
             .Should().Be(InvoiceStatus.Paid);
-        (await ReviewEntriesAsync(recorded.PaymentId)).Should().BeEmpty();
+        (await ReviewEntriesAsync(paid.PaymentId)).Should().BeEmpty();
     }
 
     [Fact]
-    public async Task RecordPayment_Manual_OrderCanBeShipped_AndIsNotCancelledByCleanup()
+    public async Task GatewayPayment_OrderCanBeShipped_AndIsNotCancelledByCleanup()
     {
         var seeded = await CreateOrderAsync(sellers: 1);
-        var invoiceId = await CreateInvoiceAsync(seeded.OrderId);
-        await PaymentService.RecordPaymentAsync(invoiceId, 100m, $"TRX-{Guid.NewGuid():N}");
+        await PayThroughGatewayAsync(seeded);
         await AgeOrderAsync(seeded.OrderId);
 
         var cancelled = await NewCleanup().RunCleanupAsync();
@@ -128,42 +137,6 @@ public class Phase15Batch04cPaymentConsistencyTests : ControllerIntegrationTestB
         shipped.GroupStatus.Should().Be(nameof(SellerGroupStatus.Shipped));
         DbContext.ChangeTracker.Clear();
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Shipped);
-    }
-
-    [Fact]
-    public async Task RecordPayment_Manual_OnCancelledOrder_StillRecordsPayment_AndFlagsForReview()
-    {
-        var seeded = await CreateOrderAsync(sellers: 1);
-        var invoiceId = await CreateInvoiceAsync(seeded.OrderId);
-        SetCurrentUser(seeded.BuyerUserId, "Customer");
-        await OrderService.CancelOrderAsync(seeded.OrderId);
-        DbContext.ChangeTracker.Clear();
-
-        var recorded = await PaymentService.RecordPaymentAsync(invoiceId, 100m, $"TRX-{Guid.NewGuid():N}");
-
-        recorded.State.Should().Be(PaymentState.Succeeded);
-        DbContext.ChangeTracker.Clear();
-        (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Cancelled);
-        (await ReviewEntriesAsync(recorded.PaymentId)).Should().ContainSingle()
-            .Which.Should().Contain("order was Cancelled");
-    }
-
-    [Fact]
-    public async Task RecordPayment_Manual_CalledTwice_DoesNotRepeatTheOrderTransition()
-    {
-        var seeded = await CreateOrderAsync(sellers: 1);
-        var invoiceId = await CreateInvoiceAsync(seeded.OrderId);
-
-        await PaymentService.RecordPaymentAsync(invoiceId, 50m, $"TRX-{Guid.NewGuid():N}");
-        var commissionsAfterFirst = await CommissionsAsync(seeded.OrderId);
-
-        var second = await PaymentService.RecordPaymentAsync(invoiceId, 50m, $"TRX-{Guid.NewGuid():N}");
-
-        DbContext.ChangeTracker.Clear();
-        (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Processing);
-        (await GroupStatusesAsync(seeded.OrderId)).Should().OnlyContain(s => s == SellerGroupStatus.Processing);
-        (await CommissionsAsync(seeded.OrderId)).Should().Equal(commissionsAfterFirst);
-        (await ReviewEntriesAsync(second.PaymentId)).Should().BeEmpty();
     }
 
     // ==================== Helpers ====================
@@ -193,20 +166,12 @@ public class Phase15Batch04cPaymentConsistencyTests : ControllerIntegrationTestB
         DbContext.ChangeTracker.Clear();
     }
 
-    private async Task<int> CreateInvoiceAsync(int orderId)
+    /// <summary>Batch 41: دریافت پول از تنها مسیر باقی‌مانده — درگاه (Initiate + Verify) به نام خریدار.</summary>
+    private async Task<PaymentDto> PayThroughGatewayAsync(SeededOrder seeded)
     {
-        var order = await DbContext.Order.AsNoTracking().SingleAsync(o => o.OrderId == orderId);
-        var invoice = new Invoice
-        {
-            OrderId = orderId,
-            InvoiceNumber = $"INV-B4C-{Guid.NewGuid():N}"[..30],
-            SubTotalAmount = order.TotalAmount,
-            TotalAmount = order.TotalAmount
-        };
-        DbContext.Invoice.Add(invoice);
-        await DbContext.SaveChangesAsync();
-        DbContext.ChangeTracker.Clear();
-        return invoice.InvoiceId;
+        SetCurrentUser(seeded.BuyerUserId, "Customer");
+        var initiation = await PaymentService.InitiateAsync(seeded.OrderId, null);
+        return await PaymentService.VerifyAsync(initiation.Authority!);
     }
 
     private Task<OrderStatus> OrderStatusAsync(int orderId)
