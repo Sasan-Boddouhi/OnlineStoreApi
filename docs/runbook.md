@@ -217,3 +217,55 @@ present. Treat the first enabled run as an unproven integration:
 3. Confirm three things: `Payment.State` reaches `Succeeded`, `GatewayReference`
    is populated, and an `AuditLog` row exists with action `Payment.Succeeded`.
 4. Only then raise the amount limits.
+---
+
+## 7. Backups and restore test (Batch 52)
+
+Scripts and what they produce: `docs/deployment.md` Appendix B.5.
+
+### Schedule
+
+On the Docker host (`crontab -e` for a user that may run `docker`):
+
+```cron
+# Daily backup at 02:30 UTC; log to a file that logrotate picks up.
+30 2 * * * cd /opt/onlinestore && scripts/backup.sh >> /var/log/onlinestore-backup.log 2>&1
+```
+
+Copy each new `$BACKUP_ROOT/<stamp>/` directory to storage outside the machine (another server or an object store) after the job; a backup on the same disk does not survive that disk.
+
+### Restore test
+
+At least once a month, and after every change to the database or the backup script:
+
+```bash
+scripts/restore-test.sh                      # newest backup
+scripts/restore-test.sh /var/backups/onlinestore/<stamp>
+```
+
+It must end with `RESTORE TEST PASSED`. Paste the summary into the log below. A backup that has never been restored is not counted as a backup.
+
+### Restore test log
+
+| Date (UTC) | Backup stamp | Restore time | Last migration | Upload files | By |
+|---|---|---|---|---|---|
+| – | – | – | – | – | – |
+
+### Restoring production (real incident)
+
+1. Stop the API: `docker compose -f docker-compose.prod.yml stop api`.
+2. Copy the `.bak` into the SQL container and restore it as `sa`:
+   `RESTORE DATABASE [ShopDB] FROM DISK = N'/var/opt/mssql/backup/<file>.bak' WITH CHECKSUM, REPLACE, RECOVERY`.
+3. Run `docker compose -f docker-compose.prod.yml --profile setup run --rm db-init` — it re-maps the application and migration users to their logins (a restored database has orphaned users).
+4. Unpack the uploads archive into the uploads volume (`docker run --rm -v onlinestoreapi_uploads_data:/data -v <dir>:/backup alpine:3.20 tar -xzf /backup/<uploads>.tar.gz -C /data`).
+5. `docker compose -f docker-compose.prod.yml up -d` (the migrator applies any migration newer than the backup), then check `/health/ready` and `/version`.
+
+## 8. SQL Server Express size limit (Batch 52, N15)
+
+Express limits every database to 10 GB of data (log files excluded) and uses at most about 1.4 GB of memory for its buffer pool. `scripts/backup.sh` writes the data size to `manifest.txt` and prints a warning at 8 GB. Check by hand:
+
+```sql
+SELECT SUM(CAST(size AS bigint)) * 8 / 1024 AS data_mb FROM ShopDB.sys.database_files WHERE type = 0;
+```
+
+At 8 GB plan the move to Standard: buy the licence, set `MSSQL_PID=Standard` (or the product key) in `.env`, take a backup, recreate the `sqlserver` container, and confirm `SELECT SERVERPROPERTY('Edition')`.

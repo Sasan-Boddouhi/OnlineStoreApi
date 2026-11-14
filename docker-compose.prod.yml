@@ -5,17 +5,83 @@ services:
     container_name: onlinestore-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}
+      # Batch 52 (OPS-01, N15): بدون MSSQL_PID تصویر با ویرایش Developer بالا می‌آید که مجوز production ندارد.
+      # Express برای راه‌اندازی (رایگان، سقف 10 GB برای هر پایگاه داده — اندازه را پایش کنید، docs/runbook.md).
+      # با مجوز خریداری‌شده: MSSQL_PID=Standard (یا کلید محصول). هرگز Developer یا Evaluation.
+      MSSQL_PID: ${MSSQL_PID:-Express}
+      # سقف حافظهٔ خود SQL Server (کمی کمتر از mem_limit تا سیستم‌عامل کانتینر جا داشته باشد).
+      MSSQL_MEMORY_LIMIT_MB: ${MSSQL_MEMORY_LIMIT_MB:-1638}
+      # فقط برای HEALTHCHECK و scripts/backup.sh داخل همین کانتینر (sqlcmd رمز را از این متغیر می‌خواند،
+      # پس رمز در خط فرمان و فهرست پردازه‌ها دیده نمی‌شود).
+      SQLCMDPASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}
     volumes:
       - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-C", "-b", "-l", "5", "-Q", "SELECT 1", "-o", "/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     networks:
       - onlinestore-network
     restart: unless-stopped
-    mem_limit: 1g
+    # SQL Server روی Linux دست‌کم 2 GB حافظه می‌خواهد (OPS-01).
+    mem_limit: ${MSSQL_MEM_LIMIT:-2g}
+
+  # Batch 52 (OPS-01): یک‌بار در اولین استقرار و هنگام چرخش رمزها، به‌صورت دستی:
+  #   docker compose -f docker-compose.prod.yml --profile setup run --rm db-init
+  # پایگاه داده (اگر نباشد)، login برنامه (خواندن/نوشتن/اجرا) و login مایگریشن (db_owner همان پایگاه داده) را
+  # می‌سازد یا رمزشان را به‌روز می‌کند. فقط همین سرویس و HEALTHCHECK/پشتیبان‌گیری با sa کار می‌کنند.
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
+    profiles: ["setup"]
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd"]
+    command: ["-S", "sqlserver", "-U", "sa", "-C", "-b", "-i", "/scripts/create-app-login.sql"]
+    environment:
+      SQLCMDPASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}
+      # متغیرهای اسکریپت sqlcmd ($(NAME)) از همین متغیرهای محیطی خوانده می‌شوند.
+      DB_NAME: ShopDB
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      MIGRATION_DB_USER: ${MIGRATION_DB_USER:?MIGRATION_DB_USER is required}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required}
+    volumes:
+      - ${SQL_SCRIPTS_PATH:-./scripts/sql}:/scripts:ro
+    networks:
+      - onlinestore-network
+    restart: "no"
+
+  # Batch 52 (OPS-02): مایگریشن یک مرحلهٔ جدای استقرار است، نه بخشی از بالا آمدن API.
+  # تصویر «<IMAGE_TAG>-migrator» همان commit را دارد (Dockerfile، target=migrator) و با login مایگریشن کار می‌کند.
+  # API فقط پس از خروج موفق این سرویس بالا می‌آید؛ مایگریشن ناموفق = API قدیمی می‌ماند.
+  migrator:
+    image: ghcr.io/sasan-boddouhi/onlinestoreapi:${IMAGE_TAG:?IMAGE_TAG is required}-migrator
+    container_name: onlinestore-migrator
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: >-
+        Server=sqlserver;
+        Database=ShopDB;
+        User Id=${MIGRATION_DB_USER:?MIGRATION_DB_USER is required};
+        Password=${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD is required};
+        TrustServerCertificate=True;
+    networks:
+      - onlinestore-network
+    restart: "no"
+    mem_limit: 512m
 
   redis:
     image: redis:7-alpine
     container_name: onlinestore-redis
+    # Batch 52 (OPS-08): Redis فقط کش است (داده و output cache)؛ پیش از رسیدن به سقف کانتینر،
+    # کلیدهای کم‌استفاده حذف می‌شوند به‌جای اینکه پردازه با OOM کشته شود.
+    command: ["redis-server", "--maxmemory", "${REDIS_MAXMEMORY:-96mb}", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redisdata:/data
     healthcheck:
@@ -56,25 +122,37 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/sasan-boddouhi/onlinestoreapi:${IMAGE_TAG}
+    image: ghcr.io/sasan-boddouhi/onlinestoreapi:${IMAGE_TAG:?IMAGE_TAG is required}
     container_name: onlinestore-api
 
+    # Batch 52 (OPS-08): فقط وقتی SQL Server و Redis سالم‌اند و مایگریشن با موفقیت تمام شده است.
     depends_on:
-      - sqlserver
-      - redis
-      - otel-collector
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
 
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: "http://0.0.0.0:80"
       Swagger__Enabled: "false"
 
+      # Batch 52 (OPS-01): login برنامه فقط db_datareader/db_datawriter/EXECUTE دارد (scripts/sql/create-app-login.sql)؛
+      # دیگر sa نیست. رمز نباید «;» یا «'» داشته باشد (docs/deployment.md).
       ConnectionStrings__DefaultConnection: >-
         Server=sqlserver;
         Database=ShopDB;
-        User Id=sa;
-        Password=${MSSQL_SA_PASSWORD};
+        User Id=${APP_DB_USER:?APP_DB_USER is required};
+        Password=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required};
         TrustServerCertificate=True;
+
+      # Batch 52 (OPS-02): مایگریشن فقط با سرویس migrator؛ API هرگز اسکیمای production را تغییر نمی‌دهد
+      # (login برنامه اصلاً مجوز DDL ندارد).
+      Database__AutoMigrate: "false"
 
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: "OnlineStoreApi"
@@ -112,11 +190,15 @@ services:
 
       GIT_COMMIT: ${GIT_COMMIT}
 
+    # N19: آپلودها روی volume محلی همین گره؛ scripts/backup.sh از آن پشتیبان می‌گیرد (OPS-05).
+    # فقط یک نمونهٔ API (OPS-02: محدودکنندهٔ نرخ، صف کارها و آپلودها هنوز بین نمونه‌ها مشترک نیستند).
     volumes:
       - uploads_data:/app/wwwroot/uploads
 
+    # Batch 52 (OPS-03): فقط روی loopback میزبان؛ TLS و دسترسی عمومی با پروکسی معکوس جلوی آن.
+    # اگر پروکسی روی ماشین دیگری است، API_BIND_ADDRESS را به IP شبکهٔ خصوصی بدهید، نه 0.0.0.0.
     ports:
-      - "5000:80"
+      - "${API_BIND_ADDRESS:-127.0.0.1}:5000:80"
     mem_limit: 512m
     networks:
       - onlinestore-network

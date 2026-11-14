@@ -137,6 +137,8 @@ ShopDB
 
 The SQL Server password is supplied through the `MSSQL_SA_PASSWORD` environment variable rather than being hardcoded in Compose.
 
+**Batch 52:** in production the API no longer logs in as `sa`; it uses a least-privilege application login and migrations use a separate migration login. SQL Server runs as Express (`MSSQL_PID`) with 2 GB of memory and a health check. See Appendix B.
+
 ## 6. Redis
 
 The Compose configuration uses:
@@ -229,7 +231,7 @@ The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT
 **Allowed hosts (Batch 40).** `AllowedHosts` (compose: `ALLOWED_HOSTS`, `;`-separated) limits the `Host` header the API answers. Include `localhost`, because the container `HEALTHCHECK` calls `http://localhost:80/health/live`; for example `ALLOWED_HOSTS=api.example.com;localhost`. When it is empty or `*` in Production the API still starts but logs a warning.
 
 **HTTP surface (Batch 40).**
-- Authorization is on by default: every endpoint without an authorization attribute requires a signed-in user. Public endpoints carry an explicit `[AllowAnonymous]` (`/health`, `/health/live`, `/health/ready` and `/version` are anonymous). Unknown routes still return `404`.
+- Authorization is on by default: every endpoint without an authorization attribute requires a signed-in user. Public endpoints carry an explicit `[AllowAnonymous]` (`/health/live`, `/health/ready` and `/version` are anonymous; since Batch 52 the detailed `/health` is anonymous only in Development and needs an admin token elsewhere, Appendix B.6). Unknown routes still return `404`.
 - JSON only: a request body with `Content-Type: application/xml` gets `415`; `Accept: application/xml` is ignored and JSON is returned.
 - Every response (API and `/uploads/*`) carries `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
 - CORS does not send `Access-Control-Allow-Credentials`; the API uses bearer tokens, not cookies.
@@ -255,6 +257,8 @@ Retry delay = 5 seconds
 
 This allows the API container to start while SQL Server is still becoming ready.
 
+**Batch 52:** this start-up path only runs when `Database__AutoMigrate=true` (staging). Production sets `Database__AutoMigrate=false` and applies migrations with the one-shot `migrator` service before the API starts (Appendix B.4).
+
 **Platform warehouse (Batch 49).** Migrations do not create a platform warehouse, and the API no longer invents a "Platform" province, city and address when stock is added without a warehouse. After the first deployment an admin must create one real platform warehouse: create an address for the admin account (`POST /api/v1/users/me/addresses`) and then `POST /api/v1/warehouses` as admin with that `addressId` and no `sellerId`. Until it exists, adding stock without a `warehouseId` returns `409 PLATFORM_WAREHOUSE_NOT_CONFIGURED`; stock sent to a seller's own warehouse keeps working. Old "Platform" province/city rows created by earlier versions are left in place and can be renamed or reused by an admin.
 
 ## 9. Health Endpoint
@@ -270,6 +274,8 @@ The response includes the overall status and individual health-check entries.
 The application registers health checks for its configured infrastructure dependencies, including SQL Server and Redis.
 
 This endpoint is also used by the Docker health check.
+
+**Batch 52:** the Docker health check uses `/health/live` (§3). Outside Development the detailed `/health` requires an admin token; automation uses `/health/ready` and the container health status (Appendix B.6).
 
 ## 10. Version Endpoint
 
@@ -404,6 +410,8 @@ http://localhost:5000/health
 
 If the new deployment passes the health gate, the workflow also verifies `/version` so the deployed commit can be confirmed.
 
+**Batch 52:** use `http://localhost:5000/health/ready` for automated verification; the detailed `/health` answers `401` without an admin token outside Development (Appendix B.6).
+
 ## 18. Rollback Strategy
 
 Rollback is designed as an API-image rollback.
@@ -512,7 +520,7 @@ Before a production deployment:
 
 After deployment:
 
-- Verify `/health`.
+- Verify `/health/ready` (the detailed `/health` needs an admin token outside Development, Appendix B.6).
 - Verify `/version`.
 - Confirm the returned commit matches the intended deployment.
 - Review deployment logs.
@@ -690,3 +698,129 @@ Guards:
 - If money is captured for an order that is no longer payable (only possible when verify had already started), the payment is still recorded `Succeeded` and `Payment.ReviewRequired` gets `refundNeeded=true` for the refund workflow (Batch 8).
 
 Not confirmed in Zarinpal's documentation (verified 2026-11-11): the time window after which an unverified payment is returned to the payer, how long after the callback verify may still be called, the default `currency` when omitted, the exact sandbox StartPay URL (inferred from "replace the host with sandbox.zarinpal.com"), and the lifetime of an authority.
+
+## Appendix B — Production operations (Batch 52)
+
+Findings OPS-01, OPS-02, OPS-03, OPS-05, OPS-07 and OPS-08 of the backend review; owner decisions N15 (SQL Server Express for launch, 2 GB+ memory, never Developer) and N19 (uploads on a local volume of a single node, included in backups).
+
+### B.1 New environment variables
+
+All are read by `docker-compose.prod.yml` from the deployment `.env` file (never committed). Variables marked *required* stop `docker compose` with an error when missing.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `APP_DB_USER` / `APP_DB_PASSWORD` | yes | – | SQL login the API uses at run time (read, write, execute; no DDL). |
+| `MIGRATION_DB_USER` / `MIGRATION_DB_PASSWORD` | yes | – | SQL login used only by the one-shot `migrator` (`db_owner` of `ShopDB`, no server role). |
+| `IMAGE_TAG` | yes | – | Image tag of the API; the migrator uses `<IMAGE_TAG>-migrator` from the same commit. |
+| `MSSQL_PID` | no | `Express` | SQL Server edition. `Standard` (or a product key) once a licence is bought. Never `Developer` or `Evaluation` in production. |
+| `MSSQL_MEM_LIMIT` | no | `2g` | Container memory limit of SQL Server (minimum 2 GB). |
+| `MSSQL_MEMORY_LIMIT_MB` | no | `1638` | SQL Server's own memory cap; keep it below the container limit. |
+| `REDIS_MAXMEMORY` | no | `96mb` | Redis `maxmemory` (policy `allkeys-lru`; Redis is only a cache). |
+| `API_BIND_ADDRESS` | no | `127.0.0.1` | Host address the API port is published on. Use a private-network IP if the reverse proxy runs on another machine; never `0.0.0.0`. |
+| `SQL_SCRIPTS_PATH` | no | `./scripts/sql` | Folder mounted into `db-init`. |
+
+Password rules: at least 16 characters, SQL Server complexity rules (upper case, lower case, digit, symbol), and **no single quote and no semicolon** (the value is placed into T-SQL text and into a connection string). The application and migration passwords must differ. `MSSQL_SA_PASSWORD` stays; it is used only by the SQL health check, `db-init` and the backup scripts.
+
+### B.2 First deployment (empty server)
+
+```bash
+# 0. The host .env holds every variable of B.1 and section 7 (JWT_KEY, ZARINPAL_MERCHANT_ID, PAYMENT_CALLBACK_URL, ...).
+docker volume create onlinestoreapi_sqlserver_data
+docker volume create onlinestoreapi_redisdata
+
+# 1. SQL Server and Redis
+docker compose -f docker-compose.prod.yml up -d sqlserver redis
+
+# 2. Database, application login, migration login (idempotent; re-run after every password rotation)
+docker compose -f docker-compose.prod.yml --profile setup run --rm db-init
+
+# 3. Migrations, then the API (the API waits until migrator exits with 0)
+docker compose -f docker-compose.prod.yml up -d
+
+# 4. Checks
+docker inspect onlinestore-sqlserver --format '{{.State.Health.Status}}'   # healthy
+docker compose -f docker-compose.prod.yml logs migrator | tail -n 20       # ends with "Done."
+curl --fail http://127.0.0.1:5000/health/ready
+curl --fail http://127.0.0.1:5000/version
+```
+
+Then finish the data steps of B.7 (platform warehouse, shipping method, SuperAdmin bootstrap).
+
+### B.3 Upgrading a deployment that still uses `sa` and auto-migrate
+
+Order matters: the backup comes first, and the new API must not start before the logins exist.
+
+1. Add the B.1 variables to `.env` and pull the new `docker-compose.prod.yml`, `scripts/` and both images (`<tag>` and `<tag>-migrator`).
+2. Take a backup with the **old** setup. The old SQL container has no `SQLCMDPASSWORD`, so pass it once:
+   ```bash
+   docker exec -e SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" onlinestore-sqlserver \
+     /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b \
+     -Q "BACKUP DATABASE [ShopDB] TO DISK = N'/var/opt/mssql/backup/pre-batch52.bak' WITH CHECKSUM, INIT"
+   docker cp onlinestore-sqlserver:/var/opt/mssql/backup/pre-batch52.bak ./pre-batch52.bak
+   ```
+3. `docker compose -f docker-compose.prod.yml up -d sqlserver redis` recreates SQL Server with `MSSQL_PID`, the memory limit and the health check on the existing data volume. Check the edition: `SELECT SERVERPROPERTY('Edition')` must say `Express Edition` (or `Standard Edition`). **Do this on staging first**: an edition change on an existing data volume has not been tested in this repository.
+4. `docker compose -f docker-compose.prod.yml --profile setup run --rm db-init`
+5. `docker compose -f docker-compose.prod.yml up -d` — the migrator applies pending migrations with the migration login, then the API starts with the application login and `Database__AutoMigrate=false`.
+6. Run `scripts/backup.sh` and `scripts/restore-test.sh` once (B.5).
+
+Rollback: restore the `.env` and compose file of the previous release and start it; the new logins can stay (they are harmless). A migration is never rolled back automatically; restore the pre-upgrade backup if a schema rollback is needed.
+
+### B.4 Migrations: the one-shot `migrator`
+
+- The `Dockerfile` target `migrator` builds an EF Core migrations bundle (`efbundle`, self-contained, `dotnet-ef` 8.0.34 = the project's EF Core version) and copies `appsettings.json` next to it, because the design-time factory reads that file from the working directory. The connection string comes only from `ConnectionStrings__DefaultConnection`.
+- CI pushes it as `ghcr.io/<owner>/onlinestoreapi:<sha>-migrator` and `latest-migrator` next to the API image.
+- `docker compose up` runs it before the API (`depends_on: condition: service_completed_successfully`). A failed migration leaves the running API untouched; read `docker compose logs migrator`.
+- Apply by hand: `docker compose -f docker-compose.prod.yml run --rm migrator` (the bundle only applies missing migrations).
+- Staging and the local Compose file may keep `Database__AutoMigrate=true`; production must not (the application login has no DDL rights, so an auto-migrate attempt would fail anyway).
+
+### B.5 Backups and restore test
+
+- `scripts/backup.sh` (on the Docker host, as a user allowed to run `docker`): full `ShopDB` backup `WITH CHECKSUM` plus `RESTORE VERIFYONLY`, a `tar.gz` of the uploads volume, `manifest.txt` (edition, last migration, data size, number of upload files) and `SHA256SUMS`, under `$BACKUP_ROOT/<UTC stamp>/` (default `/var/backups/onlinestore`, kept 14 days). It warns when the Express data file passes 8 GB. Copy every backup off the machine.
+- `scripts/restore-test.sh [dir]`: checks the checksums, restores the database into a throw-away SQL Server container with no network, runs `DBCC CHECKDB`, compares the last migration with the manifest, unpacks the uploads and compares the file count. Production is not touched.
+- Schedule and restore log: `docs/runbook.md` §7.
+
+### B.6 Health endpoints
+
+| Endpoint | Who | Content | Used by |
+|---|---|---|---|
+| `/health/live` | anonymous | `Healthy` / `Unhealthy` only | Docker `HEALTHCHECK` |
+| `/health/ready` | anonymous | `Healthy` / `Unhealthy` only (database and Redis readiness) | deploy scripts, load balancer |
+| `/health` | anonymous in Development; `AdminOnly` elsewhere | every check with name, status and duration | an admin, by hand |
+
+`scripts/migrate-production-network.sh` now checks `/health/ready` and the container health status instead of `/health`.
+
+### B.7 Pre-traffic checklist (review §10)
+
+1. `appsettings.Production.json` is git-ignored and docker-ignored (Batch 40); real values come only from environment variables.
+2. `JWT_KEY` has at least 32 random characters; `Jwt__Issuer` and `Jwt__Audience` are set (compose); `Session__*` reviewed.
+3. `PaymentGatewaySettings__Provider=Zarinpal`, `EnableRealGateway=true`, real `ZARINPAL_MERCHANT_ID`, no sandbox flag, `PAYMENT_CALLBACK_URL` = the real https result page (start-up refuses anything else, Batch 40); `PAYMENT_WEBHOOK_SECRET` set while the webhook still exists.
+4. `CORS_ORIGIN_0…` = real origins; `TRUSTED_PROXY_NETWORK` or `TRUSTED_PROXY_IP` = the reverse proxy; the start-up warning about missing proxies is gone; two clients get different rate-limit buckets; `ALLOWED_HOSTS` set (include `localhost`).
+5. At least one active shipping method, categories and geography seeded, commission rate set, one platform warehouse created (Batch 49), `ProductImages__AllowedExternalHosts__N` set if images are added by URL (Batch 48c).
+6. `BOOTSTRAP_SUPERADMIN_PHONE` set to a registered phone for the first start, then removed.
+7. Database: the API logs in with `APP_DB_USER` (not `sa`); edition is Express or Standard; memory 2 GB or more; `Database__AutoMigrate=false`; migrations applied by `migrator`; `scripts/backup.sh` scheduled; one `scripts/restore-test.sh` passed and logged.
+8. One API container only (rate limiting, the job queue and uploads are per node until OPS-02 is solved); the uploads volume is mounted and in the backup.
+9. `Swagger__Enabled=false`; `ASPNETCORE_ENVIRONMENT=Production`; `OpenTelemetry__TraceSamplingRatio` at most 0.1; API port bound to `127.0.0.1` behind the TLS proxy.
+10. `scripts/test-zarinpal-sandbox.ps1` passes against staging; one real small payment is paid, verified and refunded by hand once.
+
+### B.8 Staging dry run (not executed in this repository: the development machine has no Docker)
+
+Run on a staging host with a copy of the production `.env` (with different passwords) and record the output:
+
+```bash
+docker compose -f docker-compose.prod.yml config >/dev/null                   # variables and YAML are valid
+docker build --target migrator -t ghcr.io/<owner>/onlinestoreapi:staging-migrator .
+docker build -t ghcr.io/<owner>/onlinestoreapi:staging .
+export IMAGE_TAG=staging
+docker compose -f docker-compose.prod.yml up -d sqlserver redis
+docker exec onlinestore-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -Q "SELECT SERVERPROPERTY('Edition')"
+docker compose -f docker-compose.prod.yml --profile setup run --rm db-init     # run it twice: the second run must also succeed
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps -a                               # migrator exited 0, api healthy
+# The application login must not be able to change the schema (expect an error):
+docker exec -e SQLCMDPASSWORD="$APP_DB_PASSWORD" onlinestore-sqlserver \
+  /opt/mssql-tools18/bin/sqlcmd -S localhost -U "$APP_DB_USER" -C -b -d ShopDB -Q "CREATE TABLE dry_run_check (i int)"
+curl -i http://127.0.0.1:5000/health                                          # 401
+curl --fail http://127.0.0.1:5000/health/ready
+docker exec onlinestore-redis redis-cli CONFIG GET maxmemory                  # 100663296 (96 MB)
+scripts/backup.sh && scripts/restore-test.sh
+```

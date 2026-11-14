@@ -194,3 +194,21 @@ jobs:
 
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Batch 52 (OPS-02): تصویر یک‌بارهٔ مایگریشن (EF Core migration bundle) از همان commit.
+      # docker-compose.prod.yml آن را با برچسب «<IMAGE_TAG>-migrator» به‌عنوان سرویس migrator اجرا می‌کند.
+      - name: Build and push migrator image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: migrator
+
+          push: ${{ github.event_name != 'pull_request' }}
+
+          tags: |
+            ghcr.io/sasan-boddouhi/onlinestoreapi:latest-migrator
+            ghcr.io/sasan-boddouhi/onlinestoreapi:${{ github.sha }}-migrator
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

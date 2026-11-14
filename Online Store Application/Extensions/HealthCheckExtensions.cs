@@ -30,4 +30,27 @@ public static class HealthCheckExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Batch 52 (OPS-07): سیاست مجوز خروجی تفصیلی <c>/health</c> بیرون از Development.
+    /// </summary>
+    public const string DetailedHealthPolicy = "AdminOnly";
+
+    /// <summary>
+    /// Batch 52 (OPS-07): <c>/health</c> نام وابستگی‌ها، مدت و توضیح خطا را برمی‌گرداند؛
+    /// بیرون از Development فقط مدیر (سیاست <see cref="DetailedHealthPolicy"/>) آن را می‌بیند.
+    /// در Development برای راحتی توسعه ناشناس می‌ماند. <c>/health/live</c> و <c>/health/ready</c>
+    /// جدا نگاشت می‌شوند و همیشه ناشناس و حداقلی‌اند (فقط Healthy/Unhealthy).
+    /// </summary>
+    public static TBuilder RequireDetailedHealthAccess<TBuilder>(
+        this TBuilder builder,
+        IHostEnvironment environment)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+
+        return environment.IsDevelopment()
+            ? builder.AllowAnonymous()
+            : builder.RequireAuthorization(DetailedHealthPolicy);
+    }
 }

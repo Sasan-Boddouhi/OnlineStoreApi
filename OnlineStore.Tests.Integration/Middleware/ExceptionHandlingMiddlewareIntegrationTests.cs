@@ -21,7 +21,14 @@ public class ExceptionHandlingMiddlewareIntegrationTests : ControllerIntegration
     [Fact]
     public async Task Health_DoesNotExposeExceptionDetails()
     {
-        var response = await Client.GetAsync("/health");
+        // Batch 52 (OPS-07): «/health» بیرون از Development فقط برای مدیر است؛
+        // همان خروجی تفصیلی که مدیر می‌بیند هم نباید جزئیات استثنا داشته باشد.
+        var token = await GetAdminTokenAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var response = await Client.SendAsync(request);
 
         response.StatusCode.Should().BeOneOf(
             System.Net.HttpStatusCode.OK,

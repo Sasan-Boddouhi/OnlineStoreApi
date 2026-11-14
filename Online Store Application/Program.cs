@@ -431,6 +431,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+// Batch 52 (OPS-07): خروجی تفصیلی بیرون از Development فقط برای مدیر؛ live/ready عمومی می‌مانند.
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     Predicate = check => !check.Tags.Contains("ready"),
@@ -454,7 +455,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 
         await context.Response.WriteAsJsonAsync(result);
     }
-}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
+}).RequireDetailedHealthAccess(app.Environment).CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {

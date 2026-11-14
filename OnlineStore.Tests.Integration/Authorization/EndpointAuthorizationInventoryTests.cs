@@ -30,7 +30,9 @@ public sealed class EndpointAuthorizationInventoryTests : IClassFixture<Integrat
     /// <summary>کلید: «METHOD route»؛ مقدار: وضعیت مجوز مؤثر endpoint.</summary>
     private static readonly IReadOnlyDictionary<string, string> Expected = new Dictionary<string, string>
     {
-        ["GET /health"] = Anonymous,
+        // Batch 52 (OPS-07): خروجی تفصیلی (نام وابستگی‌ها) بیرون از Development فقط برای مدیر.
+        // این جدول در محیط Testing ساخته می‌شود؛ در Development همین endpoint ناشناس است.
+        ["GET /health"] = AdminOnly,
         ["GET /health/live"] = Anonymous,
         ["GET /health/ready"] = Anonymous,
         ["DELETE api/v{version:apiVersion}/Categories/{id:int}"] = CanManageCatalog,
@@ -243,8 +245,9 @@ public sealed class EndpointAuthorizationInventoryTests : IClassFixture<Integrat
         authenticated.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    // Batch 52 (OPS-07): «/health» از این فهرست بیرون آمد؛ بیرون از Development دیگر ناشناس نیست
+    // و رفتار آن در HealthEndpointExposureTests سنجیده می‌شود.
     [Theory]
-    [InlineData("/health")]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
     [InlineData("/version")]

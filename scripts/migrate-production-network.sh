@@ -35,7 +35,7 @@ log "Validating Compose configuration"
 docker compose --project-name "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config >/dev/null
 
 log "Checking current production health"
-curl --fail --silent --max-time 10 http://127.0.0.1:5000/health >/dev/null || die "API is not healthy before migration"
+curl --fail --silent --max-time 10 http://127.0.0.1:5000/health/ready >/dev/null || die "API is not healthy before migration"
 
 log "Creating target network if necessary"
 docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null
@@ -64,7 +64,7 @@ docker compose --project-name "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FIL
 log "Waiting for API health"
 healthy=0
 for i in {1..24}; do
-  if curl --fail --silent --max-time 5 http://127.0.0.1:5000/health >/dev/null; then
+  if curl --fail --silent --max-time 5 http://127.0.0.1:5000/health/ready >/dev/null; then
     healthy=1
     break
   fi
@@ -84,8 +84,11 @@ for c in onlinestore-api onlinestore-sqlserver onlinestore-redis onlinestore-ote
   docker inspect "$c" --format '{{json .NetworkSettings.Networks}}' | grep -q "\"$NETWORK\"" || die "$c is not connected to $NETWORK"
 done
 
-log "Verifying API -> SQL and API -> Redis"
-curl --fail --silent --max-time 10 http://127.0.0.1:5000/health
+log "Verifying SQL Server and Redis container health (Batch 52: detailed /health needs an admin token outside Development)"
+for c in onlinestore-sqlserver onlinestore-redis; do
+  [[ "$(docker inspect "$c" --format "{{.State.Health.Status}}")" == "healthy" ]] || die "$c is not healthy"
+done
+curl --fail --silent --max-time 10 http://127.0.0.1:5000/health/ready
 
 log "Verifying OTEL Collector OTLP/HTTP listener from API"
 docker exec onlinestore-api curl --silent --show-error --output /dev/null --connect-timeout 5 http://otel-collector:4318   || die "API container cannot reach otel-collector:4318"

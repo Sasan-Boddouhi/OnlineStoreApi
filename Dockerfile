@@ -26,7 +26,41 @@ RUN dotnet publish "Online Store Application(API).csproj" \
     --no-restore
 
 # ============================================
-# Stage 2: Runtime
+# Stage 1b: EF Core migration bundle (Batch 52, OPS-02)
+# ============================================
+# مایگریشن دیگر هنگام بالا آمدن API اجرا نمی‌شود (Database__AutoMigrate=false در Production)؛
+# سرویس یک‌بارهٔ «migrator» در docker-compose.prod.yml همین bundle را با login مخصوص مایگریشن اجرا می‌کند.
+# ساخت: docker build --target migrator -t <image>:<tag>-migrator .
+# نسخهٔ dotnet-ef باید با Microsoft.EntityFrameworkCore پروژه یکی باشد.
+FROM build AS bundle
+ARG DOTNET_EF_VERSION=8.0.34
+ARG BUNDLE_RUNTIME=linux-x64
+RUN dotnet tool install --global dotnet-ef --version ${DOTNET_EF_VERSION}
+ENV PATH="${PATH}:/root/.dotnet/tools"
+WORKDIR /src
+RUN dotnet ef migrations bundle \
+    --project DataLayer/DataLayer.csproj \
+    --startup-project "Online Store Application/Online Store Application(API).csproj" \
+    --context AppDbContext \
+    --configuration Release \
+    --target-runtime ${BUNDLE_RUNTIME} \
+    --self-contained \
+    --output /app/bundle/efbundle
+
+# ============================================
+# Stage 1c: Migrator image (one-shot)
+# ============================================
+# DesignTimeDbContextFactory فایل appsettings.json را از پوشهٔ جاری می‌خواند (اجباری)؛
+# رشتهٔ اتصال فقط از متغیر محیطی ConnectionStrings__DefaultConnection می‌آید.
+FROM mcr.microsoft.com/dotnet/runtime-deps:8.0 AS migrator
+WORKDIR /app
+COPY --from=bundle /app/bundle/efbundle /app/efbundle
+COPY --from=build ["/src/Online Store Application/appsettings.json", "/app/appsettings.json"]
+USER app
+ENTRYPOINT ["/app/efbundle"]
+
+# ============================================
+# Stage 2: Runtime (آخرین stage = هدف پیش‌فرض docker build)
 # ============================================
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
