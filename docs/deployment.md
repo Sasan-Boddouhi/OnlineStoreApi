@@ -259,7 +259,28 @@ This allows the API container to start while SQL Server is still becoming ready.
 
 **Batch 52:** this start-up path only runs when `Database__AutoMigrate=true` (staging). Production sets `Database__AutoMigrate=false` and applies migrations with the one-shot `migrator` service before the API starts (Appendix B.4).
 
-**Platform warehouse (Batch 49).** Migrations do not create a platform warehouse, and the API no longer invents a "Platform" province, city and address when stock is added without a warehouse. After the first deployment an admin must create one real platform warehouse: create an address for the admin account (`POST /api/v1/users/me/addresses`) and then `POST /api/v1/warehouses` as admin with that `addressId` and no `sellerId`. Until it exists, adding stock without a `warehouseId` returns `409 PLATFORM_WAREHOUSE_NOT_CONFIGURED`; stock sent to a seller's own warehouse keeps working. Old "Platform" province/city rows created by earlier versions are left in place and can be renamed or reused by an admin.
+**Platform warehouse (Batch 49, start-up guarantee since Batch 49b).** Migrations do not create a platform warehouse, and the API never invents a "Platform" province, city and address when stock is added without a warehouse. Instead, at every start the API (`PlatformWarehouseBootstrapper`, before the first request is served) checks whether a platform warehouse (`Warehouse.SellerId IS NULL`) exists:
+
+- **It exists:** nothing happens; the `PlatformWarehouse__*` settings are not read for anything else (if any of them is set, the set must still be complete and valid, otherwise start-up fails in every environment).
+- **It does not exist and `PlatformWarehouse__*` is complete:** the API creates it in one transaction: the province and city are reused when a row with exactly that name exists (city within that province), otherwise created; the address carries the recipient name, postal code and `ExtraDescription = "تلفن مسئول انبار: 09…"`. The address must belong to a user (`Address.UserId`): the owner is the user whose phone equals `PlatformWarehouse__PhoneNumber` (normalised to `09xxxxxxxxx`, Persian digits and `+98` accepted); if no user has that phone, an **inactive** system account with that phone, the recipient name and a random unknown password is created (it cannot log in; activate it or reset its password only if you want a person to use that phone). Use the warehouse's own mobile number, or the admin's number if the admin has already registered.
+- **It does not exist and the settings are missing or invalid:** in `Production` start-up stops with an `OptionsValidationException` that names every missing or invalid `PlatformWarehouse:*` key. In other environments only a warning is logged.
+- If the database cannot be queried at that moment (for example migrations not applied), the check is skipped and logged (error level in Production); the readiness health check reports the database.
+
+| Setting (environment variable in the container) | `.env` variable in `docker-compose.prod.yml` | Rule |
+|---|---|---|
+| `PlatformWarehouse__Name` | `PLATFORM_WAREHOUSE_NAME` (default `انبار مرکزی پلتفرم`) | required, ≤ 150 |
+| `PlatformWarehouse__ProvinceName` | `PLATFORM_WAREHOUSE_PROVINCE` | required, ≤ 100 |
+| `PlatformWarehouse__CityName` | `PLATFORM_WAREHOUSE_CITY` | required, ≤ 100 |
+| `PlatformWarehouse__StreetAddress` | `PLATFORM_WAREHOUSE_STREET_ADDRESS` | required, ≤ 300 |
+| `PlatformWarehouse__Plaque` | `PLATFORM_WAREHOUSE_PLAQUE` | required, ≤ 10 |
+| `PlatformWarehouse__Unit` | `PLATFORM_WAREHOUSE_UNIT` | optional (`-` when empty), ≤ 20 |
+| `PlatformWarehouse__PostalCode` | `PLATFORM_WAREHOUSE_POSTAL_CODE` | exactly 10 ASCII digits |
+| `PlatformWarehouse__RecipientFirstName` / `__RecipientLastName` | `PLATFORM_WAREHOUSE_RECIPIENT_FIRST_NAME` / `_LAST_NAME` | required, ≤ 50 each |
+| `PlatformWarehouse__PhoneNumber` | `PLATFORM_WAREHOUSE_PHONE` | Iranian mobile number |
+
+The code defaults are safe: only the name has a default, every address field is empty, so nothing is created from defaults. Set the variables before the first start of a release that contains Batch 49b on a database without a platform warehouse; afterwards they may stay or be removed. To change the warehouse later, edit it as an admin (`PUT /api/v1/warehouses/{id}`); the start-up check never edits an existing warehouse. Run a single API instance during the first start (two instances starting at the same moment on an empty database could both create one; stock without a warehouse then uses the one with the lowest id).
+
+`409 PLATFORM_WAREHOUSE_NOT_CONFIGURED` (add-stock without a `warehouseId`) remains only as a safety net and should never be seen in normal operation; if it appears, someone deleted the platform warehouse or the start-up check was skipped because of a database error, and the next start recreates it from the settings. Old "Platform" province/city rows created by versions before Batch 49 are left in place and can be renamed or reused by an admin.
 
 ## 9. Health Endpoint
 
@@ -718,6 +739,7 @@ All are read by `docker-compose.prod.yml` from the deployment `.env` file (never
 | `REDIS_MAXMEMORY` | no | `96mb` | Redis `maxmemory` (policy `allkeys-lru`; Redis is only a cache). |
 | `API_BIND_ADDRESS` | no | `127.0.0.1` | Host address the API port is published on. Use a private-network IP if the reverse proxy runs on another machine; never `0.0.0.0`. |
 | `SQL_SCRIPTS_PATH` | no | `./scripts/sql` | Folder mounted into `db-init`. |
+| `PLATFORM_WAREHOUSE_NAME`, `PLATFORM_WAREHOUSE_PROVINCE`, `PLATFORM_WAREHOUSE_CITY`, `PLATFORM_WAREHOUSE_STREET_ADDRESS`, `PLATFORM_WAREHOUSE_PLAQUE`, `PLATFORM_WAREHOUSE_UNIT`, `PLATFORM_WAREHOUSE_POSTAL_CODE`, `PLATFORM_WAREHOUSE_RECIPIENT_FIRST_NAME`, `PLATFORM_WAREHOUSE_RECIPIENT_LAST_NAME`, `PLATFORM_WAREHOUSE_PHONE` (Batch 49b) | yes while no platform warehouse exists | name: `انبار مرکزی پلتفرم`; others empty | Mapped to `PlatformWarehouse__*`. The API creates the platform warehouse from them at start-up when none exists; without them a Production start on such a database fails (section 8). |
 
 Password rules: at least 16 characters, SQL Server complexity rules (upper case, lower case, digit, symbol), and **no single quote and no semicolon** (the value is placed into T-SQL text and into a connection string). The application and migration passwords must differ. `MSSQL_SA_PASSWORD` stays; it is used only by the SQL health check, `db-init` and the backup scripts.
 
@@ -795,7 +817,7 @@ Rollback: restore the `.env` and compose file of the previous release and start 
 2. `JWT_KEY` has at least 32 random characters; `Jwt__Issuer` and `Jwt__Audience` are set (compose); `Session__*` reviewed.
 3. `PaymentGatewaySettings__Provider=Zarinpal`, `EnableRealGateway=true`, real `ZARINPAL_MERCHANT_ID`, no sandbox flag, `PAYMENT_CALLBACK_URL` = the real https result page (start-up refuses anything else, Batch 40); `PAYMENT_WEBHOOK_SECRET` set while the webhook still exists.
 4. `CORS_ORIGIN_0…` = real origins; `TRUSTED_PROXY_NETWORK` or `TRUSTED_PROXY_IP` = the reverse proxy; the start-up warning about missing proxies is gone; two clients get different rate-limit buckets; `ALLOWED_HOSTS` set (include `localhost`).
-5. At least one active shipping method, categories and geography seeded, commission rate set, one platform warehouse created (Batch 49), `ProductImages__AllowedExternalHosts__N` set if images are added by URL (Batch 48c).
+5. At least one active shipping method, categories and geography seeded, commission rate set, one platform warehouse created (Batch 49; since Batch 49b created by the API at start-up from `PLATFORM_WAREHOUSE_*` → `PlatformWarehouse__*`, section 8 — check the start-up log line "Platform warehouse … created" or an existing `Warehouse` row with `SellerId IS NULL`), `ProductImages__AllowedExternalHosts__N` set if images are added by URL (Batch 48c).
 6. `BOOTSTRAP_SUPERADMIN_PHONE` set to a registered phone for the first start, then removed.
 7. Database: the API logs in with `APP_DB_USER` (not `sa`); edition is Express or Standard; memory 2 GB or more; `Database__AutoMigrate=false`; migrations applied by `migrator`; `scripts/backup.sh` scheduled; one `scripts/restore-test.sh` passed and logged.
 8. One API container only (rate limiting, the job queue and uploads are per node until OPS-02 is solved); the uploads volume is mounted and in the backup.

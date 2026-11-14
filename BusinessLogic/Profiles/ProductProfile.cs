@@ -51,10 +51,11 @@ public class ProductProfile : Profile
         CreateMap<UpdateProductDto, Product>()
             .ConfigureDbDestination()
             // Batch 49 (F-30): مانند Unit/IsActive، null یعنی «بدون تغییر»، نه «حذف برند».
+            // Batch 49b: حذف برند فقط با پرچم صریح ClearBrand (ترکیب آن با BrandId پیش‌تر 422 شده است).
             .ForMember(dest => dest.BrandId, opt =>
             {
-                opt.PreCondition(src => src.BrandId.HasValue);
-                opt.MapFrom(src => src.BrandId);
+                opt.PreCondition(src => src.BrandId.HasValue || src.ClearBrand);
+                opt.MapFrom(src => src.ClearBrand ? null : src.BrandId);
             })
             .ForMember(dest => dest.IsActive, opt =>
             {

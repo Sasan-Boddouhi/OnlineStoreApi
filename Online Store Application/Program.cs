@@ -178,6 +178,8 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddHostedService<SuperAdminBootstrapper>();
+// Batch 49b: انبار پلتفرم هنگام راه‌اندازی از PlatformWarehouse:* ساخته می‌شود؛ در Production بدون آن راه‌اندازی متوقف می‌شود.
+builder.Services.AddPlatformWarehouseBootstrap(builder.Configuration);
 
 // تصمیم ناظر: پرچم اجرای موجودی — پیش‌فرض سخت‌گیرانه (true).
 builder.Services.Configure<InventorySettings>(

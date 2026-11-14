@@ -20,6 +20,15 @@ namespace BusinessLogic.DTOs.Product
         public UnitOfMeasurement? Unit { get; set; }
         public DateTime? ExpirationDate { get; set; }
         public bool? IsActive { get; set; }
+        /// <summary>
+        /// برند تازهٔ محصول. null یعنی «بدون تغییر» (مانند Unit/IsActive)، نه «حذف برند».
+        /// </summary>
         public int? BrandId { get; set; }
+
+        /// <summary>
+        /// Batch 49b: true برند محصول را پاک می‌کند (BrandId = null). همراه با <see cref="BrandId"/> مجاز نیست (422).
+        /// چون null در <see cref="BrandId"/> «بدون تغییر» است، پاک کردن فقط با این پرچم صریح ممکن است.
+        /// </summary>
+        public bool ClearBrand { get; set; }
     }
 }

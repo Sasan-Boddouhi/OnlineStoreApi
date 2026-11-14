@@ -317,8 +317,9 @@ public sealed class InventoryService : IInventoryService
     /// انبار پیش‌فرض پلتفرم (SellerId == null)، از داده‌ای که از قبل وجود دارد.
     ///
     /// Batch 49 (F-29): پیش‌تر اگر انبار پلتفرم نبود، استان/شهر/آدرس «Platform» به‌صورت ضمنی
-    /// ساخته می‌شد و در فهرست عمومی استان‌ها و شهرها پیدا می‌شد. اکنون مدیر پس از استقرار
-    /// انبار پلتفرم را می‌سازد (docs/deployment.md §8) و تا آن زمان پاسخ 409 است.
+    /// ساخته می‌شد و در فهرست عمومی استان‌ها و شهرها پیدا می‌شد. Batch 49b: انبار پلتفرم هنگام راه‌اندازی
+    /// از پیکربندی PlatformWarehouse:* ساخته می‌شود (PlatformWarehouseBootstrapper، docs/deployment.md §8)؛
+    /// پاسخ 409 فقط تور ایمنی است و در کارکرد عادی نباید دیده شود.
     /// </summary>
     private async Task<int> ResolveDefaultWarehouseIdAsync(CancellationToken cancellationToken)
     {

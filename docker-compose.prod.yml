@@ -166,6 +166,20 @@ services:
       PaymentGatewaySettings__CallbackUrl: ${PAYMENT_CALLBACK_URL}
       CorsOrigins__0: ${CORS_ORIGIN_0}
 
+      # Batch 49b: اگر هیچ انبار پلتفرمی (SellerId = null) نباشد، API هنگام راه‌اندازی آن را از این مقادیر می‌سازد؛
+      # بدون انبار و بدون این مقادیر، راه‌اندازی در Production متوقف می‌شود (docs/deployment.md §8).
+      # پس از ساخته شدن انبار، این مقادیر دیگر خوانده نمی‌شوند (ولی اگر تنظیم شوند باید معتبر باشند).
+      PlatformWarehouse__Name: "${PLATFORM_WAREHOUSE_NAME:-انبار مرکزی پلتفرم}"
+      PlatformWarehouse__ProvinceName: "${PLATFORM_WAREHOUSE_PROVINCE:-}"
+      PlatformWarehouse__CityName: "${PLATFORM_WAREHOUSE_CITY:-}"
+      PlatformWarehouse__StreetAddress: "${PLATFORM_WAREHOUSE_STREET_ADDRESS:-}"
+      PlatformWarehouse__Plaque: "${PLATFORM_WAREHOUSE_PLAQUE:-}"
+      PlatformWarehouse__Unit: "${PLATFORM_WAREHOUSE_UNIT:-}"
+      PlatformWarehouse__PostalCode: "${PLATFORM_WAREHOUSE_POSTAL_CODE:-}"
+      PlatformWarehouse__RecipientFirstName: "${PLATFORM_WAREHOUSE_RECIPIENT_FIRST_NAME:-}"
+      PlatformWarehouse__RecipientLastName: "${PLATFORM_WAREHOUSE_RECIPIENT_LAST_NAME:-}"
+      PlatformWarehouse__PhoneNumber: "${PLATFORM_WAREHOUSE_PHONE:-}"
+
       # Batch 40 (SEC-06): Hostهای مجاز (با «;» جدا). localhost برای HEALTHCHECK کانتینر لازم است.
       # مثال: ALLOWED_HOSTS=api.example.com;localhost . خالی = «*» و یک هشدار در لاگ راه‌اندازی.
       AllowedHosts: "${ALLOWED_HOSTS:-*}"

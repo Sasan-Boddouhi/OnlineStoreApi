@@ -255,6 +255,12 @@ public sealed class ProductService : IProductService
 
             // Batch 49 (F-30): فقط برند تازه بررسی می‌شود؛ ذخیرهٔ دوبارهٔ محصولی که برندش بعداً
             // غیرفعال شده، نباید رد شود. null یعنی «بدون تغییر» (ProductProfile).
+            // Batch 49b: اعتبارسنج HTTP همین را 422 می‌کند؛ این بررسی برای فراخوانی مستقیم سرویس است.
+            if (dto.ClearBrand && dto.BrandId.HasValue)
+                throw new UnprocessableEntityException(
+                    BusinessLogic.Validators.Products.UpdateProductDtoValidator.ClearBrandWithBrandIdMessage,
+                    "INVALID_BRAND");
+
             if (dto.BrandId.HasValue && dto.BrandId != entity.BrandId)
                 await EnsureBrandAssignableAsync(dto.BrandId.Value, cancellationToken);
 
