@@ -218,6 +218,180 @@ SELECT @s, Id, 1, 'c', 0, SYSUTCDATETIME(), SYSUTCDATETIME() FROM @cust WHERE Id
             .Should().Be(2);
     }
 
+    // ==================== Batch 41 / 42 ====================
+
+    private const string Phase14Migration = "20261103131218_Phase14_M713_ProductionDefensibility";
+    private const string Batch41Migration = "20261114051734_Phase15_Batch41_RefundWorkflow";
+    private const string Batch42Migration = "20261114054648_Phase15_Batch42_PaymentReview";
+
+    [Fact]
+    public async Task Batch41_RefundWorkflow_BackfillsRefundedAndVerifyStarted_AndRollbackMapsRefundPendingToSucceeded()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Phase14Migration);
+
+        // State: 1 = Pending، 2 = Succeeded، 5 = Refunded، 6 = RefundPending (فقط از Batch 41).
+        await db.ExecuteAsync(SeedPaymentsSql(
+            ("B41-REFUNDED", 5, "2026-11-02T08:30:00"),
+            ("B41-PENDING-AUDITED", 1, "2026-11-01T09:00:00"),
+            ("B41-PENDING-PLAIN", 1, "2026-11-01T09:00:00"),
+            ("B41-SUCCEEDED", 2, "2026-11-01T09:00:00")));
+
+        // دو رکورد «تأیید آغاز شد» با زمان‌های متفاوت؛ دیرتری عمداً اول درج می‌شود تا MIN سنجیده شود نه ترتیب درج.
+        await db.ExecuteAsync(
+            AuditSql("B41-PENDING-AUDITED", "Payment.VerificationStarted", "2026-11-01T10:05:00", "second") +
+            AuditSql("B41-PENDING-AUDITED", "Payment.VerificationStarted", "2026-11-01T10:00:00", "first") +
+            // پرداخت Succeeded هم رکورد دارد؛ back-fill فقط State = 1 را پر می‌کند.
+            AuditSql("B41-SUCCEEDED", "Payment.VerificationStarted", "2026-11-01T09:30:00", "verified"));
+
+        await db.MigrateToAsync(Batch41Migration);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] = 'B41-REFUNDED' " +
+            "AND [RefundedAtUtc] = [LastStateChangedAtUtc]"))
+            .Should().Be(1, "Refunded موجود: لحظهٔ برگشت = آخرین تغییر وضعیت");
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [RefundedAtUtc] FROM [Payment] WHERE [TransactionId] = 'B41-REFUNDED'"))
+            .Should().Be(new DateTime(2026, 11, 2, 8, 30, 0));
+
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [VerifyStartedAtUtc] FROM [Payment] WHERE [TransactionId] = 'B41-PENDING-AUDITED'"))
+            .Should().Be(new DateTime(2026, 11, 1, 10, 0, 0), "اولین رکورد Payment.VerificationStarted");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] IN ('B41-PENDING-PLAIN','B41-SUCCEEDED','B41-REFUNDED') " +
+            "AND [VerifyStartedAtUtc] IS NULL"))
+            .Should().Be(3, "بدون رکورد ممیزی یا غیر Pending → NULL");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] <> 'B41-REFUNDED' AND [RefundedAtUtc] IS NULL"))
+            .Should().Be(3, "فقط پرداخت Refunded لحظهٔ برگشت می‌گیرد");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [RefundReason] IS NOT NULL OR [RefundReference] IS NOT NULL " +
+            "OR [RefundRequestedAtUtc] IS NOT NULL"))
+            .Should().Be(0);
+
+        // RefundPending فقط در کد جدید وجود دارد.
+        await db.ExecuteAsync("UPDATE [Payment] SET [State] = 6 WHERE [TransactionId] = 'B41-SUCCEEDED'");
+
+        await db.MigrateToAsync(Phase14Migration);
+
+        (await db.ScalarAsync<int>("SELECT [State] FROM [Payment] WHERE [TransactionId] = 'B41-SUCCEEDED'"))
+            .Should().Be(2, "RefundPending در Down به Succeeded برمی‌گردد (پول هنوز برنگشته)، نه Refunded");
+        (await db.ScalarAsync<int>("SELECT [State] FROM [Payment] WHERE [TransactionId] = 'B41-REFUNDED'"))
+            .Should().Be(5);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment] WHERE [State] = 6"))
+            .Should().Be(0);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment]"))
+            .Should().Be(4, "rollback نباید پرداختی را حذف کند");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Payment') AND name IN " +
+            "('RefundReason','RefundReference','RefundRequestedAtUtc','RefundedAtUtc','VerifyStartedAtUtc')"))
+            .Should().Be(0, "Down ستون‌های Batch 41 را برمی‌دارد");
+    }
+
+    [Fact]
+    public async Task Batch42_PaymentReview_BackfillsFromAuditLog_AndRollbackDropsColumns()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch41Migration);
+
+        await db.ExecuteAsync(SeedPaymentsSql(
+            ("B42-REVIEW", 2, "2026-11-03T08:00:00"),
+            ("B42-REVIEW-LONG", 2, "2026-11-03T08:00:00"),
+            ("B42-PLAIN", 2, "2026-11-03T08:00:00")));
+
+        var longDetails = new string('x', 1500);
+
+        await db.ExecuteAsync(
+            // دیرترین شرح اول درج می‌شود: ReviewNote باید «آخرین» بر اساس زمان باشد، نه ترتیب درج.
+            AuditSql("B42-REVIEW", "Payment.ReviewRequired", "2026-11-03T11:00:00", "latest details") +
+            AuditSql("B42-REVIEW", "Payment.ReviewRequired", "2026-11-03T09:00:00", "first details") +
+            AuditSql("B42-REVIEW-LONG", "Payment.ReviewRequired", "2026-11-03T08:15:00", "short old") +
+            AuditSql("B42-REVIEW-LONG", "Payment.ReviewRequired", "2026-11-03T12:00:00", longDetails) +
+            // رکورد ممیزی دیگری برای همان پرداخت؛ نباید در back-fill دیده شود.
+            AuditSql("B42-PLAIN", "Payment.VerificationStarted", "2026-11-03T08:05:00", "not a review"));
+
+        await db.MigrateToAsync(Batch42Migration);
+
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [ReviewRequiredAtUtc] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW'"))
+            .Should().Be(new DateTime(2026, 11, 3, 9, 0, 0), "اولین زمان Payment.ReviewRequired");
+        (await db.ScalarAsync<string>(
+            "SELECT [ReviewNote] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW'"))
+            .Should().Be("latest details", "آخرین شرح Payment.ReviewRequired");
+
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [ReviewRequiredAtUtc] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW-LONG'"))
+            .Should().Be(new DateTime(2026, 11, 3, 8, 15, 0));
+        (await db.ScalarAsync<string>(
+            "SELECT [ReviewNote] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW-LONG'"))
+            .Should().Be(new string('x', 1000), "شرح بلندتر از ۱۰۰۰ نویسه با LEFT(…, 1000) کوتاه می‌شود");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] = 'B42-PLAIN' " +
+            "AND [ReviewRequiredAtUtc] IS NULL AND [ReviewNote] IS NULL"))
+            .Should().Be(1, "بدون رکورد Payment.ReviewRequired → NULL");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [ReviewResolvedAtUtc] IS NOT NULL OR [ReviewResolvedByUserId] IS NOT NULL"))
+            .Should().Be(0, "بستن مورد بررسی با ادمین است، نه با مایگریشن");
+
+        await db.MigrateToAsync(Batch41Migration);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Payment') AND name IN " +
+            "('ReviewNote','ReviewRequiredAtUtc','ReviewResolvedAtUtc','ReviewResolvedByUserId')"))
+            .Should().Be(0, "Down ستون‌های Batch 42 را برمی‌دارد");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment]"))
+            .Should().Be(3, "rollback نباید پرداختی را حذف کند");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment] WHERE [State] = 2"))
+            .Should().Be(3, "Down در Batch 42 وضعیت را تغییر نمی‌دهد");
+    }
+
+    /// <summary>
+    /// زنجیرهٔ User → Customer → Order → Invoice روی اسکیمای Phase14 (یا بعدتر: ستون‌های تازهٔ Payment همه nullable‌اند)
+    /// و برای هر ورودی یک Payment با State و LastStateChangedAtUtc داده‌شده. RowVersion را SQL Server پر می‌کند.
+    /// </summary>
+    private static string SeedPaymentsSql(params (string TransactionId, int State, string LastStateChangedAtUtc)[] payments)
+    {
+        var values = string.Join(",\n",
+            payments.Select(p =>
+                $"(100, SYSUTCDATETIME(), 0, 0, {p.State}, '{p.LastStateChangedAtUtc}', 1, @i, @o, '{p.TransactionId}', SYSUTCDATETIME(), SYSUTCDATETIME())"));
+
+        return $@"
+INSERT INTO [User] ([FirstName],[LastName],[PasswordHash],[UserType],[IsActive],[PhoneNumber],[SecurityStamp],[FailedLoginAttempts],[CreatedOn],[ModifiedOn])
+VALUES ('M','T','h',1,1,'09120004141','s',0,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @u INT = SCOPE_IDENTITY();
+
+INSERT INTO [Customer] ([Points],[LoyaltyLevel],[TotalSpent],[OrderCount],[UserId],[CreatedOn],[ModifiedOn])
+VALUES (0,0,0,0,@u,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @c INT = SCOPE_IDENTITY();
+
+INSERT INTO [Order] ([OrderDate],[TotalAmount],[DiscountAmount],[ShippingCost],[CouponQuotaRefunded],[Status],[ShippingFullName],[ShippingAddress],[ShippingPhoneNumber],[CustomerId],[CreatedOn],[ModifiedOn])
+VALUES (SYSUTCDATETIME(),100,0,0,0,0,'M','Addr','09120004141',@c,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @o INT = SCOPE_IDENTITY();
+
+INSERT INTO [Invoice] ([OrderId],[InvoiceNumber],[InvoiceDate],[SubTotalAmount],[TaxAmount],[DiscountAmount],[TotalAmount],[Status],[CreatedOn],[ModifiedOn])
+VALUES (@o,'INV-{Guid.NewGuid():N}',SYSUTCDATETIME(),100,0,0,100,0,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @i INT = SCOPE_IDENTITY();
+
+INSERT INTO [Payment] ([Amount],[PaymentDate],[PaymentMethod],[Gateway],[State],[LastStateChangedAtUtc],[IsActive],[InvoiceId],[OrderId],[TransactionId],[CreatedOn],[ModifiedOn])
+VALUES {values};
+";
+    }
+
+    /// <summary>یک رکورد AuditLog برای پرداختِ دارای این TransactionId (EntityId = PaymentId به‌صورت متن، مانند AuditService).</summary>
+    private static string AuditSql(string transactionId, string action, string occurredOnUtc, string details) => $@"
+INSERT INTO [AuditLog] ([Action],[EntityName],[EntityId],[Details],[OccurredOnUtc],[UserId],[IpAddress])
+SELECT N'{action}', N'Payment', CAST([PaymentId] AS nvarchar(20)), N'{details.Replace("'", "''")}', '{occurredOnUtc}', NULL, NULL
+FROM [Payment] WHERE [TransactionId] = '{transactionId}';
+";
+
     // ==================== ابزار ====================
 
     /// <summary>
