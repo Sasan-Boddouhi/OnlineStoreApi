@@ -238,23 +238,23 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             "Abandoned-order cleanup skipped order {OrderId} (payment {PaymentId}): {Issue}. Needs manual review.",
             order.OrderId, payment.PaymentId, issue);
 
-        var paymentKey = payment.PaymentId.ToString();
-        var alreadyFlagged = await unitOfWork.Repository<AuditLog>()
-            .AnyAsync(
-                new Spec<AuditLog>().Where(a => a.Action == ReviewRequiredAction
-                                              && a.EntityName == nameof(Payment)
-                                              && a.EntityId == paymentKey),
-                cancellationToken);
-
-        if (alreadyFlagged)
+        // Batch 42 (FIN-12): «یک بار» از ستون خودِ پرداخت خوانده می‌شود، نه از AuditLog؛ پرداخت در صف بررسی
+        // (GET payments/review) دیده می‌شود. بررسیِ بسته‌شده دوباره باز نمی‌شود.
+        if (payment.ReviewRequiredAtUtc is not null)
             return;
+
+        var details =
+            $"source=abandoned-order cleanup | order={order.OrderId} | amount={payment.Amount} " +
+            $"| paymentState={payment.State} | issues: {issue}";
+
+        payment.FlagForReview(_timeProvider.GetUtcNow().UtcDateTime, details);
+        unitOfWork.Repository<Payment>().Update(payment);
 
         await auditService.RecordAsync(
             ReviewRequiredAction,
             nameof(Payment),
-            paymentKey,
-            $"source=abandoned-order cleanup | order={order.OrderId} | amount={payment.Amount} " +
-            $"| paymentState={payment.State} | issues: {issue}",
+            payment.PaymentId.ToString(),
+            details,
             cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

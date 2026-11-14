@@ -978,6 +978,19 @@ namespace DataLayer.Migrations
                     b.Property<DateTime?>("RefundedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReviewRequiredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ReviewResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReviewResolvedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()

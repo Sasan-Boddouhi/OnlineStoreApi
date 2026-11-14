@@ -77,6 +77,8 @@ public sealed class EndpointAuthorizationInventoryTests : IClassFixture<Integrat
         ["GET api/v{version:apiVersion}/Listings/variant/{variantId:int}"] = Anonymous,
         ["GET api/v{version:apiVersion}/Listings/{id:int}"] = Anonymous,
         ["GET api/v{version:apiVersion}/Payments/order/{orderId:int}"] = Authenticated,
+        ["GET api/v{version:apiVersion}/Payments/refunds"] = AdminOnly,
+        ["GET api/v{version:apiVersion}/Payments/review"] = AdminOnly,
         ["GET api/v{version:apiVersion}/Products"] = Anonymous,
         ["GET api/v{version:apiVersion}/Products/{id:int}"] = Anonymous,
         ["GET api/v{version:apiVersion}/Products/{id:int}/attributes"] = Anonymous,
@@ -142,6 +144,9 @@ public sealed class EndpointAuthorizationInventoryTests : IClassFixture<Integrat
         ["POST api/v{version:apiVersion}/Payments/verify"] = Authenticated,
         ["POST api/v{version:apiVersion}/Payments/webhook"] = Anonymous,
         ["POST api/v{version:apiVersion}/Payments/{paymentId:int}/refund"] = AdminOnly,
+        // Batch 42 (FIN-12): صف برگشت وجه و صف بررسی دستی.
+        ["POST api/v{version:apiVersion}/Payments/{paymentId:int}/refund/confirm"] = AdminOnly,
+        ["POST api/v{version:apiVersion}/Payments/{paymentId:int}/review/resolve"] = AdminOnly,
         ["POST api/v{version:apiVersion}/Products"] = CanManageCatalog,
         ["POST api/v{version:apiVersion}/Products/{id:int}/attributes"] = CanManageCatalog,
         ["POST api/v{version:apiVersion}/Products/{id:int}/variants"] = CanManageCatalog,

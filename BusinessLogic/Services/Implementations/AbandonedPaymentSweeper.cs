@@ -87,22 +87,23 @@ public sealed class AbandonedPaymentSweeper : IAbandonedPaymentSweeper
             "Payment {PaymentId} is Pending with an unknown verification outcome; the abandoned-payment sweep skipped it. Needs manual review.",
             payment.PaymentId);
 
-        var paymentKey = payment.PaymentId.ToString();
-        var alreadyFlagged = await _unitOfWork.Repository<AuditLog>().AnyAsync(
-            new Spec<AuditLog>().Where(a => a.Action == PaymentLifecycle.ReviewRequiredAction
-                                         && a.EntityName == nameof(Payment)
-                                         && a.EntityId == paymentKey),
-            cancellationToken);
-
-        if (alreadyFlagged)
+        // Batch 42 (FIN-12): «یک بار» از ستون خودِ پرداخت خوانده می‌شود، نه از AuditLog. بررسیِ بسته‌شده هم دوباره
+        // باز نمی‌شود: ادمین آن را دیده و تصمیم گرفته است (مسئلهٔ تازه از مسیر برداشت دوباره بازش می‌کند).
+        if (payment.ReviewRequiredAtUtc is not null)
             return;
+
+        var details =
+            $"source=abandoned-payment sweep | order={payment.OrderId} | amount={payment.Amount} | paymentState={payment.State} " +
+            "| issues: the payment's verification outcome is unknown (verify started, no definitive gateway answer); the sweep skipped it — verify the payment again to resolve it";
+
+        payment.FlagForReview(_timeProvider.GetUtcNow().UtcDateTime, details);
+        _unitOfWork.Repository<Payment>().Update(payment);
 
         await _auditService.RecordAsync(
             PaymentLifecycle.ReviewRequiredAction,
             nameof(Payment),
-            paymentKey,
-            $"source=abandoned-payment sweep | order={payment.OrderId} | amount={payment.Amount} | paymentState={payment.State} " +
-            "| issues: the payment's verification outcome is unknown (verify started, no definitive gateway answer); the sweep skipped it — verify the payment again to resolve it",
+            payment.PaymentId.ToString(),
+            details,
             cancellationToken);
     }
 }

@@ -102,6 +102,29 @@ namespace Application.Entities
         [MaxLength(500)]
         public string? RefundReason { get; set; }
 
+        // ---------------- Batch 42 ----------------
+
+        /// <summary>
+        /// Batch 42 (FIN-12): لحظه‌ای که این پرداخت برای بررسی دستی علامت خورد (برداشت پول برای سفارش ناپرداختنی،
+        /// تأییدِ بی‌نتیجه، ناسازگاری پس از برداشت). تا وقتی <see cref="ReviewResolvedAtUtc"/> خالی است، بررسی باز است.
+        /// رکورد <c>Payment.ReviewRequired</c> در AuditLog همچنان نوشته می‌شود و فقط مدرک است.
+        /// </summary>
+        public DateTime? ReviewRequiredAtUtc { get; set; }
+
+        /// <summary>Batch 42: شرح مشکل (چند مشکلِ پیاپی پشت هم افزوده می‌شوند).</summary>
+        [MaxLength(1000)]
+        public string? ReviewNote { get; set; }
+
+        /// <summary>Batch 42: لحظهٔ بسته شدن بررسی توسط ادمین.</summary>
+        public DateTime? ReviewResolvedAtUtc { get; set; }
+
+        /// <summary>Batch 42: ادمینی که بررسی را بست.</summary>
+        public int? ReviewResolvedByUserId { get; set; }
+
+        /// <summary>Batch 42: بررسی دستی باز است.</summary>
+        [NotMapped]
+        public bool IsReviewOpen => ReviewRequiredAtUtc is not null && ReviewResolvedAtUtc is null;
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = new byte[8];
 
@@ -148,14 +171,51 @@ namespace Application.Entities
         /// <summary>
         /// Batch 41 (FIN-01): ادمین تأیید می‌کند که پول واقعاً به مشتری برگشته است. فقط از RefundPending.
         /// </summary>
-        public void ConfirmRefund(DateTime nowUtc, string? reference = null, string? note = null)
+        /// <param name="nowUtc">لحظهٔ ثبت در سیستم.</param>
+        /// <param name="reference">شمارهٔ پیگیری بانکی برگشت.</param>
+        /// <param name="note">یادداشت اختیاری.</param>
+        /// <param name="refundedAtUtc">Batch 42: تاریخ واقعی برگشت پول در بانک؛ اگر داده نشود همان <paramref name="nowUtc"/>.</param>
+        public void ConfirmRefund(DateTime nowUtc, string? reference = null, string? note = null, DateTime? refundedAtUtc = null)
         {
             TransitionTo(PaymentState.Refunded, note is null ? null : Truncate(note, 500), nowUtc);
 
-            RefundedAtUtc = nowUtc;
+            RefundedAtUtc = refundedAtUtc ?? nowUtc;
 
             if (!string.IsNullOrWhiteSpace(reference))
                 RefundReference = Truncate(reference.Trim(), 100);
+        }
+
+        /// <summary>
+        /// Batch 42 (FIN-12): پرداخت را برای بررسی دستی علامت می‌زند. اگر بررسیِ باز دارد، شرح تازه به آن افزوده
+        /// می‌شود؛ اگر بررسی قبلی بسته شده، بررسی تازه‌ای باز می‌شود.
+        /// </summary>
+        public void FlagForReview(DateTime nowUtc, string note)
+        {
+            var text = string.IsNullOrWhiteSpace(note) ? "review required" : note.Trim();
+
+            if (IsReviewOpen)
+            {
+                ReviewNote = Truncate(string.IsNullOrEmpty(ReviewNote) ? text : $"{ReviewNote} || {text}", 1000);
+                return;
+            }
+
+            ReviewRequiredAtUtc = nowUtc;
+            ReviewNote = Truncate(text, 1000);
+            ReviewResolvedAtUtc = null;
+            ReviewResolvedByUserId = null;
+        }
+
+        /// <summary>Batch 42 (FIN-12): ادمین بررسی باز را می‌بندد. بررسیِ باز نداشتن ⇒ 409.</summary>
+        public void ResolveReview(DateTime nowUtc, int? resolvedByUserId, string note)
+        {
+            if (!IsReviewOpen)
+                throw new BusinessRuleViolationException("This payment has no open review.", "PAYMENT_REVIEW_NOT_OPEN");
+
+            ReviewResolvedAtUtc = nowUtc;
+            ReviewResolvedByUserId = resolvedByUserId;
+
+            if (!string.IsNullOrWhiteSpace(note))
+                ReviewNote = Truncate(string.IsNullOrEmpty(ReviewNote) ? $"resolved: {note.Trim()}" : $"{ReviewNote} || resolved: {note.Trim()}", 1000);
         }
 
         private static string Truncate(string value, int maxLength)

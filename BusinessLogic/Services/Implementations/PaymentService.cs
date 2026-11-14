@@ -918,6 +918,21 @@ public sealed class PaymentService : IPaymentService
                 "Could not record manual-review entry for captured payment {PaymentId}: {Details}",
                 payment.PaymentId, details);
         }
+
+        // Batch 42 (FIN-12): همان مشکل روی خودِ پرداخت هم علامت می‌خورد تا در صف بررسی (GET payments/review) دیده شود.
+        // ذخیرهٔ جدا: اگر این شکست بخورد، رکورد حسابرسیِ بالا از دست نمی‌رود.
+        try
+        {
+            payment.FlagForReview(_timeProvider.GetUtcNow().UtcDateTime, details);
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex,
+                "Could not flag captured payment {PaymentId} for review; only the audit entry exists: {Details}",
+                payment.PaymentId, details);
+        }
     }
 
     private async Task<Invoice> EnsureInvoiceAsync(Order order, CancellationToken cancellationToken)
@@ -973,19 +988,14 @@ public sealed class PaymentService : IPaymentService
     // ==================== Phase 9 (R43) / Batch 41 — برگشت وجه ادمین ====================
 
     /// <summary>
-    /// ثبت برگشت وجه توسط ادمین: «پول را دستی برگردانده‌ام».
+    /// <b>درخواست</b> برگشت وجه توسط ادمین (Batch 42، FIN-12).
     ///
-    /// این متد <b>پول را جابه‌جا نمی‌کند</b> و این عمدی است: زرین‌پال برگشت خودکار ندارد، پس تنها راه واقعی
-    /// برگشت، پنل بانکی است. کاری که اینجا انجام می‌شود هم‌راست کردن سیستم با واقعیت است.
-    ///
-    /// Batch 41 (FIN-01):
-    ///   • پرداخت RefundPending (سفارش پرداخت‌شده‌ای که لغو یا مرجوع شده) ⇒ Refunded. سفارش پیش‌تر برگردانده شده
-    ///     است و دوباره دست نمی‌خورد.
-    ///   • پرداخت Succeeded ⇒ ابتدا همان روال برگرداندن سفارش (<see cref="IOrderReversalService"/>: سفارش، بسته‌ها،
-    ///     موجودی، کوپن، تسویه‌ها و بدهی‌ها) و RefundPending، سپس در همان تراکنش Refunded. هیچ میان‌بر
-    ///     Succeeded → Refunded وجود ندارد.
+    /// این متد <b>پول را جابه‌جا نمی‌کند</b>: زرین‌پال برگشت خودکار ندارد و تنها راه واقعی برگشت، پنل بانکی است.
+    ///   • پرداخت Succeeded ⇒ روال برگرداندن سفارش (<see cref="IOrderReversalService"/>: سفارش، بسته‌ها، موجودی،
+    ///     کوپن، تسویه‌ها و بدهی‌ها) و RefundPending؛ پرداخت در صف برگشت وجه می‌ماند تا پس از واریز در بانک با
+    ///     <see cref="ConfirmRefundAsync"/> و شمارهٔ پیگیری تأیید شود. هیچ میان‌بر Succeeded → Refunded وجود ندارد.
     ///   • اگر سفارش پرداخت موفق دیگری هم دارد (برداشت تکراری)، فقط همین پرداخت برمی‌گردد و سفارش دست نمی‌خورد.
-    ///   • هر وضعیت دیگری ⇒ 409 PAYMENT_NOT_REFUNDABLE (کلیک دوباره هرگز چیزی را دوباره ثبت نمی‌کند).
+    ///   • RefundPending یا هر وضعیت دیگری ⇒ 409 PAYMENT_NOT_REFUNDABLE (کلیک دوباره هرگز چیزی را دوباره ثبت نمی‌کند).
     /// </summary>
     public async Task<PaymentDto> RefundPaymentAsync(
         int paymentId,
@@ -1004,37 +1014,39 @@ public sealed class PaymentService : IPaymentService
             if (payment is null)
                 throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
 
-            if (payment.State is not (PaymentState.Succeeded or PaymentState.RefundPending))
+            if (payment.State == PaymentState.RefundPending)
                 throw new ConflictException(
-                    $"فقط پرداخت موفق یا در انتظار برگشت وجه قابل برگشت است؛ وضعیت فعلی: {payment.State}.",
+                    "برگشت وجه این پرداخت قبلاً درخواست شده است؛ پس از واریز در بانک آن را تأیید کنید (refund/confirm).",
                     "PAYMENT_NOT_REFUNDABLE");
 
-            var note = string.IsNullOrWhiteSpace(reason) ? "admin refund" : reason!.Trim();
+            if (payment.State != PaymentState.Succeeded)
+                throw new ConflictException(
+                    $"فقط پرداخت موفق قابل برگشت است؛ وضعیت فعلی: {payment.State}.",
+                    "PAYMENT_NOT_REFUNDABLE");
+
+            // Batch 42: دلیل الزامی است (اعتبارسنج 422)؛ این فقط سد دوم برای فراخوان‌های بدون کنترلر است.
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new UnprocessableEntityException("دلیل برگشت وجه الزامی است.", "VALIDATION_ERROR");
+
+            var note = reason.Trim();
             var now = _timeProvider.GetUtcNow().UtcDateTime;
-            var confirmsPendingRefund = payment.State == PaymentState.RefundPending;
 
-            var reversal = confirmsPendingRefund
-                ? new RefundReversalOutcome("already-reversed", 0, 0)
-                : await RequestRefundAndReverseOrderAsync(payment, note, now, cancellationToken);
-
-            payment.ConfirmRefund(now, reference: null, note: $"admin refund: {note}");
-            _unitOfWork.Repository<Payment>().Update(payment);
+            var reversal = await RequestRefundAndReverseOrderAsync(payment, note, now, cancellationToken);
 
             await _auditService.RecordAsync(
-                PaymentLifecycle.RefundedAction,
+                AdminRefundRequestedAction,
                 nameof(Payment),
                 payment.PaymentId.ToString(),
-                $"admin refund | amount={payment.Amount} | order={payment.OrderId?.ToString() ?? "none"} " +
+                $"admin refund request | amount={payment.Amount} | order={payment.OrderId?.ToString() ?? "none"} " +
                 $"| orderStatus={reversal.OrderStatus} | cancelledPayouts={reversal.CancelledPayouts} " +
-                $"| clawbackDebts={reversal.ClawbackDebts} | confirmedPendingRefund={confirmsPendingRefund} | reason={note} " +
-                "| MONEY_MOVED_MANUALLY=true",
+                $"| clawbackDebts={reversal.ClawbackDebts} | reason={note} | MONEY_NOT_RETURNED_YET=true",
                 cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
             _logger.LogWarning(
-                "Payment {PaymentId} refunded by admin {AdminId}. Order status: {OrderStatus}, cancelled payouts: {Payouts}, clawback debts: {Debts}. Money must be returned manually.",
+                "Refund of payment {PaymentId} requested by admin {AdminId}. Order status: {OrderStatus}, cancelled payouts: {Payouts}, clawback debts: {Debts}. Money must be returned in the bank and then confirmed.",
                 payment.PaymentId, _currentUser.TryGetCurrentUserId(), reversal.OrderStatus, reversal.CancelledPayouts, reversal.ClawbackDebts);
 
             return _mapper.Map<PaymentDto>(payment);
@@ -1123,4 +1135,208 @@ public sealed class PaymentService : IPaymentService
             result.CancelledPayouts,
             result.ClawbackDebts);
     }
+
+    // ==================== Batch 42 (FIN-12, CEO-02) — صف برگشت وجه و صف بررسی ====================
+
+    /// <summary>خلاصهٔ حسابرسیِ «ادمین برگشت وجه را درخواست کرد» (جدا از Payment.RefundRequested هر پرداخت).</summary>
+    public const string AdminRefundRequestedAction = "Payment.AdminRefundRequested";
+
+    /// <summary>بستن بررسی دستی توسط ادمین.</summary>
+    public const string ReviewResolvedAction = "Payment.ReviewResolved";
+
+    private const int MaxQueuePageSize = 100;
+
+    /// <inheritdoc />
+    public async Task<PaymentDto> ConfirmRefundAsync(
+        int paymentId,
+        ConfirmRefundRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // سد دوم پشت اعتبارسنج (422): بدون شمارهٔ پیگیری بانکی، برگشت پول قابل اثبات نیست.
+        if (string.IsNullOrWhiteSpace(request.BankReference))
+            throw new UnprocessableEntityException("شمارهٔ پیگیری بانکی برگشت وجه الزامی است.", "VALIDATION_ERROR");
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var refundedAt = request.RefundedAtUtc?.ToUniversalTime();
+        if (refundedAt > now.AddMinutes(5))
+            throw new UnprocessableEntityException("تاریخ برگشت وجه نمی‌تواند در آینده باشد.", "VALIDATION_ERROR");
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var payment = await _unitOfWork.Repository<Payment>()
+                .FirstOrDefaultAsync(
+                    new Spec<Payment>().Where(x => x.PaymentId == paymentId).AsTracking(),
+                    cancellationToken);
+
+            if (payment is null)
+                throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
+
+            if (payment.State != PaymentState.RefundPending)
+                throw new ConflictException(
+                    $"فقط پرداختِ در انتظار برگشت وجه قابل تأیید است؛ وضعیت فعلی: {payment.State}. ابتدا برگشت وجه را درخواست کنید.",
+                    "PAYMENT_NOT_REFUND_PENDING");
+
+            var reference = request.BankReference.Trim();
+            var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+
+            payment.ConfirmRefund(now, reference, note is null ? "refund confirmed" : $"refund confirmed: {note}", refundedAt);
+            _unitOfWork.Repository<Payment>().Update(payment);
+
+            await _auditService.RecordAsync(
+                PaymentLifecycle.RefundedAction,
+                nameof(Payment),
+                payment.PaymentId.ToString(),
+                $"refund confirmed | amount={payment.Amount} | order={payment.OrderId?.ToString() ?? "none"} " +
+                $"| bankReference={payment.RefundReference} | refundedAtUtc={payment.RefundedAtUtc:O} " +
+                $"| requestedAtUtc={payment.RefundRequestedAtUtc:O} | note={note ?? "none"} | MONEY_MOVED_MANUALLY=true",
+                cancellationToken);
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Refund of payment {PaymentId} confirmed by admin {AdminId} with bank reference {Reference}.",
+                payment.PaymentId, _currentUser.TryGetCurrentUserId(), payment.RefundReference);
+
+            return _mapper.Map<PaymentDto>(payment);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<BusinessLogic.DTOs.Shared.PagedResult<PaymentDto>> GetRefundQueueAsync(
+        int pageNumber,
+        int pageSize,
+        bool includeRefunded = false,
+        CancellationToken cancellationToken = default)
+    {
+        (pageNumber, pageSize) = NormalizePaging(pageNumber, pageSize);
+
+        var spec = new Spec<Payment>();
+        if (includeRefunded)
+        {
+            // در انتظار اول (قدیمی‌ترین درخواست اول)، سپس برگشت‌داده‌شده‌ها (تازه‌ترین اول).
+            spec.Where(p => p.State == PaymentState.RefundPending || p.State == PaymentState.Refunded)
+                .OrderBy(p => p.State == PaymentState.RefundPending ? 0 : 1)
+                .ThenBy(p => p.State == PaymentState.RefundPending ? p.RefundRequestedAtUtc : null)
+                .ThenByDescending(p => p.RefundedAtUtc)
+                .ThenBy(p => p.PaymentId);
+        }
+        else
+        {
+            spec.Where(p => p.State == PaymentState.RefundPending)
+                .OrderBy(p => p.RefundRequestedAtUtc)
+                .ThenBy(p => p.PaymentId);
+        }
+
+        var repository = _unitOfWork.Repository<Payment>();
+        var total = await repository.CountAsync(spec, cancellationToken);
+        var items = await repository.ListAsync(spec.ApplyPaging((pageNumber - 1) * pageSize, pageSize), cancellationToken);
+
+        return new BusinessLogic.DTOs.Shared.PagedResult<PaymentDto>
+        {
+            Items = items.Select(p => _mapper.Map<PaymentDto>(p)).ToList(),
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalCount = total
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<BusinessLogic.DTOs.Shared.PagedResult<PaymentReviewDto>> GetReviewQueueAsync(
+        int pageNumber,
+        int pageSize,
+        bool includeResolved = false,
+        CancellationToken cancellationToken = default)
+    {
+        (pageNumber, pageSize) = NormalizePaging(pageNumber, pageSize);
+
+        var spec = new Spec<Payment>();
+        if (includeResolved)
+        {
+            spec.Where(p => p.ReviewRequiredAtUtc != null)
+                .OrderBy(p => p.ReviewResolvedAtUtc == null ? 0 : 1)
+                .ThenBy(p => p.ReviewRequiredAtUtc)
+                .ThenBy(p => p.PaymentId);
+        }
+        else
+        {
+            spec.Where(p => p.ReviewRequiredAtUtc != null && p.ReviewResolvedAtUtc == null)
+                .OrderBy(p => p.ReviewRequiredAtUtc)
+                .ThenBy(p => p.PaymentId);
+        }
+
+        var repository = _unitOfWork.Repository<Payment>();
+        var total = await repository.CountAsync(spec, cancellationToken);
+        var items = await repository.ListAsync(spec.ApplyPaging((pageNumber - 1) * pageSize, pageSize), cancellationToken);
+
+        return new BusinessLogic.DTOs.Shared.PagedResult<PaymentReviewDto>
+        {
+            Items = items.Select(p => _mapper.Map<PaymentReviewDto>(p)).ToList(),
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalCount = total
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<PaymentReviewDto> ResolveReviewAsync(
+        int paymentId,
+        string note,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+            throw new UnprocessableEntityException("شرح بررسی الزامی است.", "VALIDATION_ERROR");
+
+        var payment = await _unitOfWork.Repository<Payment>()
+            .FirstOrDefaultAsync(
+                new Spec<Payment>().Where(x => x.PaymentId == paymentId).AsTracking(),
+                cancellationToken);
+
+        if (payment is null)
+            throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
+
+        if (!payment.IsReviewOpen)
+            throw new ConflictException("این پرداخت بررسیِ بازی ندارد.", "PAYMENT_REVIEW_NOT_OPEN");
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var adminId = _currentUser.TryGetCurrentUserId();
+        payment.ResolveReview(now, adminId, note.Trim());
+        _unitOfWork.Repository<Payment>().Update(payment);
+
+        await _auditService.RecordAsync(
+            ReviewResolvedAction,
+            nameof(Payment),
+            payment.PaymentId.ToString(),
+            $"order={payment.OrderId?.ToString() ?? "none"} | amount={payment.Amount} | paymentState={payment.State} " +
+            $"| flaggedAtUtc={payment.ReviewRequiredAtUtc:O} | note={note.Trim()}",
+            cancellationToken);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
+        }
+
+        return _mapper.Map<PaymentReviewDto>(payment);
+    }
+
+    private static (int PageNumber, int PageSize) NormalizePaging(int pageNumber, int pageSize)
+        => (Math.Max(1, pageNumber), Math.Clamp(pageSize <= 0 ? 20 : pageSize, 1, MaxQueuePageSize));
 }

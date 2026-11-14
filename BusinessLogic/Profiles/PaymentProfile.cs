@@ -11,5 +11,9 @@ public class PaymentProfile : Profile
     {
         // موجودیت به دی‌تی‌او خروجی
         CreateMap<Payment, PaymentDto>();
+
+        // Batch 42 (FIN-12): ردیف صف بررسی دستی (فقط ادمین).
+        CreateMap<Payment, PaymentReviewDto>()
+            .ForMember(d => d.ReviewRequiredAtUtc, o => o.MapFrom(s => s.ReviewRequiredAtUtc ?? default));
     }
 }

@@ -198,13 +198,14 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         SetCurrentUser(1, "Admin");
         var dto = await PaymentService.RefundPaymentAsync(paid.PaymentId, "duplicate charge");
 
-        dto.State.Should().Be(PaymentState.Refunded, "the admin attests that the money was returned by hand");
+        // Batch 42 (FIN-12): برگشت وجه ادمین فقط درخواست است؛ Refunded پس از تأیید با شمارهٔ پیگیری بانکی.
+        dto.State.Should().Be(PaymentState.RefundPending, "no money has moved until the admin confirms the bank transfer");
         DbContext.ChangeTracker.Clear();
 
         var payment = await PaymentAsync(paid.PaymentId);
-        payment.State.Should().Be(PaymentState.Refunded);
+        payment.State.Should().Be(PaymentState.RefundPending);
         payment.RefundRequestedAtUtc.Should().Be(ClockNow);
-        payment.RefundedAtUtc.Should().Be(ClockNow);
+        payment.RefundedAtUtc.Should().BeNull();
         payment.RefundReason.Should().Be("duplicate charge");
 
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Cancelled);
@@ -215,7 +216,7 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task AdminRefund_OnRefundPendingPayment_ConfirmsTheRefund_WithoutReversingTheOrderAgain()
+    public async Task ConfirmRefund_OnRefundPendingPayment_ConfirmsTheRefund_WithoutReversingTheOrderAgain()
     {
         var seeded = await CreateOrderAsync(sellers: 1);
         var paid = await PayAsync(seeded);
@@ -225,7 +226,14 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         Factory.Clock.Advance(TimeSpan.FromHours(3));
 
         SetCurrentUser(1, "Admin");
-        var dto = await PaymentService.RefundPaymentAsync(paid.PaymentId, "returned by bank transfer");
+
+        // Batch 42 (FIN-12): «refund» روی پرداختِ در انتظار برگشت دیگر تأیید نمی‌کند (409)؛ تأیید مسیر خودش را دارد.
+        var request = () => PaymentService.RefundPaymentAsync(paid.PaymentId, "returned by bank transfer");
+        (await request.Should().ThrowAsync<ConflictException>()).Which.Code.Should().Be("PAYMENT_NOT_REFUNDABLE");
+
+        var dto = await PaymentService.ConfirmRefundAsync(
+            paid.PaymentId,
+            new ConfirmRefundRequest { BankReference = "BANK-B41-1", Note = "returned by bank transfer" });
 
         dto.State.Should().Be(PaymentState.Refunded);
         DbContext.ChangeTracker.Clear();
@@ -234,14 +242,15 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         payment.State.Should().Be(PaymentState.Refunded);
         payment.RefundRequestedAtUtc.Should().Be(requestedAt);
         payment.RefundedAtUtc.Should().Be(ClockNow);
+        payment.RefundReference.Should().Be("BANK-B41-1");
 
         (await AvailableAsync(seeded.ListingIds[0])).Should().Be(InitialStock, "the cancel already released the stock; the confirmation must not release it again");
         (await AuditDetailsAsync(nameof(Order), seeded.OrderId, "Order.Cancelled")).Should().ContainSingle();
         (await AuditDetailsAsync(nameof(Payment), paid.PaymentId, "Payment.Refunded")).Should().ContainSingle()
             .Which.Should().Contain("MONEY_MOVED_MANUALLY=true").And.Contain("returned by bank transfer");
 
-        var again = () => PaymentService.RefundPaymentAsync(paid.PaymentId, "second click");
-        (await again.Should().ThrowAsync<ConflictException>()).Which.Code.Should().Be("PAYMENT_NOT_REFUNDABLE");
+        var again = () => PaymentService.ConfirmRefundAsync(paid.PaymentId, new ConfirmRefundRequest { BankReference = "BANK-B41-2" });
+        (await again.Should().ThrowAsync<ConflictException>()).Which.Code.Should().Be("PAYMENT_NOT_REFUND_PENDING");
     }
 
     [Fact]
@@ -257,7 +266,8 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         await PaymentService.RefundPaymentAsync(paid.PaymentId, "customer returned the item");
 
         DbContext.ChangeTracker.Clear();
-        (await PaymentAsync(paid.PaymentId)).State.Should().Be(PaymentState.Refunded);
+        // Batch 42 (FIN-12): درخواست برگشت وجه ⇒ RefundPending (Refunded فقط پس از تأیید بانکی).
+        (await PaymentAsync(paid.PaymentId)).State.Should().Be(PaymentState.RefundPending);
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Returned);
         (await GroupStatusAsync(seeded.Groups[0].GroupId)).Should().Be(SellerGroupStatus.Returned);
         (await PayoutsAsync(seeded.OrderId)).Should().ContainSingle().Which.Status.Should().Be(PayoutStatus.Cancelled);
@@ -274,9 +284,10 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         SetCurrentUser(1, "Admin");
         var dto = await PaymentService.RefundPaymentAsync(duplicateId, "charged twice");
 
-        dto.State.Should().Be(PaymentState.Refunded);
+        // Batch 42 (FIN-12): درخواست برگشت وجه ⇒ RefundPending (Refunded فقط پس از تأیید بانکی).
+        dto.State.Should().Be(PaymentState.RefundPending);
         DbContext.ChangeTracker.Clear();
-        (await PaymentAsync(duplicateId)).State.Should().Be(PaymentState.Refunded);
+        (await PaymentAsync(duplicateId)).State.Should().Be(PaymentState.RefundPending);
         (await PaymentAsync(paid.PaymentId)).State.Should().Be(PaymentState.Succeeded, "the order is still paid by the first payment");
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Processing);
         (await GroupStatusesAsync(seeded.OrderId)).Should().OnlyContain(s => s == SellerGroupStatus.Processing);
