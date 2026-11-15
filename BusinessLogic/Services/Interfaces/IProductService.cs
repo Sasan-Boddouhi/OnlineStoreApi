@@ -16,6 +16,16 @@ public interface IProductService
         bool includeInactive = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// همان فهرست با شرط‌های نوع‌دار (Batch 60، API-10). شرط‌های <paramref name="criteria"/> با AND به فیلتر
+    /// <paramref name="query"/> اضافه می‌شوند؛ مرتب‌سازی آماده (اگر باشد) جای مرتب‌سازی query را می‌گیرد.
+    /// </summary>
+    Task<PagedResult<ProductDto>> GetByQueryAsync(
+        QueryContract<Product> query,
+        ProductListCriteria criteria,
+        bool includeInactive = false,
+        CancellationToken cancellationToken = default);
+
     Task<ProductDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default);
     Task<ProductDto?> UpdateAsync(UpdateProductDto dto, CancellationToken cancellationToken = default);

@@ -29,7 +29,8 @@ public class QueryCacheKeyTests
     [Fact]
     public void ToCacheKey_HugeFilter_HasBoundedLength()
     {
-        var query = Parse($"Name contains '{new string('x', 5000)}'", null);
+        // Batch 60: فیلتر بیش از FilterParser.MaxLength نویسه رد می‌شود؛ بزرگ‌ترین فیلتر مجاز را می‌سازیم.
+        var query = Parse($"Name contains '{new string('x', FilterParser.MaxLength - "Name contains ''".Length)}'", null);
 
         var key = query.ToCacheKey("products");
 

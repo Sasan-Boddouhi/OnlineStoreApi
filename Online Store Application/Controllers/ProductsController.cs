@@ -44,24 +44,29 @@ public class ProductsController : ControllerBase
     /// Batch 6 (F-15): محصولات غیرفعال (حذف‌شده) به‌طور پیش‌فرض برنمی‌گردند.
     /// <c>includeInactive=true</c> فقط برای دارندهٔ مجوز catalog.products.write اثر دارد
     /// و برای بقیه بی‌صدا نادیده گرفته می‌شود.
+    ///
+    /// Batch 60 (F-24، API-10): پارامترهای نوع‌دار <c>q</c>، <c>categoryId</c>، <c>subcategoryId</c>، <c>brandId</c>،
+    /// <c>inStock</c> و <c>sort=newest|rating|name</c>. همهٔ شرط‌ها (نوع‌دار، <c>filter</c>، فقط‌فعال) با AND ترکیب می‌شوند.
+    /// <c>filter</c> با توکن اضافه یا ناقص کامل رد می‌شود (400 INVALID_QUERY) و هرگز نیمه‌کاره اعمال نمی‌شود.
+    /// مقدار نامعتبر پارامتر نوع‌دار یا <c>sort</c> ناشناخته ← 422 VALIDATION_ERROR. دستور زبان: <c>docs/api-query-syntax.md</c>.
     /// </remarks>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(PagedResult<ProductDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetProducts(
-        [FromQuery] string? filter,
-        [FromQuery] string? sort,
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 20,
-        [FromQuery] bool includeInactive = false)
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> GetProducts([FromQuery] ProductListQueryDto query)
     {
+        // مرتب‌سازی آماده (newest|rating|name) از مسیر نوع‌دار می‌رود؛ هر مقدار دیگر زبان کوچک است
+        // که اعتبارسنج پیش‌تر درستی‌اش را بررسی کرده است.
+        var sortPreset = ProductListCriteria.ParseSortPreset(query.Sort);
+
         var parseResult = StringQueryParser.TryParse<Product>(
-            filter,
-            sort,
+            query.Filter,
+            sortPreset is null ? query.Sort : null,
             QueryContext,
-            page: pageNumber,
-            size: pageSize);
+            page: query.PageNumber,
+            size: query.PageSize);
 
         if (!parseResult.Success)
         {
@@ -72,6 +77,7 @@ public class ProductsController : ControllerBase
                 Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
                 Instance = HttpContext.Request.Path
             };
+            problem.Extensions["code"] = "INVALID_QUERY";
             problem.Extensions["errors"] = parseResult.Errors;
             return BadRequest(problem);
         }
@@ -93,14 +99,25 @@ public class ProductsController : ControllerBase
                 Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
                 Instance = HttpContext.Request.Path
             };
+            problem.Extensions["code"] = "INVALID_QUERY";
             problem.Extensions["errors"] = validation.Errors;
             return BadRequest(problem);
         }
 
-        var canSeeInactive = includeInactive
+        var canSeeInactive = query.IncludeInactive
             && (await _authorizationService.AuthorizeAsync(User, "CanManageCatalog")).Succeeded;
 
-        var result = await _productService.GetByQueryAsync(validation.Value!, canSeeInactive);
+        var criteria = new ProductListCriteria
+        {
+            Q = query.Q,
+            CategoryId = query.CategoryId,
+            SubcategoryId = query.SubcategoryId,
+            BrandId = query.BrandId,
+            InStock = query.InStock,
+            Sort = sortPreset
+        };
+
+        var result = await _productService.GetByQueryAsync(validation.Value!, criteria, canSeeInactive);
         return Ok(result);
     }
 

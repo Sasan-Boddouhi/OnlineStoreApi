@@ -8,13 +8,15 @@ namespace BusinessLogic.Specifications.Cities;
 
 public static class CityQueryConfig
 {
+    /// <summary>
+    /// فیلدهای مجاز فیلتر و مرتب‌سازی. Batch 60 (F-24): <c>province.name</c> و <c>isactive</c> حذف شدند؛
+    /// روی <see cref="City"/> وجود ندارند و هر درخواست با آن‌ها به خطا می‌خورد.
+    /// </summary>
     public static readonly string[] AllowedFields =
     {
         "cityname",
         "provinceid",
-        "province.provincename",
-        "province.name",
-        "isactive"
+        "province.provincename"
     };
 
     public static Expression<Func<City, CityDto>> Projection =>

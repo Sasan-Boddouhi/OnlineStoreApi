@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Linq.Expressions;
+using Application.Common.Helpers;
 using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
@@ -46,12 +48,23 @@ public sealed class ProductService : IProductService
 
     #region Query
 
+    public Task<PagedResult<ProductDto>> GetByQueryAsync(
+        QueryContract<Product> query,
+        bool includeInactive = false,
+        CancellationToken cancellationToken = default)
+        => GetByQueryAsync(query, ProductListCriteria.None, includeInactive, cancellationToken);
+
     public async Task<PagedResult<ProductDto>> GetByQueryAsync(
         QueryContract<Product> query,
+        ProductListCriteria criteria,
         bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
         using var activity = ActivitySource.StartActivity("Product.GetByQuery", ActivityKind.Internal);
+
+        // Batch 60 (API-10): شرط‌های نوع‌دار پیش از ساخت کلید کش در خود query ادغام می‌شوند،
+        // پس کلید کش آن‌ها را هم در بر دارد (همهٔ مقدارها ثابت‌اند، نه متغیر بسته‌شده).
+        query = ApplyCriteria(query, criteria);
 
         // Batch 6 (F-15): فهرست با و بدون محصولات غیرفعال کلید کش جدا دارد؛
         // وگرنه پاسخ مدیر کاتالوگ (شامل حذف‌شده‌ها) به کاربر عمومی برمی‌گشت.
@@ -162,6 +175,103 @@ public sealed class ProductService : IProductService
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
+    }
+
+    // ---------------- Batch 60 (API-10): پارامترهای نوع‌دار فهرست ----------------
+
+    /// <summary>
+    /// شرط‌های نوع‌دار را با AND به فیلتر زبان کوچک اضافه می‌کند و مرتب‌سازی آماده را (اگر باشد)
+    /// جایگزین مرتب‌سازی زبان کوچک می‌کند. صفحه‌بندی دست نمی‌خورد.
+    /// </summary>
+    private static QueryContract<Product> ApplyCriteria(QueryContract<Product> query, ProductListCriteria criteria)
+    {
+        var filter = query.Filter;
+
+        void AddCondition(Expression<Func<Product, bool>> condition)
+            => filter = filter is null ? condition : filter.And(condition);
+
+        var q = criteria.Q?.Trim();
+        if (!string.IsNullOrEmpty(q))
+            AddCondition(Bind<string>((p, s) => p.Name.Contains(s) || (p.Description != null && p.Description.Contains(s)), q));
+
+        if (criteria.CategoryId is int categoryId)
+            AddCondition(Bind<int>((p, id) => p.Subcategory.CategoryId == id, categoryId));
+
+        if (criteria.SubcategoryId is int subcategoryId)
+            AddCondition(Bind<int>((p, id) => p.SubcategoryId == id, subcategoryId));
+
+        if (criteria.BrandId is int brandId)
+            AddCondition(Bind<int?>((p, id) => p.BrandId == id, brandId));
+
+        if (criteria.InStock is bool inStock)
+            AddCondition(inStock ? InStock : InStock.Not());
+
+        var sorts = criteria.Sort is ProductListSort preset ? PresetSorts(preset) : query.Sorts;
+
+        return new QueryContract<Product>
+        {
+            Filter = filter,
+            Sorts = sorts,
+            Page = query.Page,
+            Size = query.Size,
+            Skip = query.Skip,
+            Take = query.Take
+        };
+    }
+
+    /// <summary>
+    /// محصولی که دست‌کم یک پیشنهاد قابل خرید دارد: واریانت فعال، پیشنهاد فعال، فروشندهٔ تأییدشده و فعال،
+    /// و موجودی فعال بیشتر از صفر (همان قاعدهٔ پیشنهادهای نمایش‌داده‌شده در <see cref="ProductQueryConfig.Projection"/>).
+    /// </summary>
+    private static readonly Expression<Func<Product, bool>> InStock =
+        p => p.Variants.Any(v => v.IsActive && v.Listings.Any(l =>
+            l.Status == SellerProductStatus.Active
+            && l.Seller != null
+            && l.Seller.Status == SellerStatus.Approved
+            && l.Seller.IsActive
+            && l.Inventories.Any(inv => inv.IsActive && inv.Quantity > 0)));
+
+    /// <summary>
+    /// مقدار را به‌صورت ثابت (نه متغیر بسته‌شده) در عبارت می‌گذارد؛ کلید کش از متن عبارت ساخته می‌شود
+    /// و متغیر بسته‌شده مقدارش را در آن متن نشان نمی‌دهد.
+    /// </summary>
+    private static Expression<Func<Product, bool>> Bind<TArg>(Expression<Func<Product, TArg, bool>> template, TArg value)
+    {
+        var body = new ReplaceExpressionVisitor(template.Parameters[1], Expression.Constant(value, typeof(TArg)))
+            .Visit(template.Body)!;
+        return Expression.Lambda<Func<Product, bool>>(body, template.Parameters[0]);
+    }
+
+    private static IReadOnlyList<ISortDefinition<Product>> PresetSorts(ProductListSort preset) => preset switch
+    {
+        ProductListSort.Newest => new ISortDefinition<Product>[]
+        {
+            new PresetSort((Expression<Func<Product, DateTime>>)(p => p.CreatedOn), true),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ProductId), true)
+        },
+        ProductListSort.Rating => new ISortDefinition<Product>[]
+        {
+            new PresetSort((Expression<Func<Product, double>>)(p => p.AverageRating), true),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ReviewCount), true),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ProductId), false)
+        },
+        _ => new ISortDefinition<Product>[]
+        {
+            new PresetSort((Expression<Func<Product, string>>)(p => p.Name), false),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ProductId), false)
+        }
+    };
+
+    private sealed class PresetSort : ISortDefinition<Product>
+    {
+        public PresetSort(LambdaExpression keySelector, bool descending)
+        {
+            KeySelector = keySelector;
+            Descending = descending;
+        }
+
+        public LambdaExpression KeySelector { get; }
+        public bool Descending { get; }
     }
 
     #endregion
