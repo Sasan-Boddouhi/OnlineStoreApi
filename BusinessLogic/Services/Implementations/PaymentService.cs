@@ -273,6 +273,7 @@ public sealed class PaymentService : IPaymentService
         var role = _currentUser.GetCurrentUserRole();
         var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
             || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+        var ownerVerified = false;
 
         if (!isAdmin)
         {
@@ -285,13 +286,27 @@ public sealed class PaymentService : IPaymentService
 
             if (customer is null || (payment.Order != null && payment.Order.CustomerId != customer.CustomerId))
                 throw new ForbiddenException("این پرداخت متعلق به کاربر دیگری است.", "PAYMENT_FORBIDDEN");
+
+            // Batch 43: کارت ماسک‌شده فقط وقتی به مشتری نشان داده می‌شود که مالکیت سفارش «مثبت» ثابت شده باشد
+            // (پرداختِ بدون سفارش از بررسی بالا می‌گذرد ولی صاحبش معلوم نیست).
+            ownerVerified = payment.Order is not null;
         }
 
         // تأیید دوبارهٔ پرداخت موفق، خطا نیست؛ همان نتیجه را برمی‌گردانیم.
         if (payment.State == PaymentState.Succeeded)
-            return _mapper.Map<PaymentDto>(payment);
+            return ownerVerified ? ToOwnerDto(payment) : ToDto(payment);
 
-        return await VerifyWithGatewayAsync(payment, "verify");
+        var result = await VerifyWithGatewayAsync(payment, "verify");
+
+        if (ownerVerified && result.CardPanMasked is null)
+        {
+            // مسیر تأیید ممکن است پرداخت را دوباره بارگذاری کرده باشد؛ کارت ماسک‌شده از ردیف ذخیره‌شده خوانده می‌شود.
+            var stored = await _unitOfWork.Repository<Payment>().FirstOrDefaultAsync(
+                new Spec<Payment>().Where(p => p.PaymentId == result.PaymentId), CancellationToken.None);
+            result.CardPanMasked = stored?.CardPanMasked;
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -305,7 +320,13 @@ public sealed class PaymentService : IPaymentService
     ///  ۳) F-07: Verified/AlreadyVerified ⇒ ثبت قطعی (Batch 4b). Rejected ⇒ Failed. TransientError ⇒ پرداخت
     ///     Pending می‌ماند و 503 PAYMENT_VERIFY_RETRY با Retry-After؛ تکرار بعدی idempotent است (101 ⇒ موفق).
     /// </summary>
-    private async Task<PaymentDto> VerifyWithGatewayAsync(Payment payment, string source)
+    /// <param name="payment">پرداخت ردیابی‌شده.</param>
+    /// <param name="source">منشأ تأیید برای AuditLog (verify، webhook، reconciliation، …).</param>
+    /// <param name="gatewayReportsCaptured">
+    /// Batch 43: استعلام درگاه گفته این Authority قبلاً Verify شده و پول برداشته شده است. مثل «Verify آغازشده» رفتار
+    /// می‌شود: حتی اگر سفارش دیگر قابل پرداخت نباشد، Verify تکرار می‌شود تا برداشت ثبت شود (Succeeded + بررسی/برگشت وجه).
+    /// </param>
+    private async Task<PaymentDto> VerifyWithGatewayAsync(Payment payment, string source, bool gatewayReportsCaptured = false)
     {
         var ct = CancellationToken.None;
         const int maxClaimAttempts = 2;
@@ -313,7 +334,7 @@ public sealed class PaymentService : IPaymentService
         for (var attempt = 1; ; attempt++)
         {
             if (payment.State == PaymentState.Succeeded)
-                return _mapper.Map<PaymentDto>(payment);
+                return ToDto(payment);
 
             var payments = payment.OrderId is null
                 ? new List<Payment> { payment }
@@ -327,7 +348,7 @@ public sealed class PaymentService : IPaymentService
             var verifyAlreadyStarted = unresolved.Contains(payment.PaymentId);
 
             var refusal = order is null ? null : GetPayabilityRefusal(order, payments, payment);
-            if (refusal is not null && !verifyAlreadyStarted)
+            if (refusal is not null && !verifyAlreadyStarted && !gatewayReportsCaptured)
                 await RefuseVerificationAsync(payment, refusal.Value.Code, refusal.Value.Message, source);
 
             if (payment.State != PaymentState.Pending)
@@ -356,7 +377,7 @@ public sealed class PaymentService : IPaymentService
             case PaymentVerificationOutcome.Verified:
             case PaymentVerificationOutcome.AlreadyVerified:
                 // Batch 4b: از اینجا پول برداشته شده است؛ ثبت پرداخت نباید شکست بخورد.
-                return await CompleteCapturedPaymentAsync(payment, verification.ReferenceId, source);
+                return await CompleteCapturedPaymentAsync(payment, verification, source);
 
             case PaymentVerificationOutcome.Rejected:
                 return await MarkVerificationRejectedAsync(payment, verification);
@@ -508,7 +529,7 @@ public sealed class PaymentService : IPaymentService
             _logger.LogWarning(ex, "Concurrent update while failing payment {PaymentId}; reloading", payment.PaymentId);
             var reloaded = await GetByAuthorityAsync(payment.TransactionId!, ct);
             if (reloaded.State == PaymentState.Succeeded)
-                return _mapper.Map<PaymentDto>(reloaded);
+                return ToDto(reloaded);
             throw;
         }
 
@@ -557,7 +578,7 @@ public sealed class PaymentService : IPaymentService
         if (payment.State is PaymentState.Succeeded or PaymentState.RefundPending or PaymentState.Refunded)
         {
             _logger.LogInformation("Duplicate webhook for payment {PaymentId} ignored", payment.PaymentId);
-            return _mapper.Map<PaymentDto>(payment);
+            return ToDto(payment);
         }
 
         if (parsed.IsSuccessful)
@@ -574,7 +595,7 @@ public sealed class PaymentService : IPaymentService
         {
             _logger.LogWarning(
                 "Failure webhook for payment {PaymentId} ignored: its verification outcome is still unknown", payment.PaymentId);
-            return _mapper.Map<PaymentDto>(payment);
+            return ToDto(payment);
         }
 
         payment.TransitionTo(PaymentState.Failed, note: parsed.Status);
@@ -589,10 +610,10 @@ public sealed class PaymentService : IPaymentService
         {
             _logger.LogWarning(ex, "Concurrency conflict on webhook for payment {PaymentId}. Likely already processed by redirect verification.", payment.PaymentId);
             var reloaded = await GetByAuthorityAsync(parsed.Authority, cancellationToken);
-            return _mapper.Map<PaymentDto>(reloaded);
+            return ToDto(reloaded);
         }
 
-        return _mapper.Map<PaymentDto>(payment);
+        return ToDto(payment);
     }
 
     /// <summary>
@@ -613,7 +634,8 @@ public sealed class PaymentService : IPaymentService
         var payment = payments.FirstOrDefault(p => p.State == PaymentState.Succeeded)
                       ?? payments.OrderByDescending(p => p.PaymentId).FirstOrDefault();
 
-        return payment is null ? null : _mapper.Map<PaymentDto>(payment);
+        // مالکیت سفارش بالاتر ثابت شده است (یا فراخوان ادمین است)؛ صاحب سفارش کارت ماسک‌شدهٔ خودش را می‌بیند.
+        return payment is null ? null : ToOwnerDto(payment);
     }
 
     /// <summary>همهٔ پرداخت‌های سفارش، ردیابی‌شده (برای لغو/ادعا در همان واحد کار).</summary>
@@ -692,11 +714,13 @@ public sealed class PaymentService : IPaymentService
     /// عمداً CancellationToken.None: قطع اتصال مشتری (RequestAborted) نباید ثبت پولی را که
     /// گرفته شده نیمه‌کاره بگذارد.
     /// </summary>
-    private async Task<PaymentDto> CompleteCapturedPaymentAsync(Payment payment, string? referenceId, string source)
+    private async Task<PaymentDto> CompleteCapturedPaymentAsync(
+        Payment payment, PaymentVerificationResult verification, string source)
     {
         var issues = new List<string>();
+        var referenceId = verification.ReferenceId;
 
-        payment = await PersistCapturedPaymentAsync(payment, referenceId, source, issues);
+        payment = await PersistCapturedPaymentAsync(payment, verification, source, issues);
 
         if (payment.State == PaymentState.Succeeded)
             await SyncOrderAfterCaptureAsync(payment, issues);
@@ -707,7 +731,7 @@ public sealed class PaymentService : IPaymentService
         _logger.LogInformation(
             "Payment {PaymentId} captured for order {OrderId} via {Source}", payment.PaymentId, payment.OrderId, source);
 
-        return _mapper.Map<PaymentDto>(payment);
+        return ToDto(payment);
     }
 
     /// <summary>
@@ -715,10 +739,11 @@ public sealed class PaymentService : IPaymentService
     /// پرداخت را ثبت کرده باشد، نسخهٔ تازه بارگذاری و همان برگردانده می‌شود.
     /// </summary>
     private async Task<Payment> PersistCapturedPaymentAsync(
-        Payment payment, string? referenceId, string source, List<string> issues)
+        Payment payment, PaymentVerificationResult verification, string source, List<string> issues)
     {
         var ct = CancellationToken.None;
         const int maxAttempts = 3;
+        var referenceId = verification.ReferenceId;
 
         for (var attempt = 1; ; attempt++)
         {
@@ -735,6 +760,8 @@ public sealed class PaymentService : IPaymentService
             }
 
             payment.GatewayReference = referenceId;
+            // Batch 43 (FIN-07): کارمزد و کارت ماسک‌شده از همان پاسخ Verify، در همان ذخیره‌ای که پرداخت Succeeded می‌شود.
+            payment.RecordGatewayDetails(verification.Fee, verification.FeeType, verification.CardPanMasked);
             payment.TransitionTo(PaymentState.Succeeded);
             await AuditAsync("Payment.Succeeded", payment.PaymentId, referenceId, ct);
             _unitOfWork.Repository<Payment>().Update(payment);
@@ -1049,7 +1076,7 @@ public sealed class PaymentService : IPaymentService
                 "Refund of payment {PaymentId} requested by admin {AdminId}. Order status: {OrderStatus}, cancelled payouts: {Payouts}, clawback debts: {Debts}. Money must be returned in the bank and then confirmed.",
                 payment.PaymentId, _currentUser.TryGetCurrentUserId(), reversal.OrderStatus, reversal.CancelledPayouts, reversal.ClawbackDebts);
 
-            return _mapper.Map<PaymentDto>(payment);
+            return ToDto(payment);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -1202,7 +1229,7 @@ public sealed class PaymentService : IPaymentService
                 "Refund of payment {PaymentId} confirmed by admin {AdminId} with bank reference {Reference}.",
                 payment.PaymentId, _currentUser.TryGetCurrentUserId(), payment.RefundReference);
 
-            return _mapper.Map<PaymentDto>(payment);
+            return ToDto(payment);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -1248,7 +1275,7 @@ public sealed class PaymentService : IPaymentService
 
         return new BusinessLogic.DTOs.Shared.PagedResult<PaymentDto>
         {
-            Items = items.Select(p => _mapper.Map<PaymentDto>(p)).ToList(),
+            Items = items.Select(p => ToDto(p)).ToList(),
             PageNumber = pageNumber,
             PageSize = pageSize,
             TotalCount = total
@@ -1339,4 +1366,651 @@ public sealed class PaymentService : IPaymentService
 
     private static (int PageNumber, int PageSize) NormalizePaging(int pageNumber, int pageSize)
         => (Math.Max(1, pageNumber), Math.Clamp(pageSize <= 0 ? 20 : pageSize, 1, MaxQueuePageSize));
+
+    // ==================== Batch 43 (FIN-07) — خروجی پرداخت ====================
+
+    /// <summary>
+    /// نگاشت پیش‌فرض Payment → PaymentDto. جزئیات درگاه (کارمزد، پرداخت‌کنندهٔ کارمزد، کارت ماسک‌شده) فقط برای ادمین
+    /// می‌مانند؛ برای هر فراخوان دیگر (مشتری، webhook، جاب‌ها) null می‌شوند. PaymentDto به مشتری هم برگردانده می‌شود.
+    /// تنها استثنا <see cref="ToOwnerDto"/> است.
+    /// </summary>
+    private PaymentDto ToDto(Payment payment)
+    {
+        var dto = _mapper.Map<PaymentDto>(payment);
+
+        if (!IsAdminCaller())
+        {
+            dto.GatewayFee = null;
+            dto.GatewayFeeType = null;
+            dto.CardPanMasked = null;
+        }
+
+        return dto;
+    }
+
+    /// <summary>
+    /// تصمیم مالک (Batch 43): مشتری کارت ماسک‌شدهٔ پرداختِ <b>خودش</b> را می‌بیند. فقط جایی صدا زده می‌شود که مالکیت
+    /// سفارشِ این پرداخت برای کاربر جاری ثابت شده باشد (Verify و GET payments/order/{orderId}). کارمزد درگاه هزینهٔ
+    /// داخلی فروشگاه است و همچنان فقط برای ادمین می‌ماند.
+    /// </summary>
+    private PaymentDto ToOwnerDto(Payment payment)
+    {
+        var dto = ToDto(payment);
+        dto.CardPanMasked = payment.CardPanMasked;
+        return dto;
+    }
+
+    private bool IsAdminCaller()
+    {
+        var role = _currentUser.GetCurrentUserRole();
+        return string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ==================== Batch 43 (FIN-05) — تطبیق پرداخت با درگاه ====================
+    //
+    // منطق پول (هر ردیف: پاسخ استعلام درگاه × وضعیت پرداخت Pending و سفارش):
+    //   • PaidNotVerified + سفارش قابل پرداخت        ⇒ مسیر Verify موجود (برداشت، Succeeded، سفارش Processing).
+    //   • Verified (پول قبلاً برداشته شده)             ⇒ همیشه مسیر Verify (پاسخ 101): پولِ برداشته‌شده باید Succeeded ثبت شود؛
+    //                                                    اگر سفارش دیگر قابل پرداخت نیست، همان مسیر موجودِ «برداشت برای
+    //                                                    سفارش لغوشده»: Succeeded + صف بررسی با refundNeeded=true.
+    //   • PaidNotVerified + سفارش ناپرداختنی          ⇒ Verify صدا زده نمی‌شود (پولی برداشته نمی‌شود)؛ پرداخت لغو و به صف
+    //                                                    بررسی می‌رود؛ پولِ تأییدنشده را درگاه خودش به خریدار برمی‌گرداند.
+    //                                                    عمداً refundNeeded=true ندارد: پولی نزد ما نیست که دستی برگردد.
+    //   • NotPaid                                     ⇒ جاب: لغو (مثل قبل). ادمین: دست نمی‌زند (شاید خریدار هنوز در بانک است).
+    //   • Unknown                                     ⇒ Pending می‌ماند؛ جاب یک بار به صف بررسی می‌فرستد و در اجرای بعد دوباره می‌پرسد.
+    //   • استعلام خاموش (EnableInquiry=false، پیش‌فرض تا پاسخ N2) ⇒ جایگزین امن: جاب نه Verify می‌کند و نه لغو؛ پرداخت
+    //     Pending می‌ماند و یک بار به صف بررسی می‌رود. ادمین با verify-by-authority همان مسیر Verify را اجرا می‌کند
+    //     (پرداخت‌شده ⇒ برداشت؛ پرداخت‌نشده ⇒ Failed). اگر ادمین بررسی را بدون Verify ببندد، جاب پرداخت را رهاشده لغو می‌کند.
+    //   • پرداختی که Verify آن قبلاً آغاز شده (VerifyStartedAtUtc) هرگز اینجا لغو نمی‌شود: Verified / PaidNotVerified با
+    //     سفارش قابل پرداخت ⇒ مسیر Verify؛ بقیه ⇒ Pending می‌ماند و یک بار علامت می‌خورد (رفتار Batch 5/41).
+    //   • پرداخت بسته (Cancelled/Failed) که درگاه آن را Verified می‌گوید ⇒ وضعیت عوض نمی‌شود (ماشین حالت اجازه نمی‌دهد)،
+    //     ولی با refundNeeded=true به صف بررسی می‌رود: پولی برداشته شده که ثبت نشده است.
+
+    /// <summary>منشأ «تطبیق خودکار» در AuditLog (جاب پرداخت‌های رهاشده).</summary>
+    public const string ReconciliationSource = "reconciliation";
+
+    /// <summary>منشأ «تطبیق دستی ادمین» در AuditLog.</summary>
+    public const string AdminVerifySource = "admin verify-by-authority";
+
+    /// <summary>رکورد حسابرسیِ اقدام ادمین <c>POST payments/verify-by-authority</c>.</summary>
+    public const string VerifyByAuthorityAction = "Payment.VerifyByAuthority";
+
+    /// <summary>قواعدی که بین جاب و اقدام ادمین فرق می‌کنند.</summary>
+    /// <param name="Source">منشأ در AuditLog.</param>
+    /// <param name="AskGateway">پیش از تصمیم از درگاه استعلام شود.</param>
+    /// <param name="CancelWhenNotPaid">پرداختِ «پرداخت‌نشده» لغو شود (فقط جاب پرداخت‌های رهاشده).</param>
+    /// <param name="FlagWhenUnresolved">پرداختی که Pending می‌ماند یک بار به صف بررسی برود (جاب‌ها).</param>
+    /// <param name="VerifyWhenInquiryDisabled">
+    /// وقتی استعلام خاموش است (N2)، مسیر Verify موجود مستقیم اجرا شود. فقط اقدام ادمین: انسانی که پنل درگاه را دیده
+    /// تصمیم گرفته است. جاب‌ها هرگز بدون استعلام Verify نمی‌کنند.
+    /// </param>
+    /// <param name="AbandonedAfterMinutes">مهلت رهاشدگی؛ فقط برای متن AuditLog.</param>
+    private sealed record ReconciliationRules(
+        string Source,
+        bool AskGateway,
+        bool CancelWhenNotPaid,
+        bool FlagWhenUnresolved,
+        bool VerifyWhenInquiryDisabled,
+        int AbandonedAfterMinutes);
+
+    /// <inheritdoc />
+    public async Task<PaymentReconciliationDto> VerifyByAuthorityAsync(
+        string authority,
+        CancellationToken cancellationToken = default)
+    {
+        // سد دوم پشت اعتبارسنج (422).
+        if (string.IsNullOrWhiteSpace(authority))
+            throw new UnprocessableEntityException("شناسهٔ پرداخت (Authority) الزامی است.", "VALIDATION_ERROR");
+
+        var payment = await GetByAuthorityAsync(authority.Trim(), cancellationToken);
+        var stateBefore = payment.State;
+
+        var result = await ReconcileAsync(
+            payment,
+            new ReconciliationRules(
+                AdminVerifySource,
+                AskGateway: true,
+                CancelWhenNotPaid: false,
+                FlagWhenUnresolved: false,
+                VerifyWhenInquiryDisabled: true,
+                AbandonedAfterMinutes: 0));
+
+        // اقدام ادمین همیشه ثبت می‌شود، حتی وقتی چیزی عوض نشد.
+        await AuditAsync(
+            VerifyByAuthorityAction,
+            result.Payment.PaymentId,
+            $"order={result.Payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(result.Payment.Amount)} " +
+            $"| gateway={result.GatewayStatus} | gatewayRaw={result.GatewayRawStatus ?? "none"} " +
+            $"| gatewayError={result.GatewayErrorCode ?? "none"} | outcome={result.Outcome} " +
+            $"| paymentState={stateBefore}->{result.Payment.State} | reviewRequired={result.ReviewRequired}",
+            CancellationToken.None);
+        await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+
+        _logger.LogWarning(
+            "Admin {AdminId} reconciled payment {PaymentId} by authority: gateway {GatewayStatus}, outcome {Outcome}",
+            _currentUser.TryGetCurrentUserId(), result.Payment.PaymentId, result.GatewayStatus, result.Outcome);
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<PaymentReconciliationDto> ReconcileStalePaymentAsync(
+        int paymentId,
+        bool askGateway,
+        int abandonedAfterMinutes,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await LoadPaymentForReconciliationAsync(paymentId, cancellationToken)
+            ?? throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
+
+        return await ReconcileAsync(
+            payment,
+            new ReconciliationRules(
+                ReconciliationSource,
+                askGateway,
+                CancelWhenNotPaid: true,
+                FlagWhenUnresolved: true,
+                VerifyWhenInquiryDisabled: false,
+                abandonedAfterMinutes));
+    }
+
+    /// <inheritdoc />
+    public async Task<PaymentReconciliationDto> ReconcileBeforeOrderCancellationAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        var payment = await LoadPaymentForReconciliationAsync(paymentId, cancellationToken)
+            ?? throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
+
+        return await ReconcileAsync(
+            payment,
+            new ReconciliationRules(
+                ReconciliationSource,
+                AskGateway: true,
+                CancelWhenNotPaid: false,
+                FlagWhenUnresolved: true,
+                VerifyWhenInquiryDisabled: false,
+                AbandonedAfterMinutes: 0));
+    }
+
+    /// <summary>
+    /// هستهٔ تطبیق. عمداً CancellationToken.None: این مسیر ممکن است پول برداشت کند و نباید نیمه‌کاره رها شود.
+    /// </summary>
+    private async Task<PaymentReconciliationDto> ReconcileAsync(Payment payment, ReconciliationRules rules)
+    {
+        if (payment.State is PaymentState.Succeeded or PaymentState.RefundPending or PaymentState.Refunded)
+            return Reconciled(payment, null, PaymentReconciliationOutcome.NoChange,
+                "این پرداخت قبلاً ثبت شده است؛ کاری برای انجام نیست.");
+
+        // پرداختِ بدون Authority هرگز به درگاه نرسیده است؛ چیزی برای پرسیدن نیست.
+        var inquiry = rules.AskGateway && !string.IsNullOrWhiteSpace(payment.TransactionId)
+            ? await InquireSafelyAsync(payment)
+            : null;
+
+        if (payment.State != PaymentState.Pending)
+            return await ReconcileClosedPaymentAsync(payment, inquiry, rules);
+
+        var verifyStarted = PaymentLifecycle.IsVerificationUnresolved(payment);
+
+        switch (inquiry?.Status)
+        {
+            case PaymentInquiryStatus.Verified:
+            case PaymentInquiryStatus.PaidNotVerified:
+                return await ReconcilePaidPaymentAsync(payment, inquiry, rules, verifyStarted);
+
+            case PaymentInquiryStatus.Unknown when inquiry.IsInquiryDisabled:
+                // تصمیم باز N2: استعلام خاموش است. ادمین (که پنل درگاه را دیده) همان مسیر Verify موجود را با همهٔ
+                // قواعدش اجرا می‌کند. جاب‌ها «جایگزین امن» را اجرا می‌کنند: نه Verify خودکار، نه لغو بی‌صدا؛ پرداخت
+                // Pending می‌ماند و یک بار به صف بررسی می‌رود.
+                if (rules.VerifyWhenInquiryDisabled)
+                    return await ReconcilePaidPaymentAsync(payment, inquiry, rules, verifyStarted);
+
+                // ادمین بررسی دستی را بسته و پرداخت را Verify نکرده است: یعنی پرداختی در کار نبوده. از این پس مثل پرداخت
+                // رهاشده لغو می‌شود تا برای همیشه Pending نماند (پول تأییدنشده را در هر حال درگاه برمی‌گرداند).
+                if (!verifyStarted && rules.CancelWhenNotPaid
+                    && payment.ReviewRequiredAtUtc is not null && payment.ReviewResolvedAtUtc is not null)
+                    return await CancelAbandonedPaymentAsync(payment, inquiry, rules);
+
+                return await LeavePendingAsync(
+                    payment,
+                    inquiry,
+                    rules,
+                    verifyStarted ? UnresolvedVerificationNote(payment) : InquiryDisabledNote(payment),
+                    "استعلام از درگاه خاموش است؛ پرداخت نه خودکار تأیید شد و نه لغو. در صف بررسی است تا ادمین آن را با verify-by-authority قطعی کند.");
+
+            case PaymentInquiryStatus.Unknown:
+                return await LeavePendingAsync(
+                    payment,
+                    inquiry,
+                    rules,
+                    verifyStarted ? UnresolvedVerificationNote(payment) : UnknownInquiryNote(payment),
+                    "درگاه پاسخ قطعی نداد؛ پرداخت در انتظار ماند و دوباره استعلام می‌شود.");
+
+            default:
+                // NotPaid، یا استعلام انجام نشده (خاموش بودن استعلام یا نبود Authority).
+                if (verifyStarted)
+                    return await LeavePendingAsync(
+                        payment,
+                        inquiry,
+                        rules,
+                        UnresolvedVerificationNote(payment),
+                        "تأیید این پرداخت قبلاً آغاز شده و نتیجه‌اش نامعلوم است؛ لغو نشد. تأیید دوباره آن را قطعی می‌کند.");
+
+                if (!rules.CancelWhenNotPaid)
+                    return Reconciled(payment, inquiry, PaymentReconciliationOutcome.LeftPending,
+                        "درگاه می‌گوید این پرداخت انجام نشده است. پرداخت در انتظار ماند؛ اگر رها شده باشد جاب پرداخت‌های رهاشده آن را لغو می‌کند.");
+
+                return await CancelAbandonedPaymentAsync(payment, inquiry, rules);
+        }
+    }
+
+    /// <summary>
+    /// درگاه می‌گوید خریدار پرداخت کرده است (تأییدنشده یا قبلاً تأییدشده)؛ یا استعلام خاموش است و ادمین خواسته Verify
+    /// اجرا شود. در حالت دوم هیچ پیش‌فرضی دربارهٔ پرداخت نیست: مسیر Verify موجود با همهٔ قواعد خودش تصمیم می‌گیرد.
+    /// </summary>
+    private async Task<PaymentReconciliationDto> ReconcilePaidPaymentAsync(
+        Payment payment, PaymentInquiryResult inquiry, ReconciliationRules rules, bool verifyStarted)
+    {
+        var ct = CancellationToken.None;
+        var captured = inquiry.Status == PaymentInquiryStatus.Verified;
+        var paidPerGateway = inquiry.Status is PaymentInquiryStatus.Verified or PaymentInquiryStatus.PaidNotVerified;
+
+        var payments = payment.OrderId is null
+            ? new List<Payment> { payment }
+            : await ListOrderPaymentsAsync(payment.OrderId.Value, ct);
+        var order = payment.OrderId is null
+            ? null
+            : await _unitOfWork.Repository<Order>().FirstOrDefaultAsync(
+                new Spec<Order>().Where(o => o.OrderId == payment.OrderId.Value), ct);
+        var refusal = order is null ? null : GetPayabilityRefusal(order, payments, payment);
+
+        if (refusal is not null && paidPerGateway && !captured)
+        {
+            // پول فقط نزد درگاه «پرداخت‌شدهٔ تأییدنشده» است. Verify آن را برای سفارشی برمی‌داشت که انجام نمی‌شود و برگشت
+            // دستی می‌خواست؛ بدون Verify، درگاه خودش پول را به خریدار برمی‌گرداند.
+            if (verifyStarted)
+                return await LeavePendingAsync(
+                    payment,
+                    inquiry,
+                    rules,
+                    UnresolvedVerificationNote(payment),
+                    "خریدار پرداخت کرده ولی سفارش دیگر قابل پرداخت نیست و تأیید این پرداخت قبلاً آغاز شده است؛ تأیید نشد و لغو هم نشد. درگاه پولِ تأییدنشده را برمی‌گرداند.");
+
+            return await CancelUnverifiablePaidPaymentAsync(payment, inquiry, rules, refusal.Value.Code);
+        }
+
+        string? verifyFailure = null;
+        var paymentId = payment.PaymentId;
+        try
+        {
+            await VerifyWithGatewayAsync(payment, rules.Source, gatewayReportsCaptured: captured);
+        }
+        catch (ServiceUnavailableException ex)
+        {
+            // Verify پاسخ قطعی نداد یا پرداخت دیگری از همین سفارش در حال تأیید است؛ اجرای بعد دوباره تلاش می‌کند.
+            verifyFailure = ex.Code;
+        }
+        catch (ConflictException ex)
+        {
+            // رقابت: وضعیت پرداخت یا سفارش در این فاصله عوض شده است (مثلاً لغو سفارش).
+            verifyFailure = ex.Code;
+        }
+        catch (BusinessException ex)
+        {
+            // Verify قطعی رد شد (مثلاً مبلغ نابرابر)؛ پرداخت Failed شده است.
+            verifyFailure = ex.Code;
+        }
+
+        var current = await LoadPaymentForReconciliationAsync(paymentId, ct) ?? payment;
+
+        switch (current.State)
+        {
+            case PaymentState.Succeeded:
+            case PaymentState.RefundPending:
+            case PaymentState.Refunded:
+                await CloseSweeperHoldAsync(current, "the gateway confirmed the payment and it was captured");
+                return Reconciled(
+                    current,
+                    inquiry,
+                    current.IsReviewOpen ? PaymentReconciliationOutcome.CapturedNeedsReview : PaymentReconciliationOutcome.Captured,
+                    current.IsReviewOpen
+                        ? "پول نزد درگاه برداشت شده بود و پرداخت موفق ثبت شد، ولی نیاز به بررسی دارد (صف بررسی را ببینید؛ شاید برگشت وجه لازم باشد)."
+                        : "خریدار پرداخت کرده بود؛ پرداخت تأیید و سفارش پرداخت‌شده ثبت شد.");
+
+            case PaymentState.Failed when !paidPerGateway:
+                // استعلام خاموش بود و درگاه Verify را رد کرد: پرداختی انجام نشده بود؛ چیزی برای بررسی نیست.
+                return Reconciled(current, inquiry, PaymentReconciliationOutcome.Failed,
+                    $"درگاه تأیید این پرداخت را رد کرد ({verifyFailure ?? "نامعلوم"})؛ پولی برداشته نشده و پرداخت ناموفق ثبت شد.");
+
+            case PaymentState.Failed:
+            {
+                var issue = captured
+                    ? $"the gateway inquiry reported {inquiry.Status} (money captured) but Verify was rejected ({verifyFailure}); check the gateway panel — the captured money may need a manual refund"
+                    : $"the gateway inquiry reported {inquiry.Status} but Verify was rejected ({verifyFailure}); nothing was captured and the gateway returns the unverified payment to the payer";
+                await FlagForReviewAsync(current, ReviewDetails(current, rules.Source, inquiry, issue, refundNeeded: captured));
+                return Reconciled(current, inquiry, PaymentReconciliationOutcome.Failed,
+                    "درگاه پرداخت را گزارش کرده بود ولی تأیید آن را رد کرد؛ پرداخت ناموفق ثبت شد و به صف بررسی رفت.");
+            }
+
+            case PaymentState.Pending:
+                return await LeavePendingAsync(
+                    current,
+                    inquiry,
+                    rules,
+                    UnresolvedVerificationNote(current),
+                    $"تأیید پرداخت نتیجهٔ قطعی نداشت ({verifyFailure ?? "نامعلوم"})؛ پرداخت در انتظار ماند و دوباره تلاش می‌شود.");
+
+            case PaymentState.Cancelled when verifyFailure is not null:
+            {
+                // مسیر Verify پرداخت را بدون تماس با درگاه رد و لغو کرد (سفارش در این فاصله ناپرداختنی شد، یا استعلام
+                // خاموش بود و سفارش از اول قابل پرداخت نبود). اگر درگاه گفته بود خریدار پرداخت کرده، کسی باید برگشت
+                // خودکار پول را تأیید کند.
+                if (paidPerGateway)
+                    await FlagForReviewAsync(current, ReviewDetails(
+                        current,
+                        rules.Source,
+                        inquiry,
+                        $"the payer paid at the gateway but the payment was cancelled without Verify ({verifyFailure}), so no money was captured. " +
+                        "The gateway returns an unverified payment to the payer automatically — confirm in the gateway panel that it was returned",
+                        refundNeeded: false));
+
+                return Reconciled(current, inquiry, PaymentReconciliationOutcome.Cancelled,
+                    $"سفارش این پرداخت قابل پرداخت نیست ({verifyFailure})؛ پرداخت بدون تأیید لغو شد و پولی برداشته نشده است. اگر خریدار پرداخت کرده باشد درگاه آن را برمی‌گرداند.");
+            }
+
+            default:
+                return Reconciled(current, inquiry, PaymentReconciliationOutcome.NoChange,
+                    $"وضعیت پرداخت هم‌زمان تغییر کرد ({verifyFailure ?? current.State.ToString()})؛ تأیید انجام نشد.");
+        }
+    }
+
+    /// <summary>جاب: پرداخت رهاشده‌ای که درگاه می‌گوید پرداخت نشده (یا استعلام خاموش است) لغو می‌شود، مثل قبل.</summary>
+    private async Task<PaymentReconciliationDto> CancelAbandonedPaymentAsync(
+        Payment payment, PaymentInquiryResult? inquiry, ReconciliationRules rules)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        payment.TransitionTo(PaymentState.Cancelled, "abandoned: no gateway confirmation", now);
+        var reviewClosed = ApplySweeperHoldResolution(payment, now, "the gateway reports the payment as not paid; it was cancelled");
+        _unitOfWork.Repository<Payment>().Update(payment);
+
+        await AuditAsync(
+            PaymentLifecycle.CancelledAction,
+            payment.PaymentId,
+            $"abandoned after {rules.AbandonedAfterMinutes} minutes | source={rules.Source} | {GatewayText(inquiry)}" +
+            (reviewClosed ? " | the open 'waiting for the gateway' review was closed automatically" : string.Empty) +
+            (inquiry?.IsInquiryDisabled == true
+                ? " | gateway inquiry is off; an admin closed the manual review without verifying, so the payment is treated as abandoned"
+                : string.Empty),
+            CancellationToken.None);
+
+        if (!await TrySaveReconciliationAsync(payment.PaymentId, rules.Source))
+            return await ConcurrentChangeAsync(payment.PaymentId, inquiry);
+
+        return Reconciled(payment, inquiry, PaymentReconciliationOutcome.Cancelled,
+            "پرداخت انجام نشده بود و لغو شد.");
+    }
+
+    /// <summary>
+    /// خریدار پرداخت کرده، Verify نشده و سفارش دیگر قابل پرداخت نیست: Verify صدا زده نمی‌شود، پرداخت لغو و برای بررسی
+    /// علامت می‌خورد. پول برداشته نشده است و درگاه آن را به خریدار برمی‌گرداند.
+    /// </summary>
+    private async Task<PaymentReconciliationDto> CancelUnverifiablePaidPaymentAsync(
+        Payment payment, PaymentInquiryResult inquiry, ReconciliationRules rules, string refusalCode)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var reason = $"not verified: {refusalCode} (order {payment.OrderId}); the gateway returns the unverified payment to the payer";
+
+        payment.TransitionTo(PaymentState.Cancelled, reason, now);
+
+        var details = ReviewDetails(
+            payment,
+            rules.Source,
+            inquiry,
+            $"the payer paid at the gateway but the order is no longer payable ({refusalCode}); the payment was NOT verified, so no money was captured, " +
+            "and it was cancelled. The gateway returns an unverified payment to the payer automatically — confirm in the gateway panel that it was returned",
+            refundNeeded: false);
+        payment.FlagForReview(now, details);
+        _unitOfWork.Repository<Payment>().Update(payment);
+
+        await AuditAsync(
+            PaymentLifecycle.NotVerifiedAction,
+            payment.PaymentId,
+            $"source={rules.Source} | {reason} | paymentState={payment.State} | amount={FormatAmount(payment.Amount)} | {GatewayText(inquiry)}",
+            CancellationToken.None);
+        await AuditAsync(PaymentLifecycle.ReviewRequiredAction, payment.PaymentId, details, CancellationToken.None);
+
+        if (!await TrySaveReconciliationAsync(payment.PaymentId, rules.Source))
+            return await ConcurrentChangeAsync(payment.PaymentId, inquiry);
+
+        _logger.LogError(
+            "Payment {PaymentId} was paid at the gateway but order {OrderId} is no longer payable ({Code}); it was cancelled without Verify and flagged for review.",
+            payment.PaymentId, payment.OrderId, refusalCode);
+
+        return Reconciled(payment, inquiry, PaymentReconciliationOutcome.Cancelled,
+            "خریدار پرداخت کرده بود ولی سفارش دیگر قابل پرداخت نیست؛ پرداخت تأیید نشد و لغو شد. درگاه پولِ تأییدنشده را به خریدار برمی‌گرداند؛ پرداخت در صف بررسی است.");
+    }
+
+    /// <summary>
+    /// پرداخت Pending می‌ماند. جاب آن را فقط یک بار به صف بررسی می‌فرستد («یک بار» از ستون خودِ پرداخت، Batch 42؛
+    /// بررسیِ بسته‌شده دوباره باز نمی‌شود).
+    /// </summary>
+    private async Task<PaymentReconciliationDto> LeavePendingAsync(
+        Payment payment, PaymentInquiryResult? inquiry, ReconciliationRules rules, string note, string message)
+    {
+        if (rules.FlagWhenUnresolved && payment.ReviewRequiredAtUtc is null)
+        {
+            _logger.LogError(
+                "Payment {PaymentId} is Pending and could not be reconciled ({Gateway}); it was left Pending and flagged for manual review.",
+                payment.PaymentId, GatewayText(inquiry));
+
+            payment.FlagForReview(_timeProvider.GetUtcNow().UtcDateTime, note);
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await AuditAsync(
+                PaymentLifecycle.ReviewRequiredAction, payment.PaymentId, $"{note} | {GatewayText(inquiry)}", CancellationToken.None);
+
+            if (!await TrySaveReconciliationAsync(payment.PaymentId, rules.Source))
+                return await ConcurrentChangeAsync(payment.PaymentId, inquiry);
+        }
+
+        return Reconciled(payment, inquiry, PaymentReconciliationOutcome.LeftPending, message);
+    }
+
+    /// <summary>پرداخت بسته (Cancelled/Failed/Initiated): وضعیت عوض نمی‌شود؛ فقط پولِ برداشته‌شدهٔ ثبت‌نشده علامت می‌خورد.</summary>
+    private async Task<PaymentReconciliationDto> ReconcileClosedPaymentAsync(
+        Payment payment, PaymentInquiryResult? inquiry, ReconciliationRules rules)
+    {
+        switch (inquiry?.Status)
+        {
+            case PaymentInquiryStatus.Verified:
+            {
+                var issue = $"the gateway reports this authority as verified (money captured) but the payment is {payment.State}; " +
+                            "the captured money is not recorded and needs a manual refund";
+
+                // کلیک دوبارهٔ ادمین همان مشکل را دوباره به شرح اضافه نمی‌کند.
+                if (!(payment.IsReviewOpen && payment.ReviewNote?.Contains(issue, StringComparison.Ordinal) == true))
+                    await FlagForReviewAsync(payment, ReviewDetails(payment, rules.Source, inquiry, issue, refundNeeded: true));
+
+                return Reconciled(payment, inquiry, PaymentReconciliationOutcome.NoChange,
+                    $"درگاه می‌گوید پول این پرداخت برداشته شده، ولی پرداخت در وضعیت {payment.State} است و قابل ثبت نیست؛ به صف بررسی رفت و برگشت وجه دستی لازم است.");
+            }
+
+            case PaymentInquiryStatus.PaidNotVerified:
+                return Reconciled(payment, inquiry, PaymentReconciliationOutcome.NoChange,
+                    $"خریدار پرداخت کرده ولی این پرداخت در وضعیت {payment.State} است و تأیید نمی‌شود؛ درگاه پولِ تأییدنشده را به خریدار برمی‌گرداند. برای پرداخت سفارش، پرداخت تازه لازم است.");
+
+            default:
+                return Reconciled(payment, inquiry, PaymentReconciliationOutcome.NoChange,
+                    $"این پرداخت در وضعیت {payment.State} است؛ کاری برای انجام نیست.");
+        }
+    }
+
+    /// <summary>علامت بررسی + رکورد حسابرسی، در یک ذخیره. شکست ذخیره لاگ Critical می‌شود و پرتاب نمی‌کند.</summary>
+    private async Task FlagForReviewAsync(Payment payment, string details)
+    {
+        _logger.LogError("Payment {PaymentId} needs manual review: {Details}", payment.PaymentId, details);
+
+        try
+        {
+            payment.FlagForReview(_timeProvider.GetUtcNow().UtcDateTime, details);
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await AuditAsync(PaymentLifecycle.ReviewRequiredAction, payment.PaymentId, details, CancellationToken.None);
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex,
+                "Could not flag payment {PaymentId} for review: {Details}", payment.PaymentId, details);
+        }
+    }
+
+    /// <summary>
+    /// اگر بررسیِ بازِ این پرداخت فقط همان علامتِ «منتظر پاسخ درگاه»ِ جاب است (متن دست‌نخورده)، با قطعی شدن وضعیت
+    /// خودکار بسته می‌شود تا قطعی درگاه صف بررسی را پر از ردیف‌های حل‌شده نکند. هر شرح دیگری باز می‌ماند.
+    /// </summary>
+    private bool ApplySweeperHoldResolution(Payment payment, DateTime nowUtc, string resolution)
+    {
+        if (!payment.IsReviewOpen)
+            return false;
+
+        if (payment.ReviewNote != UnknownInquiryNote(payment)
+            && payment.ReviewNote != InquiryDisabledNote(payment)
+            && payment.ReviewNote != UnresolvedVerificationNote(payment))
+            return false;
+
+        payment.ResolveReview(nowUtc, resolvedByUserId: null, $"closed automatically by reconciliation: {resolution}");
+        return true;
+    }
+
+    private async Task CloseSweeperHoldAsync(Payment payment, string resolution)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!ApplySweeperHoldResolution(payment, now, resolution))
+            return;
+
+        try
+        {
+            _unitOfWork.Repository<Payment>().Update(payment);
+            await AuditAsync(
+                ReviewResolvedAction,
+                payment.PaymentId,
+                $"order={payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(payment.Amount)} | paymentState={payment.State} " +
+                $"| closed automatically by reconciliation: {resolution}",
+                CancellationToken.None);
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            // پرداخت ثبت شده است؛ بسته نشدن علامت فقط یک ردیف اضافه در صف بررسی است.
+            _logger.LogError(ex, "Could not close the reconciliation review flag of payment {PaymentId}", payment.PaymentId);
+        }
+    }
+
+    /// <summary>ذخیرهٔ تغییر تطبیق با کنترل RowVersion. تعارض هم‌زمانی ⇒ false و ChangeTracker پاک می‌شود.</summary>
+    private async Task<bool> TrySaveReconciliationAsync(int paymentId, string source)
+    {
+        var ct = CancellationToken.None;
+
+        await _unitOfWork.BeginTransactionAsync(ct);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+            await _unitOfWork.CommitTransactionAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // درخواست دیگری (مثلاً Verify خودِ خریدار) هم‌زمان همین پرداخت را تغییر داده است؛ آن برنده است.
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            _logger.LogWarning(ex,
+                "Concurrent change while reconciling payment {PaymentId} via {Source}; nothing was changed.", paymentId, source);
+            return false;
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(ct);
+            throw;
+        }
+    }
+
+    private async Task<PaymentReconciliationDto> ConcurrentChangeAsync(int paymentId, PaymentInquiryResult? inquiry)
+    {
+        var current = await LoadPaymentForReconciliationAsync(paymentId, CancellationToken.None)
+            ?? throw new NotFoundException("پرداخت یافت نشد.", "PAYMENT_NOT_FOUND");
+
+        return Reconciled(
+            current,
+            inquiry,
+            current.State == PaymentState.Pending ? PaymentReconciliationOutcome.LeftPending : PaymentReconciliationOutcome.NoChange,
+            "پرداخت هم‌زمان توسط درخواست دیگری تغییر کرد؛ این تطبیق چیزی را عوض نکرد.");
+    }
+
+    private Task<Payment?> LoadPaymentForReconciliationAsync(int paymentId, CancellationToken cancellationToken)
+        => _unitOfWork.Repository<Payment>().FirstOrDefaultAsync(
+            new Spec<Payment>().Where(p => p.PaymentId == paymentId).AsTracking(),
+            cancellationToken);
+
+    /// <summary>استعلام از درگاه؛ قرارداد می‌گوید پرتاب نمی‌کند، ولی هر خطا اینجا هم «نامعلوم» می‌شود، نه «پرداخت‌نشده».</summary>
+    private async Task<PaymentInquiryResult> InquireSafelyAsync(Payment payment)
+    {
+        try
+        {
+            return await _gateway.InquireAsync(payment.TransactionId!, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Gateway inquiry threw for payment {PaymentId}; status unknown", payment.PaymentId);
+            return PaymentInquiryResult.Unknown("GATEWAY_ERROR", "ارتباط با درگاه برقرار نشد.");
+        }
+    }
+
+    private PaymentReconciliationDto Reconciled(
+        Payment payment, PaymentInquiryResult? inquiry, PaymentReconciliationOutcome outcome, string message) => new()
+    {
+        Payment = ToDto(payment),
+        GatewayStatus = inquiry?.Status.ToString() ?? "NotAsked",
+        GatewayRawStatus = inquiry?.GatewayStatus,
+        GatewayErrorCode = inquiry?.ErrorCode,
+        Outcome = outcome.ToString(),
+        ReviewRequired = payment.IsReviewOpen,
+        Message = message
+    };
+
+    private static string GatewayText(PaymentInquiryResult? inquiry)
+        => inquiry is null
+            ? "gateway=NotAsked"
+            : $"gateway={inquiry.Status} | gatewayRaw={inquiry.GatewayStatus ?? "none"}" +
+              (inquiry.ErrorCode is null ? string.Empty : $" | gatewayError={inquiry.ErrorCode}");
+
+    private static string FormatAmount(decimal amount)
+        => amount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string ReviewDetails(
+        Payment payment, string source, PaymentInquiryResult inquiry, string issue, bool refundNeeded)
+        => $"source={source} | order={payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(payment.Amount)} " +
+           $"| paymentState={payment.State} | {GatewayText(inquiry)} | issues: {issue}" +
+           (refundNeeded ? " | refundNeeded=true" : " | moneyCaptured=false");
+
+    /// <summary>
+    /// شرحِ ثابتِ «Verify آغاز شده و نتیجه‌اش نامعلوم است» (همان متن Batch 5/41). عمداً فقط تابع خودِ پرداخت است تا
+    /// <see cref="ApplySweeperHoldResolution"/> بتواند علامتِ دست‌نخوردهٔ جاب را بشناسد.
+    /// </summary>
+    private static string UnresolvedVerificationNote(Payment payment)
+        => $"source=abandoned-payment sweep | order={payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(payment.Amount)} " +
+           "| paymentState=Pending | issues: the payment's verification outcome is unknown (verify started, no definitive gateway answer); " +
+           "the sweep skipped it — verify the payment again to resolve it";
+
+    /// <summary>شرحِ ثابتِ «درگاه به استعلام پاسخ قطعی نداد».</summary>
+    private static string UnknownInquiryNote(Payment payment)
+        => $"source=abandoned-payment sweep | order={payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(payment.Amount)} " +
+           "| paymentState=Pending | issues: the gateway inquiry gave no definitive answer for this stale pending payment; " +
+           "it was left Pending and is asked again on the next run";
+
+    /// <summary>شرحِ ثابتِ «استعلام خاموش است» (جایگزین امنِ تصمیم باز N2).</summary>
+    private static string InquiryDisabledNote(Payment payment)
+        => $"source=abandoned-payment sweep | order={payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(payment.Amount)} " +
+           "| paymentState=Pending | issues: the gateway inquiry is turned off (PaymentGatewaySettings:EnableInquiry=false), so it is not known " +
+           "whether this stale pending payment was paid; it was neither verified nor cancelled automatically. Check the gateway panel: " +
+           "if it was paid run POST payments/verify-by-authority, otherwise cancel the order";
 }

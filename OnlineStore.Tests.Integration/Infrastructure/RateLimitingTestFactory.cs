@@ -23,6 +23,7 @@ public sealed class RateLimitingTestFactory : IntegrationTestFactory<Program>
     public const int LoginLimit = 5;
     public const int RegisterLimit = 5;
     public const int CheckoutLimit = 5;
+    public const int PaymentVerifyLimit = 10;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -42,6 +43,8 @@ public sealed class RateLimitingTestFactory : IntegrationTestFactory<Program>
             ["RateLimiting:Checkout:WindowSeconds"] = "60",
             ["RateLimiting:PaymentInitiate:PermitLimit"] = "10",
             ["RateLimiting:PaymentInitiate:WindowSeconds"] = "60",
+            ["RateLimiting:PaymentVerify:PermitLimit"] = PaymentVerifyLimit.ToString(),
+            ["RateLimiting:PaymentVerify:WindowSeconds"] = "60",
             ["ForwardedHeaders:KnownProxies:0"] = TrustedProxyIp,
             ["ForwardedHeaders:ForwardLimit"] = "1",
             ["OpenTelemetry:Enabled"] = "false",

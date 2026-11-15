@@ -142,6 +142,7 @@ public sealed class EndpointAuthorizationInventoryTests : IClassFixture<Integrat
         ["POST api/v{version:apiVersion}/Listings/{id:int}/inventory"] = Authenticated,
         ["POST api/v{version:apiVersion}/Payments/initiate"] = Authenticated,
         ["POST api/v{version:apiVersion}/Payments/verify"] = Authenticated,
+        ["POST api/v{version:apiVersion}/Payments/verify-by-authority"] = AdminOnly,
         ["POST api/v{version:apiVersion}/Payments/webhook"] = Anonymous,
         ["POST api/v{version:apiVersion}/Payments/{paymentId:int}/refund"] = AdminOnly,
         // Batch 42 (FIN-12): صف برگشت وجه و صف بررسی دستی.

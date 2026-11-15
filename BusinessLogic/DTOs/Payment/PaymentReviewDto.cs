@@ -28,4 +28,15 @@ public class PaymentReviewDto
 
     /// <summary>ادمینی که بررسی را بست.</summary>
     public int? ReviewResolvedByUserId { get; set; }
+
+    // ---- Batch 43 (FIN-07): جزئیات درگاه برای تطبیق با پنل درگاه ----
+
+    /// <summary>کارمزد درگاه برای این تراکنش (همان عدد پاسخ درگاه).</summary>
+    public decimal? GatewayFee { get; set; }
+
+    /// <summary>پرداخت‌کنندهٔ کارمزد به گفتهٔ درگاه.</summary>
+    public string? GatewayFeeType { get; set; }
+
+    /// <summary>شمارهٔ کارت ماسک‌شدهٔ پرداخت‌کننده.</summary>
+    public string? CardPanMasked { get; set; }
 }

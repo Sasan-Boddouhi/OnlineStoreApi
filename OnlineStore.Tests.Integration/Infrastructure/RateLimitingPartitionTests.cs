@@ -235,6 +235,7 @@ public class RateLimitingConfigurationValidationTests
     [Theory]
     [InlineData("RateLimiting:Login:PermitLimit", "0", "RateLimiting:Login:PermitLimit")]
     [InlineData("RateLimiting:Checkout:WindowSeconds", "0", "RateLimiting:Checkout:WindowSeconds")]
+    [InlineData("RateLimiting:PaymentVerify:PermitLimit", "0", "RateLimiting:PaymentVerify:PermitLimit")]
     [InlineData("ForwardedHeaders:KnownNetworks:0", "0.0.0.0/0", "ForwardedHeaders:KnownNetworks")]
     [InlineData("ForwardedHeaders:KnownNetworks:0", "172.18.0.1/16", "ForwardedHeaders:KnownNetworks")]
     [InlineData("ForwardedHeaders:KnownProxies:0", "not-an-ip", "ForwardedHeaders:KnownProxies")]

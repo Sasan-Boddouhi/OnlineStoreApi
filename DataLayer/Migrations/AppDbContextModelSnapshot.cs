@@ -919,6 +919,10 @@ namespace DataLayer.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CardPanMasked")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");
 
@@ -927,6 +931,13 @@ namespace DataLayer.Migrations
 
                     b.Property<int>("Gateway")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("GatewayFee")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("GatewayFeeType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("GatewayReference")
                         .HasMaxLength(100)

@@ -2,6 +2,7 @@
 using Application.Entities;
 using Application.Interfaces;
 using Application.Options;
+using BusinessLogic.DTOs.Payment;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,26 +13,37 @@ namespace BusinessLogic.Services.Implementations;
 /// Phase 9 (R44) — پرداخت‌های Pending که کاربر رهایشان کرده، برای همیشه Pending می‌ماندند.
 /// نتیجه: آمار «پرداخت در انتظار» متورم و تسویه‌های نامفهوم.
 ///
-/// این کلاس فقط پرداخت‌هایی را می‌بندد که درگاه هیچ‌گاه تأییدشان نکرده است.
+/// Batch 43 (FIN-05): پیش از لغو، از درگاه استعلام می‌شود. خریداری که پول داده ولی مرورگرش پیش از Verify بسته شده،
+/// دیگر «پرداخت کردم ولی سفارشم لغو شد» نمی‌بیند: پرداختِ او از همان مسیر Verify برداشت می‌شود. این کلاس فقط
+/// پرداخت‌های کهنه را انتخاب می‌کند؛ تصمیم پول برای هر پرداخت در
+/// <see cref="IPaymentService.ReconcileStalePaymentAsync"/> است (همان قواعد اقدام ادمین).
+///
+/// هر پرداخت جدا پردازش و ذخیره می‌شود: خطای یک پرداخت بقیه را متوقف نمی‌کند.
 /// سفارش دست‌نخورده می‌ماند تا کاربر دوباره تلاش کند (تصمیم فاز ۸).
 /// </summary>
 public sealed class AbandonedPaymentSweeper : IAbandonedPaymentSweeper
 {
+    /// <summary>
+    /// پس از این تعداد پاسخ «نامعلومِ» پیاپی، همین اجرا دیگر از درگاه نمی‌پرسد: درگاه در دسترس نیست و هر تماس تا
+    /// سقف timeout طول می‌کشد. باقی پرداخت‌ها دست‌نخورده برای اجرای بعد می‌مانند.
+    /// </summary>
+    public const int MaxConsecutiveUnknownAnswers = 5;
+
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IAuditService _auditService;
+    private readonly IPaymentService _paymentService;
     private readonly TimeProvider _timeProvider;
     private readonly AbandonedPaymentSettings _settings;
     private readonly ILogger<AbandonedPaymentSweeper> _logger;
 
     public AbandonedPaymentSweeper(
         IUnitOfWork unitOfWork,
-        IAuditService auditService,
+        IPaymentService paymentService,
         TimeProvider timeProvider,
         IOptions<AbandonedPaymentSettings> settings,
         ILogger<AbandonedPaymentSweeper> logger)
     {
         _unitOfWork = unitOfWork;
-        _auditService = auditService;
+        _paymentService = paymentService;
         _timeProvider = timeProvider;
         _settings = settings.Value;
         _logger = logger;
@@ -40,70 +52,97 @@ public sealed class AbandonedPaymentSweeper : IAbandonedPaymentSweeper
     public async Task<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var cutoff = now.AddMinutes(-Math.Max(1, _settings.TimeoutMinutes));
+        var timeoutMinutes = Math.Max(1, _settings.TimeoutMinutes);
+        var cutoff = now.AddMinutes(-timeoutMinutes);
+        var batchSize = Math.Clamp(_settings.MaxPaymentsPerSweep, 1, 5000);
 
-        var stale = await _unitOfWork.Repository<Payment>()
-            .ListAsync(
-                new Spec<Payment>()
-                    .Where(p => p.State == PaymentState.Pending && p.LastStateChangedAtUtc < cutoff)
-                    .AsTracking(),
-                cancellationToken);
+        // پرداخت‌هایی که هنوز برای بررسی علامت نخورده‌اند اول می‌آیند (قدیمی‌ترین اول)؛ پرداخت‌هایی که منتظر پاسخ
+        // درگاه مانده‌اند ته صف می‌روند تا چند پرداختِ گیرکرده جلوی بقیه را نگیرند.
+        var staleIds = (await _unitOfWork.Repository<Payment>()
+                .ListAsync(
+                    new Spec<Payment>()
+                        .Where(p => p.State == PaymentState.Pending && p.LastStateChangedAtUtc < cutoff)
+                        .OrderBy(p => p.ReviewRequiredAtUtc == null ? 0 : 1)
+                        .ThenBy(p => p.LastStateChangedAtUtc)
+                        .ThenBy(p => p.PaymentId)
+                        .ApplyPaging(0, batchSize),
+                    cancellationToken))
+            .Select(p => p.PaymentId)
+            .ToList();
 
-        if (stale.Count == 0)
+        if (staleIds.Count == 0)
             return 0;
 
-        // Batch 5 (F-07): Verify این پرداخت‌ها آغاز شده (Payment.VerifyStartedAtUtc، Batch 41) و نتیجه‌اش نامعلوم است؛ شاید پول برداشته شده باشد.
-        // لغو نمی‌شوند، فقط یک بار برای بررسی دستی ثبت می‌شوند. تأیید دوباره وضعیت را قطعی می‌کند.
-        var unresolved = PaymentLifecycle.FindUnresolvedVerifications(stale);
-        foreach (var payment in stale.Where(p => unresolved.Contains(p.PaymentId)))
-            await FlagUnresolvedOnceAsync(payment, cancellationToken);
-
         var cancelled = 0;
-        foreach (var payment in stale.Where(p => !unresolved.Contains(p.PaymentId)))
+        var captured = 0;
+        var leftPending = 0;
+        var failed = 0;
+        var consecutiveUnknown = 0;
+
+        foreach (var paymentId in staleIds)
         {
-            payment.TransitionTo(PaymentState.Cancelled, "abandoned: no gateway confirmation");
+            cancellationToken.ThrowIfCancellationRequested();
 
-            await _auditService.RecordAsync(
-                "Payment.Cancelled",
-                nameof(Payment),
-                payment.PaymentId.ToString(),
-                $"abandoned after {_settings.TimeoutMinutes} minutes",
-                cancellationToken);
+            PaymentReconciliationDto result;
+            try
+            {
+                result = await _paymentService.ReconcileStalePaymentAsync(
+                    paymentId, _settings.InquireGatewayBeforeCancel, timeoutMinutes, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // یک پرداخت خراب نباید بقیه را متوقف کند. تراکنش بازمانده برگردانده و ردیابی پاک می‌شود تا تغییر نیمه‌کارهٔ
+                // این پرداخت با ذخیرهٔ پرداخت بعدی نوشته نشود.
+                failed++;
+                _logger.LogError(ex, "Reconciling stale payment {PaymentId} failed; it is retried on the next run.", paymentId);
+                await _unitOfWork.BeginTransactionAsync(CancellationToken.None);
+                await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+                continue;
+            }
 
-            _unitOfWork.Repository<Payment>().Update(payment);
-            cancelled++;
+            switch (result.Outcome)
+            {
+                case nameof(PaymentReconciliationOutcome.Cancelled):
+                    cancelled++;
+                    break;
+                case nameof(PaymentReconciliationOutcome.Captured):
+                case nameof(PaymentReconciliationOutcome.CapturedNeedsReview):
+                    captured++;
+                    break;
+                case nameof(PaymentReconciliationOutcome.LeftPending):
+                    leftPending++;
+                    break;
+            }
+
+            // استعلامِ خاموش (PaymentGatewaySettings:EnableInquiry=false) تماسی با درگاه نگرفته است؛ نشانهٔ قطعی درگاه نیست
+            // و نباید جلوی علامت خوردن بقیهٔ پرداخت‌های کهنه را بگیرد.
+            if (result.GatewayErrorCode == PaymentInquiryResult.InquiryDisabledCode)
+                continue;
+
+            if (result.GatewayStatus == nameof(PaymentInquiryStatus.Unknown))
+            {
+                if (++consecutiveUnknown >= MaxConsecutiveUnknownAnswers)
+                {
+                    _logger.LogError(
+                        "The payment gateway gave no definitive inquiry answer {Count} times in a row; the abandoned-payment sweep stops asking until the next run.",
+                        consecutiveUnknown);
+                    break;
+                }
+            }
+            else if (result.GatewayStatus != "NotAsked")
+            {
+                consecutiveUnknown = 0;
+            }
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        _logger.LogWarning("Cancelled {Count} abandoned payments older than {Cutoff:u}", cancelled, cutoff);
+        _logger.LogWarning(
+            "Abandoned-payment sweep (older than {Cutoff:u}): {Cancelled} cancelled, {Captured} captured after gateway inquiry, {LeftPending} left pending, {Failed} failed, {Total} examined",
+            cutoff, cancelled, captured, leftPending, failed, staleIds.Count);
 
         return cancelled;
-    }
-
-    private async Task FlagUnresolvedOnceAsync(Payment payment, CancellationToken cancellationToken)
-    {
-        _logger.LogError(
-            "Payment {PaymentId} is Pending with an unknown verification outcome; the abandoned-payment sweep skipped it. Needs manual review.",
-            payment.PaymentId);
-
-        // Batch 42 (FIN-12): «یک بار» از ستون خودِ پرداخت خوانده می‌شود، نه از AuditLog. بررسیِ بسته‌شده هم دوباره
-        // باز نمی‌شود: ادمین آن را دیده و تصمیم گرفته است (مسئلهٔ تازه از مسیر برداشت دوباره بازش می‌کند).
-        if (payment.ReviewRequiredAtUtc is not null)
-            return;
-
-        var details =
-            $"source=abandoned-payment sweep | order={payment.OrderId} | amount={payment.Amount} | paymentState={payment.State} " +
-            "| issues: the payment's verification outcome is unknown (verify started, no definitive gateway answer); the sweep skipped it — verify the payment again to resolve it";
-
-        payment.FlagForReview(_timeProvider.GetUtcNow().UtcDateTime, details);
-        _unitOfWork.Repository<Payment>().Update(payment);
-
-        await _auditService.RecordAsync(
-            PaymentLifecycle.ReviewRequiredAction,
-            nameof(Payment),
-            payment.PaymentId.ToString(),
-            details,
-            cancellationToken);
     }
 }

@@ -26,6 +26,23 @@ namespace BusinessLogic.Services.Implementations;
 ///    ‎-53 متعلق به مرچنت دیگر، ‎-54 Authority نامعتبر). خطای شبکه، timeout، 5xx، پاسخ ناخوانا و کدهای
 ///    پیکربندی/محدودیت (مثلاً ‎-9، ‎-10، ‎-12، ‎-52) «نامعلوم» هستند و پرداخت Failed نمی‌شود.
 ///  • صفحهٔ پرداخت: <c>{BaseUrl}/pg/StartPay/{authority}</c> از همان یک تنظیم (سندباکس: sandbox.zarinpal.com).
+///
+/// Batch 43 (FIN-05, FIN-07) — مستند خوانده‌شده در 2026-11-14:
+///  • استعلام فقط با <c>PaymentGatewaySettings:EnableInquiry = true</c> انجام می‌شود (پیش‌فرض خاموش تا پاسخ پشتیبانی
+///    زرین‌پال دربارهٔ فعال بودن و سقف‌های این متد روی مرچنت ما، تصمیم باز N2)؛ خاموش ⇒ Unknown با کد
+///    <c>INQUIRY_DISABLED</c> و بدون هیچ تماسی.
+///  • استعلام: <c>POST {BaseUrl}/pg/v4/payment/inquiry.json</c> با <c>merchant_id</c> و <c>authority</c>
+///    (https://www.zarinpal.com/docs/paymentGateway/otherMethods/Inquiry.html). پاسخ موفق <c>data.code = 100</c> و
+///    <c>data.status</c> یکی از VERIFIED، PAID، IN_BANK، FAILED، REVERSED است. مستند صریحاً می‌گوید این متد برای
+///    تأیید تراکنش نیست؛ ما هم فقط برای تصمیم‌گیری می‌خوانیم و برداشت همچنان با verify است. سقف نرخ یا عمر
+///    تراکنش در مستند نیامده است (کد ‎-12 = تلاش بیش از حد).
+///  • نگاشت: VERIFIED ⇒ Verified؛ PAID ⇒ PaidNotVerified؛ FAILED / REVERSED / IN_BANK ⇒ NotPaid (پولی نزد ما نیست
+///    و چون verify نمی‌شود، پرداخت دیرهنگام را زرین‌پال برمی‌گرداند)؛ خطای ‎-51 و ‎-54 ⇒ NotPaid؛ هر چیز دیگر
+///    (شبکه، timeout، 5xx، ‎-9/‎-10/‎-11/‎-12/‎-52/‎-53، وضعیت ناشناخته) ⇒ Unknown.
+///  • متد <c>unVerified.json</c> (فهرست حداکثر ۱۰۰ تراکنش آخرِ تأییدنشده) عمداً استفاده نمی‌شود: Authority هر
+///    پرداخت در جدول خودمان هست و سقف ۱۰۰ آن را برای تطبیق ناقابل‌اتکا می‌کند.
+///  • verify افزون بر <c>ref_id</c>، <c>fee</c>، <c>fee_type</c> و <c>card_pan</c> (ماسک‌شده) برمی‌گرداند؛ <c>card_hash</c>
+///    خوانده نمی‌شود.
 /// </summary>
 public sealed class ZarinpalPaymentGateway : IPaymentGateway
 {
@@ -37,6 +54,15 @@ public sealed class ZarinpalPaymentGateway : IPaymentGateway
 
     /// <summary>کدهایی که دربارهٔ خودِ پرداخت قطعی‌اند؛ پولی برداشته نشده است.</summary>
     private static readonly HashSet<int> DefinitiveRejectionCodes = new() { -50, -51, -53, -54 };
+
+    /// <summary>Batch 43: خطاهای استعلام که یعنی «برای این Authority پولی نزد ما نیست» (پرداخت ناموفق، Authority نامعتبر).</summary>
+    private static readonly HashSet<int> InquiryNotPaidCodes = new() { -51, -54 };
+
+    public const string InquiryStatusVerified = "VERIFIED";
+    public const string InquiryStatusPaid = "PAID";
+    public const string InquiryStatusInBank = "IN_BANK";
+    public const string InquiryStatusFailed = "FAILED";
+    public const string InquiryStatusReversed = "REVERSED";
 
     private readonly HttpClient _httpClient;
     private readonly PaymentGatewaySettings _settings;
@@ -190,10 +216,10 @@ public sealed class ZarinpalPaymentGateway : IPaymentGateway
                 : null;
 
             if (code == CodeVerified)
-                return PaymentVerificationResult.Verified(referenceId);
+                return WithGatewayDetails(PaymentVerificationResult.Verified(referenceId), data);
 
             if (code == CodeAlreadyVerified)
-                return PaymentVerificationResult.AlreadyVerified(referenceId);
+                return WithGatewayDetails(PaymentVerificationResult.AlreadyVerified(referenceId), data);
 
             if (DefinitiveRejectionCodes.Contains(code.Value))
                 return PaymentVerificationResult.Rejected(
@@ -212,6 +238,173 @@ public sealed class ZarinpalPaymentGateway : IPaymentGateway
             return PaymentVerificationResult.TransientError("GATEWAY_ERROR", "ارتباط با درگاه برقرار نشد.");
         }
     }
+
+    /// <summary>
+    /// Batch 43 (FIN-05): استعلام وضعیت Authority بدون برداشت پول. هرگز پرتاب نمی‌کند؛ هر پاسخ غیرقطعی Unknown است.
+    /// </summary>
+    public async Task<PaymentInquiryResult> InquireAsync(
+        string authority,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_settings.EnableRealGateway)
+            return PaymentInquiryResult.Unknown(
+                "GATEWAY_DISABLED", "درگاه واقعی غیرفعال است (EnableRealGateway = false).");
+
+        if (string.IsNullOrWhiteSpace(_settings.MerchantId))
+            return PaymentInquiryResult.Unknown(
+                "GATEWAY_NOT_CONFIGURED", "MerchantId درگاه تنظیم نشده است.");
+
+        // تصمیم باز N2: تا تأیید پشتیبانی زرین‌پال، استعلام فقط با کلید صریح انجام می‌شود (پیش‌فرض خاموش).
+        if (!_settings.EnableInquiry)
+            return PaymentInquiryResult.Disabled();
+
+        if (string.IsNullOrWhiteSpace(authority))
+            return PaymentInquiryResult.Unknown("AUTHORITY_REQUIRED", "شناسهٔ پرداخت ارسال نشده است.");
+
+        try
+        {
+            var payload = new
+            {
+                merchant_id = _settings.MerchantId,
+                authority
+            };
+
+            using var response = await _httpClient.PostAsJsonAsync(
+                $"{BaseUrl}/pg/v4/payment/inquiry.json",
+                payload,
+                cancellationToken);
+
+            if ((int)response.StatusCode >= 500)
+            {
+                _logger.LogWarning(
+                    "Zarinpal inquiry returned HTTP {Status} for authority {Authority}; status unknown",
+                    (int)response.StatusCode, authority);
+                return PaymentInquiryResult.Unknown("GATEWAY_UNAVAILABLE", "درگاه موقتاً در دسترس نیست.");
+            }
+
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+            if (body.ValueKind != JsonValueKind.Object)
+                return PaymentInquiryResult.Unknown("GATEWAY_BAD_RESPONSE", "پاسخ درگاه قابل خواندن نبود.");
+
+            if (body.TryGetProperty("data", out var data)
+                && data.ValueKind == JsonValueKind.Object
+                && data.TryGetProperty("status", out var statusElement)
+                && statusElement.ValueKind == JsonValueKind.String)
+            {
+                var status = statusElement.GetString()!.Trim();
+                var code = data.TryGetProperty("code", out var dataCode) && dataCode.TryGetInt32(out var parsed)
+                    ? parsed
+                    : (int?)null;
+
+                // وضعیت فقط همراه با کد موفق (100) معتبر است؛ کد دیگر یعنی خودِ استعلام موفق نبوده است.
+                if (code != CodeVerified)
+                    return PaymentInquiryResult.Unknown(
+                        "GATEWAY_ERROR",
+                        $"درگاه وضعیت قطعی برنگرداند (کد {code?.ToString(CultureInfo.InvariantCulture) ?? "نامعلوم"}).",
+                        status);
+
+                return status.ToUpperInvariant() switch
+                {
+                    InquiryStatusVerified => PaymentInquiryResult.Verified(status),
+                    InquiryStatusPaid => PaymentInquiryResult.PaidNotVerified(status),
+                    InquiryStatusFailed or InquiryStatusReversed or InquiryStatusInBank => PaymentInquiryResult.NotPaid(status),
+                    _ => PaymentInquiryResult.Unknown(
+                        "GATEWAY_UNKNOWN_STATUS", "درگاه وضعیتی برگرداند که شناخته‌شده نیست.", status)
+                };
+            }
+
+            var errorCode = body.TryGetProperty("errors", out var errors) ? ReadErrorCode(errors) : null;
+
+            if (errorCode is not null && InquiryNotPaidCodes.Contains(errorCode.Value))
+                return PaymentInquiryResult.NotPaid($"ERROR{errorCode.Value.ToString(CultureInfo.InvariantCulture)}");
+
+            _logger.LogWarning(
+                "Zarinpal inquiry returned code {Code} (HTTP {Status}) for authority {Authority}; status unknown",
+                errorCode, (int)response.StatusCode, authority);
+            return errorCode is null
+                ? PaymentInquiryResult.Unknown("GATEWAY_BAD_RESPONSE", "پاسخ درگاه قابل خواندن نبود.")
+                : PaymentInquiryResult.Unknown(
+                    "GATEWAY_ERROR", $"درگاه وضعیت قطعی برنگرداند (کد {errorCode.Value.ToString(CultureInfo.InvariantCulture)}).");
+        }
+        catch (Exception ex)
+        {
+            // timeout، خطای شبکه یا JSON ناخوانا: وضعیت نامعلوم است، نه «پرداخت‌نشده».
+            _logger.LogError(ex, "Zarinpal inquiry failed for authority {Authority}; status unknown", authority);
+            return PaymentInquiryResult.Unknown("GATEWAY_ERROR", "ارتباط با درگاه برقرار نشد.");
+        }
+    }
+
+    /// <summary>
+    /// کد خطا را از <c>errors</c> می‌خواند. دو شکل در مستند هست: <c>{"code": -54, ...}</c> و شکل اعتبارسنجیِ استعلام
+    /// <c>{"authority": ["Invalid authority.", "-54"]}</c> (کد منفی به‌صورت رشته داخل آرایهٔ فیلد).
+    /// </summary>
+    private static int? ReadErrorCode(JsonElement errors)
+    {
+        if (errors.ValueKind != JsonValueKind.Object)
+            return null;
+
+        if (errors.TryGetProperty("code", out var codeElement))
+        {
+            if (codeElement.ValueKind == JsonValueKind.Number && codeElement.TryGetInt32(out var code))
+                return code;
+
+            if (codeElement.ValueKind == JsonValueKind.String
+                && int.TryParse(codeElement.GetString(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsedCode))
+                return parsedCode;
+        }
+
+        foreach (var property in errors.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (var item in property.Value.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Number && item.TryGetInt32(out var number) && number < 0)
+                    return number;
+
+                if (item.ValueKind == JsonValueKind.String
+                    && int.TryParse(item.GetString(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var text)
+                    && text < 0)
+                    return text;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Batch 43 (FIN-07): کارمزد، پرداخت‌کنندهٔ کارمزد و کارت ماسک‌شده را از پاسخ verify برمی‌دارد.</summary>
+    private static PaymentVerificationResult WithGatewayDetails(PaymentVerificationResult result, JsonElement? data)
+    {
+        if (data is null || data.Value.ValueKind != JsonValueKind.Object)
+            return result;
+
+        var element = data.Value;
+
+        decimal? fee = null;
+        if (element.TryGetProperty("fee", out var feeElement))
+        {
+            if (feeElement.ValueKind == JsonValueKind.Number && feeElement.TryGetDecimal(out var number))
+                fee = number;
+            else if (feeElement.ValueKind == JsonValueKind.String
+                     && decimal.TryParse(feeElement.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var text))
+                fee = text;
+        }
+
+        return result with
+        {
+            Fee = fee is >= 0 ? fee : null,
+            FeeType = ReadString(element, "fee_type"),
+            CardPanMasked = ReadString(element, "card_pan")
+        };
+    }
+
+    private static string? ReadString(JsonElement element, string name)
+        => element.TryGetProperty(name, out var value)
+           && value.ValueKind == JsonValueKind.String
+           && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()!.Trim()
+            : null;
 
     public Task<bool> RefundAsync(
         string authority,

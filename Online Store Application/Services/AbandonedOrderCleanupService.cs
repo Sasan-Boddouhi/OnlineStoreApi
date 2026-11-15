@@ -1,11 +1,14 @@
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Interfaces;
+using Application.Options;
+using BusinessLogic.DTOs.Payment;
 using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Services.Implementations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Online_Store_Application.Services;
 
@@ -186,6 +189,12 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             return false;
         }
 
+        // Batch 43 (FIN-05): سفارشِ ۶۰ دقیقه‌ای ممکن است پرداخت بازی داشته باشد که خریدار پولش را داده ولی مرورگرش پیش از
+        // Verify بسته شده و هنوز به مهلت جاب پرداخت‌ها نرسیده است. پیش از لغو از درگاه استعلام می‌شود؛ سفارش فقط وقتی
+        // لغو می‌شود که درگاه برای همهٔ پرداخت‌های بازش بگوید «پرداخت نشده».
+        if (!await OpenPaymentsAreUnpaidAsync(scope.ServiceProvider, order, cancellationToken))
+            return false;
+
         // Batch 41 (FIN-01): همان روال لغو مشتری و ادمین — گروه‌ها، موجودی، پرداخت‌های باز، سهمیهٔ کوپن و AuditLog
         // فقط یک‌جا نوشته شده‌اند. اگر روال رد کند (مثلاً گروهِ «تحویل‌شده» در سفارش Pending) هیچ‌چیز ذخیره نمی‌شود.
         await scope.ServiceProvider.GetRequiredService<IOrderReversalService>().ReverseAsync(
@@ -198,6 +207,47 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return true;
+    }
+
+    /// <summary>
+    /// Batch 43 (FIN-05): برای هر پرداخت بازِ سفارش (Pending با Authority) از درگاه استعلام می‌کند
+    /// (<see cref="IPaymentService.ReconcileBeforeOrderCancellationAsync"/>). true فقط وقتی که درگاه همه را «پرداخت‌نشده»
+    /// گفته و هیچ‌چیز عوض نشده است؛ آنگاه سفارش مثل قبل لغو می‌شود و روال برگرداندن، پرداخت‌های باز را لغو می‌کند.
+    /// هر نتیجهٔ دیگر (برداشت شد، پاسخ نامعلوم، رد Verify، تغییر هم‌زمان) ⇒ false: این اجرا سفارش را رها می‌کند و
+    /// اجرای بعدی با وضعیت تازه تصمیم می‌گیرد. با <c>AbandonedPaymentSettings:InquireGatewayBeforeCancel = false</c>
+    /// استعلام انجام نمی‌شود (رفتار قبلی).
+    /// </summary>
+    private async Task<bool> OpenPaymentsAreUnpaidAsync(
+        IServiceProvider services, Order order, CancellationToken cancellationToken)
+    {
+        var openPaymentIds = order.Payments
+            .Where(p => p.State == PaymentState.Pending && !string.IsNullOrWhiteSpace(p.TransactionId))
+            .Select(p => p.PaymentId)
+            .ToList();
+
+        if (openPaymentIds.Count == 0
+            || !services.GetRequiredService<IOptions<AbandonedPaymentSettings>>().Value.InquireGatewayBeforeCancel)
+            return true;
+
+        var paymentService = services.GetRequiredService<IPaymentService>();
+        var allUnpaid = true;
+
+        foreach (var paymentId in openPaymentIds)
+        {
+            var result = await paymentService.ReconcileBeforeOrderCancellationAsync(paymentId, cancellationToken);
+
+            var unpaid = result.GatewayStatus == nameof(PaymentInquiryStatus.NotPaid)
+                         && result.Outcome == nameof(PaymentReconciliationOutcome.LeftPending);
+            if (unpaid)
+                continue;
+
+            allUnpaid = false;
+            _logger.LogWarning(
+                "Abandoned order {OrderId} was not cancelled: payment {PaymentId} reconciled as {Outcome} (gateway {GatewayStatus}).",
+                order.OrderId, paymentId, result.Outcome, result.GatewayStatus);
+        }
+
+        return allUnpaid;
     }
 
     /// <summary>

@@ -222,6 +222,222 @@ public class ZarinpalPaymentGatewayTests
         gateway.BuildRedirectUrl("S0000000000000000000000000000000001").Should().Be(result.RedirectUrl);
     }
 
+    // ==================== Batch 43: استعلام (inquiry.json) ====================
+    // مستند: https://www.zarinpal.com/docs/paymentGateway/otherMethods/Inquiry.html (خوانده‌شده در 2026-11-14)
+
+    private const string Authority = "A000000000000000000000000000xpgr85j5";
+
+    [Theory]
+    [InlineData("VERIFIED", PaymentInquiryStatus.Verified)]
+    [InlineData("PAID", PaymentInquiryStatus.PaidNotVerified)]
+    [InlineData("paid", PaymentInquiryStatus.PaidNotVerified)]
+    [InlineData("IN_BANK", PaymentInquiryStatus.NotPaid)]
+    [InlineData("FAILED", PaymentInquiryStatus.NotPaid)]
+    [InlineData("REVERSED", PaymentInquiryStatus.NotPaid)]
+    public async Task Inquire_DocumentedStatus_MapsToTheProviderNeutralResult(string status, PaymentInquiryStatus expected)
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK,
+            "{\"data\":{\"status\":\"" + status + "\",\"code\":100,\"message\":\"Success\"},\"errors\":[]}");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(expected);
+        result.GatewayStatus.Should().Be(status);
+        result.ErrorCode.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Inquire_SendsMerchantAndAuthority_ToTheInquiryEndpoint_WithoutAnAmount()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"status":"PAID","code":100,"message":"Success"},"errors":[]}""");
+
+        await CreateGateway(handler).InquireAsync(Authority);
+
+        var request = handler.Requests.Should().ContainSingle().Subject;
+        request.Uri.Should().Be("https://payment.zarinpal.com/pg/v4/payment/inquiry.json");
+        using var body = JsonDocument.Parse(request.Body);
+        body.RootElement.GetProperty("merchant_id").GetString().Should().Be(MerchantId);
+        body.RootElement.GetProperty("authority").GetString().Should().Be(Authority);
+        body.RootElement.TryGetProperty("amount", out _).Should().BeFalse("an inquiry never captures money");
+    }
+
+    [Fact]
+    public async Task Inquire_Sandbox_UsesTheSandboxHost()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"status":"PAID","code":100,"message":"Success"},"errors":[]}""");
+
+        await CreateGateway(handler, s => s.UseSandbox = true).InquireAsync(Authority);
+
+        handler.Requests.Should().ContainSingle().Which.Uri.Should().Be("https://sandbox.zarinpal.com/pg/v4/payment/inquiry.json");
+    }
+
+    [Fact]
+    public async Task Inquire_UnknownStatus_IsUnknown_NotNotPaid()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"status":"SETTLED","code":100,"message":"Success"},"errors":[]}""");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.Unknown);
+        result.GatewayStatus.Should().Be("SETTLED");
+    }
+
+    [Fact]
+    public async Task Inquire_StatusWithANonSuccessCode_IsUnknown()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"status":"PAID","code":-52,"message":"Oops"},"errors":[]}""");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.Unknown, "a status is only trusted together with the success code 100");
+    }
+
+    [Fact]
+    public async Task Inquire_InvalidAuthority_InTheDocumentedValidationShape_IsNotPaid()
+    {
+        // نمونهٔ خطای خودِ مستند: کد منفی به‌صورت رشته داخل آرایهٔ فیلد.
+        var handler = StubHandler.Json(HttpStatusCode.UnprocessableEntity,
+            """{"message":"Invalid authority","errors":{"authority":["Invalid authority.","-54"]}}""");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.NotPaid);
+    }
+
+    [Theory]
+    [InlineData(-51)] // پرداخت ناموفق
+    [InlineData(-54)] // Authority نامعتبر
+    public async Task Inquire_ErrorCodeAboutThePaymentItself_IsNotPaid(int code)
+    {
+        var handler = StubHandler.Json(HttpStatusCode.UnprocessableEntity,
+            "{\"data\":[],\"errors\":{\"code\":" + code + ",\"message\":\"error\",\"validations\":[]}}");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.NotPaid);
+    }
+
+    [Theory]
+    [InlineData(-9)]  // خطای اعتبارسنجی درخواست
+    [InlineData(-10)] // IP یا مرچنت نامعتبر (پیکربندی)
+    [InlineData(-11)] // مرچنت غیرفعال
+    [InlineData(-12)] // تلاش بیش از حد
+    [InlineData(-52)] // خطای غیرمنتظره
+    [InlineData(-53)] // متعلق به مرچنت دیگر (پیکربندی)
+    public async Task Inquire_ConfigurationOrLimitErrorCode_IsUnknown_NotNotPaid(int code)
+    {
+        var handler = StubHandler.Json(HttpStatusCode.UnprocessableEntity,
+            "{\"data\":[],\"errors\":{\"code\":" + code + ",\"message\":\"error\",\"validations\":[]}}");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.Unknown, "a payment must not be cancelled because of our own configuration or a rate limit");
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task Inquire_Http5xx_IsUnknown(HttpStatusCode status)
+    {
+        var handler = StubHandler.Text(status, "<html>upstream error</html>");
+
+        var result = await CreateGateway(handler).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.Unknown);
+    }
+
+    [Fact]
+    public async Task Inquire_NetworkErrorTimeoutOrUnreadableBody_IsUnknown_AndDoesNotThrow()
+    {
+        var network = await CreateGateway(StubHandler.Throws(new HttpRequestException("connection reset"))).InquireAsync(Authority);
+        var timeout = await CreateGateway(StubHandler.Throws(new TaskCanceledException("timeout"))).InquireAsync(Authority);
+        var unreadable = await CreateGateway(StubHandler.Text(HttpStatusCode.OK, "not json")).InquireAsync(Authority);
+        var empty = await CreateGateway(StubHandler.Json(HttpStatusCode.OK, "{}")).InquireAsync(Authority);
+
+        network.Status.Should().Be(PaymentInquiryStatus.Unknown);
+        timeout.Status.Should().Be(PaymentInquiryStatus.Unknown);
+        unreadable.Status.Should().Be(PaymentInquiryStatus.Unknown);
+        empty.Status.Should().Be(PaymentInquiryStatus.Unknown);
+    }
+
+    [Fact]
+    public async Task Inquire_WhenTheRealGatewayIsDisabled_IsUnknown_AndNothingIsSent()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"status":"PAID","code":100},"errors":[]}""");
+
+        var result = await CreateGateway(handler, s => s.EnableRealGateway = false).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.Unknown);
+        result.ErrorCode.Should().Be("GATEWAY_DISABLED");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    // ---- تصمیم باز N2: استعلام پشت کلید PaymentGatewaySettings:EnableInquiry، پیش‌فرض خاموش ----
+
+    [Fact]
+    public void EnableInquiry_DefaultsToOff()
+    {
+        new PaymentGatewaySettings().EnableInquiry.Should().BeFalse(
+            "the merchant-level availability of Zarinpal's inquiry method is not confirmed yet (owner decision N2)");
+    }
+
+    [Fact]
+    public async Task Inquire_WhenInquiryIsTurnedOff_IsUnknownInquiryDisabled_AndNothingIsSent()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"status":"PAID","code":100},"errors":[]}""");
+
+        var result = await CreateGateway(handler, s => s.EnableInquiry = false).InquireAsync(Authority);
+
+        result.Status.Should().Be(PaymentInquiryStatus.Unknown, "with the inquiry off nobody knows whether the payer paid");
+        result.ErrorCode.Should().Be(PaymentInquiryResult.InquiryDisabledCode);
+        result.IsInquiryDisabled.Should().BeTrue();
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Verify_StillWorks_WhenInquiryIsTurnedOff()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"code":100,"message":"Verified","ref_id":201},"errors":[]}""");
+
+        var result = await CreateGateway(handler, s => s.EnableInquiry = false).VerifyAsync(Authority, 1_500_000m);
+
+        result.Outcome.Should().Be(PaymentVerificationOutcome.Verified, "the switch only gates the inquiry call");
+    }
+
+    // ==================== Batch 43 (FIN-07): کارمزد و کارت ماسک‌شده از پاسخ verify ====================
+
+    [Theory]
+    [InlineData(100, PaymentVerificationOutcome.Verified)]
+    [InlineData(101, PaymentVerificationOutcome.AlreadyVerified)]
+    public async Task Verify_Captured_ReturnsFeeFeeTypeAndMaskedCard(int code, PaymentVerificationOutcome expected)
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK,
+            "{\"data\":{\"code\":" + code + ",\"message\":\"Verified\",\"card_hash\":\"1EBE3EBEBE35C7EC0F8D6EE4F2F859107A87822CA179BC9528767EA7B5489B69\"," +
+            "\"card_pan\":\"502229******5995\",\"ref_id\":201,\"fee_type\":\"Merchant\",\"fee\":12000},\"errors\":[]}");
+
+        var result = await CreateGateway(handler).VerifyAsync(Authority, 1_500_000m);
+
+        result.Outcome.Should().Be(expected);
+        result.ReferenceId.Should().Be("201");
+        result.Fee.Should().Be(12_000m);
+        result.FeeType.Should().Be("Merchant");
+        result.CardPanMasked.Should().Be("502229******5995");
+    }
+
+    [Fact]
+    public async Task Verify_Captured_WithoutGatewayDetails_LeavesThemEmpty()
+    {
+        var handler = StubHandler.Json(HttpStatusCode.OK, """{"data":{"code":100,"message":"Verified","ref_id":201},"errors":[]}""");
+
+        var result = await CreateGateway(handler).VerifyAsync(Authority, 1_500_000m);
+
+        result.Outcome.Should().Be(PaymentVerificationOutcome.Verified);
+        result.Fee.Should().BeNull();
+        result.FeeType.Should().BeNull();
+        result.CardPanMasked.Should().BeNull();
+    }
+
     // ==================== helpers ====================
 
     private static ZarinpalPaymentGateway CreateGateway(StubHandler handler, Action<PaymentGatewaySettings>? configure = null)
@@ -231,6 +447,8 @@ public class ZarinpalPaymentGatewayTests
             Provider = "Zarinpal",
             MerchantId = MerchantId,
             EnableRealGateway = true,
+            // Batch 43: استعلام پیش‌فرض خاموش است (تصمیم باز N2)؛ تست‌های نگاشت استعلام آن را روشن می‌خواهند.
+            EnableInquiry = true,
             BaseUrl = "https://payment.zarinpal.com"
         };
         configure?.Invoke(settings);

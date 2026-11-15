@@ -534,6 +534,10 @@ public class Phase15Batch04bPaymentCaptureTests : ControllerIntegrationTestBase
             return result;
         }
 
+        // Batch 43: IPaymentGateway استعلام هم دارد (FIN-05).
+        public Task<PaymentInquiryResult> InquireAsync(string authority, CancellationToken cancellationToken = default)
+            => _inner.InquireAsync(authority, cancellationToken);
+
         // Batch 5: IPaymentGateway آدرس صفحهٔ پرداخت را هم می‌سازد (F-28).
         public string BuildRedirectUrl(string authority) => _inner.BuildRedirectUrl(authority);
 

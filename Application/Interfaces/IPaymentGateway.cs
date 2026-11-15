@@ -31,6 +31,16 @@ public interface IPaymentGateway
         decimal amount,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Batch 43 (FIN-05): استعلام وضعیت یک Authority از درگاه، <b>بدون</b> برداشت پول. فقط برای تصمیم‌گیری است
+    /// (آیا خریدار پرداخت کرده؟ آیا قبلاً تأیید شده؟)؛ برداشت نهایی همچنان فقط با <see cref="VerifyAsync"/> است.
+    /// خطای شبکه، timeout، 5xx، پاسخ ناخوانا و وضعیت ناشناخته <see cref="PaymentInquiryStatus.Unknown"/> است.
+    /// این متد پرتاب نمی‌کند.
+    /// </summary>
+    Task<PaymentInquiryResult> InquireAsync(
+        string authority,
+        CancellationToken cancellationToken = default);
+
     /// <summary>آدرس صفحهٔ پرداخت درگاه برای یک Authority موجود (برای replay شروع پرداخت).</summary>
     string BuildRedirectUrl(string authority);
 
@@ -90,6 +100,18 @@ public sealed record PaymentVerificationResult(
     /// <summary>پول برداشته شده است (تأیید الان یا قبلاً).</summary>
     public bool IsCaptured => Outcome is PaymentVerificationOutcome.Verified or PaymentVerificationOutcome.AlreadyVerified;
 
+    /// <summary>Batch 43 (FIN-07): کارمزد درگاه برای این تراکنش، همان عددی که درگاه برگردانده است (اگر برگردانده باشد).</summary>
+    public decimal? Fee { get; init; }
+
+    /// <summary>Batch 43 (FIN-07): پرداخت‌کنندهٔ کارمزد به گفتهٔ درگاه (مثلاً Merchant یا Payer).</summary>
+    public string? FeeType { get; init; }
+
+    /// <summary>
+    /// Batch 43 (FIN-07): شمارهٔ کارت <b>ماسک‌شده</b> به گفتهٔ درگاه (مثلاً 502229******5995). شمارهٔ کامل کارت هرگز
+    /// خوانده یا نگه‌داری نمی‌شود؛ ذخیره فقط از راه <c>Payment.RecordGatewayDetails</c> است که دوباره ماسک می‌کند.
+    /// </summary>
+    public string? CardPanMasked { get; init; }
+
     public static PaymentVerificationResult Verified(string? referenceId)
         => new(PaymentVerificationOutcome.Verified, referenceId, null, null);
 
@@ -101,4 +123,59 @@ public sealed record PaymentVerificationResult(
 
     public static PaymentVerificationResult TransientError(string code, string message)
         => new(PaymentVerificationOutcome.TransientError, null, code, message);
+}
+
+/// <summary>Batch 43 (FIN-05): وضعیت مستقل از درگاهِ یک Authority هنگام استعلام.</summary>
+public enum PaymentInquiryStatus
+{
+    /// <summary>
+    /// درگاه برای این Authority پولی نزد ما نگه نداشته است: پرداخت انجام نشده، ناموفق بوده، هنوز در صفحهٔ بانک
+    /// مانده یا برگشت خورده است. چون Verify نمی‌شود، هر پرداخت دیرهنگام را خودِ درگاه به خریدار برمی‌گرداند.
+    /// </summary>
+    NotPaid,
+
+    /// <summary>خریدار پرداخت کرده ولی هنوز Verify نشده است؛ پول تا Verify برداشت قطعی نشده است.</summary>
+    PaidNotVerified,
+
+    /// <summary>پرداخت قبلاً Verify شده است؛ پول برداشته شده است.</summary>
+    Verified,
+
+    /// <summary>درگاه پاسخ قطعی نداد (خطای شبکه، timeout، 5xx، محدودیت نرخ، وضعیت ناشناخته، پیکربندی).</summary>
+    Unknown
+}
+
+/// <summary>
+/// Batch 43 (FIN-05): نتیجهٔ استعلام. <see cref="GatewayStatus"/> متن خامِ وضعیت درگاه است (فقط برای لاگ و AuditLog؛
+/// هیچ تصمیمی از روی آن گرفته نمی‌شود).
+/// </summary>
+public sealed record PaymentInquiryResult(
+    PaymentInquiryStatus Status,
+    string? GatewayStatus,
+    string? ErrorCode,
+    string? ErrorMessage)
+{
+    public static PaymentInquiryResult NotPaid(string? gatewayStatus = null)
+        => new(PaymentInquiryStatus.NotPaid, gatewayStatus, null, null);
+
+    public static PaymentInquiryResult PaidNotVerified(string? gatewayStatus = null)
+        => new(PaymentInquiryStatus.PaidNotVerified, gatewayStatus, null, null);
+
+    public static PaymentInquiryResult Verified(string? gatewayStatus = null)
+        => new(PaymentInquiryStatus.Verified, gatewayStatus, null, null);
+
+    public static PaymentInquiryResult Unknown(string code, string message, string? gatewayStatus = null)
+        => new(PaymentInquiryStatus.Unknown, gatewayStatus, code, message);
+
+    /// <summary>کد خطای «استعلام برای این درگاه خاموش است» (هیچ تماسی با درگاه گرفته نشده).</summary>
+    public const string InquiryDisabledCode = "INQUIRY_DISABLED";
+
+    /// <summary>
+    /// استعلام با تنظیمات خاموش است (مثلاً <c>PaymentGatewaySettings:EnableInquiry = false</c>): وضعیت نامعلوم است و
+    /// هیچ تماسی با درگاه گرفته نشده. فراخوان نباید آن را قطعیِ درگاه حساب کند.
+    /// </summary>
+    public static PaymentInquiryResult Disabled()
+        => new(PaymentInquiryStatus.Unknown, null, InquiryDisabledCode, "استعلام وضعیت پرداخت از درگاه خاموش است.");
+
+    /// <summary>استعلام خاموش بوده است (نه اینکه درگاه پاسخ نداده باشد).</summary>
+    public bool IsInquiryDisabled => Status == PaymentInquiryStatus.Unknown && ErrorCode == InquiryDisabledCode;
 }

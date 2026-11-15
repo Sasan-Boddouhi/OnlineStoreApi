@@ -400,9 +400,26 @@ deletion, order cancellation.
 ### 12.6 Background work
 
 `AbandonedPaymentCleanupService` (`BackgroundService`, every 15 minutes) delegates
-to `IAbandonedPaymentSweeper`, which cancels `Pending` payments older than 30
-minutes. The clock is injected as `TimeProvider` so the behaviour is testable
-without waiting.
+to `IAbandonedPaymentSweeper`, which reconciles `Pending` payments older than 30
+minutes with the gateway before anything is cancelled (Batch 43). The money
+decision for each payment is in `IPaymentService.ReconcileStalePaymentAsync`:
+
+| Gateway inquiry answer | Result |
+|---|---|
+| paid, not verified, order still payable | captured through the normal verify path (`source=reconciliation`) |
+| already verified (money captured) | recorded `Succeeded`; if the order is no longer payable it goes to the review queue with `refundNeeded=true` |
+| paid, not verified, order no longer payable | **not** verified, cancelled, flagged for review (the gateway returns unverified money) |
+| not paid | cancelled |
+| unknown, or inquiry turned off | left `Pending`, flagged for review once |
+
+`AbandonedOrderCleanupService` asks the same question for the open payments of an
+order before it cancels the order. `PaymentGatewaySettings:EnableInquiry` is
+`false` by default (the Zarinpal inquiry method is documented but not yet
+confirmed for the merchant); while it is off no payment is verified or cancelled
+automatically, and an admin settles each flagged payment with
+`POST /api/v1/payments/verify-by-authority`. `AbandonedPaymentSettings:InquireGatewayBeforeCancel=false`
+restores the old behaviour (cancel after the timeout without asking).
+The clock is injected as `TimeProvider` so the behaviour is testable without waiting.
 
 A failed payment does **not** release its inventory reservation. The order stays
 `Pending` so the customer can retry; release happens only on explicit

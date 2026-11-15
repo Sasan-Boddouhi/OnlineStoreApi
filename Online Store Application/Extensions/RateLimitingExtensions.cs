@@ -17,6 +17,7 @@ public static class RateLimitPolicies
     public const string Refresh = "RefreshLimiter";
     public const string Checkout = "CheckoutLimiter";
     public const string PaymentInitiate = "PaymentInitiateLimiter";
+    public const string PaymentVerify = "PaymentVerifyLimiter";
 }
 
 /// <summary>F-03: سقف‌ها باید مثبت باشند؛ در غیر این صورت راه‌اندازی شکست می‌خورد (ValidateOnStart).</summary>
@@ -31,6 +32,7 @@ public sealed class RateLimitingOptionsValidator : IValidateOptions<RateLimiting
         Check(nameof(options.Refresh), options.Refresh, errors);
         Check(nameof(options.Checkout), options.Checkout, errors);
         Check(nameof(options.PaymentInitiate), options.PaymentInitiate, errors);
+        Check(nameof(options.PaymentVerify), options.PaymentVerify, errors);
 
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
@@ -65,7 +67,7 @@ public static class RateLimitingExtensions
     /// <summary>
     /// F-03: هر سیاست یک limiter پنجرهٔ ثابت به‌ازای هر کلاینت است، نه یک سطل برای کل سامانه.
     /// endpointهای ناشناس (ورود، ثبت‌نام، تازه‌سازی) با IP کلاینت و endpointهای احرازشده
-    /// (checkout، شروع پرداخت) با شناسهٔ کاربر کلید می‌خورند. پاسخ رد شده 429 با Retry-After است.
+    /// (checkout، شروع و تأیید پرداخت) با شناسهٔ کاربر کلید می‌خورند. پاسخ رد شده 429 با Retry-After است.
     /// UseRateLimiter باید پس از UseForwardedHeaders و UseAuthentication بیاید.
     /// </summary>
     public static IServiceCollection AddPartitionedRateLimiting(
@@ -93,6 +95,7 @@ public static class RateLimitingExtensions
                 options.AddPolicy(RateLimitPolicies.Refresh, ctx => ByClientIp(ctx, limits.Refresh));
                 options.AddPolicy(RateLimitPolicies.Checkout, ctx => ByUserOrClientIp(ctx, limits.Checkout));
                 options.AddPolicy(RateLimitPolicies.PaymentInitiate, ctx => ByUserOrClientIp(ctx, limits.PaymentInitiate));
+                options.AddPolicy(RateLimitPolicies.PaymentVerify, ctx => ByUserOrClientIp(ctx, limits.PaymentVerify));
             });
 
         return services;
@@ -173,6 +176,7 @@ public static class RateLimitingExtensions
         RateLimitPolicies.Refresh => limits.Refresh.WindowSeconds,
         RateLimitPolicies.Checkout => limits.Checkout.WindowSeconds,
         RateLimitPolicies.PaymentInitiate => limits.PaymentInitiate.WindowSeconds,
+        RateLimitPolicies.PaymentVerify => limits.PaymentVerify.WindowSeconds,
         _ => 60
     };
 }

@@ -7,8 +7,9 @@
 public interface IAbandonedPaymentSweeper
 {
     /// <summary>
-    /// پرداخت‌های Pending قدیمی‌تر از مهلت را Cancelled می‌کند
-    /// و تعداد ردیف‌های تغییرکرده را برمی‌گرداند.
+    /// پرداخت‌های Pending قدیمی‌تر از مهلت را با درگاه تطبیق می‌دهد (Batch 43): پرداخت‌شده ⇒ برداشت از مسیر Verify،
+    /// پرداخت‌نشده ⇒ Cancelled، نامعلوم ⇒ Pending می‌ماند و یک بار برای بررسی علامت می‌خورد.
+    /// تعداد پرداخت‌های <b>لغوشده</b> را برمی‌گرداند.
     /// </summary>
     Task<int> SweepAsync(CancellationToken cancellationToken = default);
 }

@@ -71,4 +71,44 @@ public interface IPaymentService
         int paymentId,
         string note,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Batch 43 (FIN-05) — اقدام ادمین: تطبیق یک Authority با درگاه. از درگاه استعلام می‌کند و همان قواعد جاب
+    /// پرداخت‌های رهاشده را اجرا می‌کند، با دو تفاوت: پرداختِ «پرداخت‌نشده» را لغو نمی‌کند (شاید خریدار هنوز در صفحهٔ
+    /// بانک است؛ لغو با جاب است) و برای پاسخ نامعلوم پرداخت را به صف بررسی نمی‌فرستد (ادمین خودش در حال بررسی است).
+    /// پرداخت‌شدهٔ تأییدنشده برای سفارش قابل پرداخت ⇒ برداشت از مسیر Verify؛ Authority ناموجود ⇒ 404 PAYMENT_NOT_FOUND.
+    /// </summary>
+    Task<PaymentReconciliationDto> VerifyByAuthorityAsync(
+        string authority,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Batch 43 (FIN-05) — تطبیق یک پرداخت Pending کهنه توسط جاب پرداخت‌های رهاشده، پیش از لغو:
+    ///   • پرداخت‌شده و سفارش قابل پرداخت ⇒ برداشت از مسیر Verify (source = reconciliation)؛
+    ///   • قبلاً نزد درگاه تأییدشده ⇒ ثبت Succeeded از مسیر Verify (و بررسی/برگشت وجه اگر سفارش قابل پرداخت نیست)؛
+    ///   • پرداخت‌شدهٔ تأییدنشده برای سفارش ناپرداختنی ⇒ بدون Verify لغو و به صف بررسی می‌رود (درگاه پول را برمی‌گرداند)؛
+    ///   • پرداخت‌نشده ⇒ لغو (مثل قبل)؛ نامعلوم ⇒ Pending می‌ماند و یک بار به صف بررسی می‌رود؛
+    ///   • پرداختی که Verify آن قبلاً آغاز شده هرگز لغو نمی‌شود.
+    /// با <paramref name="askGateway"/> = false رفتار پیش از Batch 43 اجرا می‌شود (بدون استعلام).
+    /// </summary>
+    /// <param name="paymentId">شناسهٔ پرداخت.</param>
+    /// <param name="askGateway">پیش از تصمیم از درگاه استعلام شود.</param>
+    /// <param name="abandonedAfterMinutes">مهلت رهاشدگی؛ فقط برای متن AuditLog.</param>
+    /// <param name="cancellationToken">فقط برای بارگذاری پرداخت؛ تصمیم پول پس از آغاز لغوپذیر نیست.</param>
+    Task<PaymentReconciliationDto> ReconcileStalePaymentAsync(
+        int paymentId,
+        bool askGateway,
+        int abandonedAfterMinutes,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Batch 43 (FIN-05) — جاب سفارش‌های رهاشده پیش از لغو یک سفارش، برای هر پرداخت بازِ آن از درگاه استعلام می‌کند
+    /// (سفارش ۶۰ دقیقه‌ای ممکن است پرداختی جوان‌تر از مهلت جاب پرداخت‌ها داشته باشد). همان قواعد
+    /// <see cref="ReconcileStalePaymentAsync"/>، با این تفاوت که پرداختِ «پرداخت‌نشده» را خودش لغو نمی‌کند: لغو آن با
+    /// روال برگرداندن سفارش است (مثل قبل). فراخوان از <c>GatewayStatus</c> و <c>Outcome</c> تصمیم می‌گیرد:
+    /// برداشت‌شده ⇒ سفارش دیگر رهاشده نیست؛ نامعلوم ⇒ سفارش در این اجرا لغو نمی‌شود.
+    /// </summary>
+    Task<PaymentReconciliationDto> ReconcileBeforeOrderCancellationAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default);
 }

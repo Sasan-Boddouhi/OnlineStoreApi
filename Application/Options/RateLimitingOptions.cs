@@ -20,6 +20,11 @@ public sealed class RateLimitingOptions
     public FixedWindowLimitOptions Checkout { get; set; } = new() { PermitLimit = 5, WindowSeconds = 60 };
 
     public FixedWindowLimitOptions PaymentInitiate { get; set; } = new() { PermitLimit = 10, WindowSeconds = 60 };
+
+    // Batch 43 (FIN-05): هر تأیید پرداخت یک تماس با درگاه است؛ سقف برای هر کاربر (و اگر احراز نشده، IP).
+    // یک بازگشت عادی از درگاه یک یا دو تأیید می‌فرستد. کلاینتی که 503 PAYMENT_VERIFY_RETRY را هر ۵ ثانیه تکرار کند پس از
+    // حدود ۵۰ ثانیه 429 با Retry-After می‌گیرد؛ پرداختِ بی‌نتیجه را جاب تطبیق (AbandonedPaymentSweeper) قطعی می‌کند.
+    public FixedWindowLimitOptions PaymentVerify { get; set; } = new() { PermitLimit = 10, WindowSeconds = 60 };
 }
 
 /// <summary>یک پنجرهٔ ثابت: حداکثر <see cref="PermitLimit"/> درخواست در هر <see cref="WindowSeconds"/> ثانیه.</summary>

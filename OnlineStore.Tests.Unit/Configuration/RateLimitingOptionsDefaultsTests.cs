@@ -18,4 +18,17 @@ public class RateLimitingOptionsDefaultsTests
         options.Refresh.PermitLimit.Should().Be(60);
         options.Refresh.WindowSeconds.Should().Be(60);
     }
+
+    /// <summary>
+    /// Batch 43 (FIN-05): تأیید پرداخت (هر بار یک تماس با درگاه) بدون تنظیم صریح هم سقف دارد: ۱۰ درخواست در دقیقه
+    /// برای هر کاربر.
+    /// </summary>
+    [Fact]
+    public void PaymentVerify_DefaultsTo10PerMinute()
+    {
+        var options = new RateLimitingOptions();
+
+        options.PaymentVerify.PermitLimit.Should().Be(10);
+        options.PaymentVerify.WindowSeconds.Should().Be(60);
+    }
 }

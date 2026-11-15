@@ -10,6 +10,9 @@ namespace BusinessLogic.Services.Implementations;
 ///   • Verify برای Authority حاوی "fail" رد قطعی (Rejected)، برای Authority حاوی "timeout" نتیجهٔ
 ///     نامعلوم (TransientError)، برای تأیید تکراری همان Authority «قبلاً تأیید شده» (AlreadyVerified)
 ///     و در غیر این صورت Verified برمی‌گرداند.
+///   • Inquire (Batch 43) هرگز «پرداخت‌شده» اختراع نمی‌کند: Authority که همین نمونه Verify کرده Verified،
+///     Authority حاوی "timeout" نامعلوم (Unknown) و بقیه NotPaid هستند. پس جاب پرداخت‌های رهاشده در
+///     Development همان رفتار قبلی (لغو) را دارد و هیچ سفارشی بدون Verify واقعی «پرداخت‌شده» نمی‌شود.
 ///   • Refund همیشه موفق است.
 ///
 /// این «طلب» بودن عمدی است: هیچ تستی نباید برای سنجش منطق پول به اینترنت وصل شود.
@@ -56,6 +59,25 @@ public sealed class FakePaymentGateway : IPaymentGateway
             return Task.FromResult(_verified.Add(authority)
                 ? PaymentVerificationResult.Verified(reference)
                 : PaymentVerificationResult.AlreadyVerified(reference));
+        }
+    }
+
+    public Task<PaymentInquiryResult> InquireAsync(
+        string authority,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(authority))
+            return Task.FromResult(PaymentInquiryResult.NotPaid("NO_AUTHORITY"));
+
+        if (authority.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(
+                PaymentInquiryResult.Unknown("GATEWAY_TIMEOUT", "پاسخ درگاه در زمان مقرر نرسید."));
+
+        lock (_sync)
+        {
+            return Task.FromResult(_verified.Contains(authority)
+                ? PaymentInquiryResult.Verified("FAKE_VERIFIED")
+                : PaymentInquiryResult.NotPaid("FAKE_NOT_PAID"));
         }
     }
 

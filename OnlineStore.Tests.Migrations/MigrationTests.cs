@@ -251,4 +251,56 @@ INSERT INTO [Payment] ([Amount],[PaymentDate],[PaymentMethod],[Status],[IsActive
 VALUES {values};
 ";
     }
+
+    // ==================== Batch 43 ====================
+
+    /// <summary>
+    /// Batch 43 (FIN-07) — <c>Phase15_Batch43_PaymentGatewayDetails</c>: سه ستون اختیاری روی Payment (کارمزد درگاه،
+    /// پرداخت‌کنندهٔ کارمزد، کارت ماسک‌شده)، بدون back-fill. بالا: ستون‌ها با نوع و nullable درست ساخته می‌شوند؛
+    /// پایین (تا Batch 42): هر سه برداشته می‌شوند؛ دوباره بالا: دوباره ساخته می‌شوند.
+    /// </summary>
+    [Fact]
+    public async Task Phase15_Batch43_PaymentGatewayDetails_AppliesAndRollsBack()
+    {
+        const string batch43 = "20261114134136_Phase15_Batch43_PaymentGatewayDetails";
+        const string batch42 = "20261114054648_Phase15_Batch42_PaymentReview";
+        const string gatewayColumns =
+            "SELECT COUNT(*) FROM sys.columns " +
+            "WHERE name IN ('GatewayFee','GatewayFeeType','CardPanMasked') AND object_id = OBJECT_ID('Payment')";
+
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(batch42);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(0, "پیش از Batch 43 این ستون‌ها وجود ندارند");
+
+        await db.MigrateToAsync(batch43);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(3, "Batch 43 هر سه ستون را می‌سازد");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id " +
+            "WHERE c.object_id = OBJECT_ID('Payment') AND c.name = 'GatewayFee' " +
+            "AND t.name = 'decimal' AND c.precision = 18 AND c.scale = 0 AND c.is_nullable = 1"))
+            .Should().Be(1, "GatewayFee باید decimal(18,0) NULL باشد");
+
+        // nvarchar(20) در sys.columns طول ۴۰ بایت دارد.
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id " +
+            "WHERE c.object_id = OBJECT_ID('Payment') AND c.name IN ('GatewayFeeType','CardPanMasked') " +
+            "AND t.name = 'nvarchar' AND c.max_length = 40 AND c.is_nullable = 1"))
+            .Should().Be(2, "GatewayFeeType و CardPanMasked باید nvarchar(20) NULL باشند");
+
+        await db.MigrateToAsync(batch42);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(0, "rollback باید هر سه ستون را بردارد");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE name = 'ReviewRequiredAtUtc' AND object_id = OBJECT_ID('Payment')"))
+            .Should().Be(1, "rollback نباید به ستون‌های Batch 42 دست بزند");
+
+        await db.MigrateToAsync(batch43);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(3, "اعمال دوباره پس از rollback باید ممکن باشد");
+    }
 }

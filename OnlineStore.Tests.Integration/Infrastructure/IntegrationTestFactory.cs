@@ -65,7 +65,8 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["RateLimiting:Register:PermitLimit"] = "10000",
                 ["RateLimiting:Refresh:PermitLimit"] = "10000",
                 ["RateLimiting:Checkout:PermitLimit"] = "10000",
-                ["RateLimiting:PaymentInitiate:PermitLimit"] = "10000"
+                ["RateLimiting:PaymentInitiate:PermitLimit"] = "10000",
+                ["RateLimiting:PaymentVerify:PermitLimit"] = "10000"
             });
         });
 

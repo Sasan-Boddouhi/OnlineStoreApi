@@ -10,7 +10,8 @@ namespace Application.Entities
     ///
     /// قواعد سخت:
     /// 1) هیچ اطلاعات کارت (PAN/CVV/تاریخ انقضا) اینجا ذخیره نمی‌شود؛
-    ///    Tokenization کار درگاه است و ما فقط Authority دریافت می‌کنیم.
+    ///    Tokenization کار درگاه است و ما فقط Authority دریافت می‌کنیم. تنها استثنا (Batch 43) شمارهٔ کارتِ
+    ///    <b>ماسک‌شده</b> است که خودِ درگاه پس از پرداخت برمی‌گرداند (<see cref="CardPanMasked"/>).
     /// 2) تغییر وضعیت فقط از مسیر <see cref="TransitionTo"/> ممکن است،
     ///    تا انتقال غیرمجاز (مثل Pending → Succeeded بی‌تأیید درگاه) ممکن نباشد.
     /// 3) IdempotencyKey در سطح دیتابیس یکتاست، نه فقط در کد.
@@ -125,6 +126,27 @@ namespace Application.Entities
         [NotMapped]
         public bool IsReviewOpen => ReviewRequiredAtUtc is not null && ReviewResolvedAtUtc is null;
 
+        // ---------------- Batch 43 ----------------
+
+        /// <summary>
+        /// Batch 43 (FIN-07): کارمزد درگاه برای این تراکنش، همان عددی که درگاه در پاسخ Verify برگردانده است
+        /// (برای تطبیق با گزارش تسویهٔ درگاه). پرداخت‌های پیش از این Batch مقدار ندارند.
+        /// </summary>
+        [Column(TypeName = "decimal(18,0)")]
+        public decimal? GatewayFee { get; set; }
+
+        /// <summary>Batch 43 (FIN-07): پرداخت‌کنندهٔ کارمزد به گفتهٔ درگاه (مثلاً Merchant یا Payer).</summary>
+        [MaxLength(20)]
+        public string? GatewayFeeType { get; set; }
+
+        /// <summary>
+        /// Batch 43 (FIN-07): شمارهٔ کارت <b>ماسک‌شدهٔ</b> پرداخت‌کننده (حداکثر ۶ رقم اول و ۴ رقم آخر، مثلاً
+        /// 502229******5995) برای پشتیبانی و تطبیق. قاعدهٔ ۱ همچنان برقرار است: شمارهٔ کامل کارت هرگز ذخیره
+        /// نمی‌شود؛ مقدار فقط از <see cref="RecordGatewayDetails"/> نوشته می‌شود که خودش دوباره ماسک می‌کند.
+        /// </summary>
+        [MaxLength(20)]
+        public string? CardPanMasked { get; set; }
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = new byte[8];
 
@@ -216,6 +238,52 @@ namespace Application.Entities
 
             if (!string.IsNullOrWhiteSpace(note))
                 ReviewNote = Truncate(string.IsNullOrEmpty(ReviewNote) ? $"resolved: {note.Trim()}" : $"{ReviewNote} || resolved: {note.Trim()}", 1000);
+        }
+
+        /// <summary>
+        /// Batch 43 (FIN-07): جزئیاتی که درگاه در پاسخ Verify داده است. مقدار خالی چیزی را پاک نمی‌کند (تأیید تکراری
+        /// ممکن است جزئیات کمتری برگرداند). شمارهٔ کارت همیشه از <see cref="MaskCardPan"/> می‌گذرد.
+        /// </summary>
+        public void RecordGatewayDetails(decimal? fee, string? feeType, string? cardPan)
+        {
+            if (fee is >= 0)
+                GatewayFee = decimal.Truncate(fee.Value);
+
+            if (!string.IsNullOrWhiteSpace(feeType))
+                GatewayFeeType = Truncate(feeType.Trim(), 20);
+
+            var masked = MaskCardPan(cardPan);
+            if (masked is not null)
+                CardPanMasked = masked;
+        }
+
+        /// <summary>
+        /// Batch 43: شمارهٔ کارت را به شکل امنِ قابل ذخیره درمی‌آورد: فقط ۶ رقم اول و ۴ رقم آخر می‌مانند و بقیه <c>*</c>
+        /// می‌شوند، حتی اگر درگاه شمارهٔ کامل یا ماسکِ ضعیف‌تری فرستاده باشد. ورودی نامعتبر (طول نادرست یا نویسهٔ
+        /// غیرمنتظره) ⇒ null و چیزی ذخیره نمی‌شود.
+        /// </summary>
+        public static string? MaskCardPan(string? cardPan)
+        {
+            if (string.IsNullOrWhiteSpace(cardPan))
+                return null;
+
+            var compact = cardPan.Replace(" ", string.Empty).Replace("-", string.Empty);
+            if (compact.Length is < 12 or > 19)
+                return null;
+
+            var chars = new char[compact.Length];
+            for (var i = 0; i < compact.Length; i++)
+            {
+                var c = compact[i];
+                var isDigit = c is >= '0' and <= '9';
+                if (!isDigit && c is not ('*' or 'x' or 'X'))
+                    return null;
+
+                var visible = i < 6 || i >= compact.Length - 4;
+                chars[i] = isDigit && visible ? c : '*';
+            }
+
+            return new string(chars);
         }
 
         private static string Truncate(string value, int maxLength)

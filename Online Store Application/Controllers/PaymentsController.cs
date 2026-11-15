@@ -4,6 +4,7 @@ using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -57,18 +58,46 @@ public class PaymentsController : ControllerBase
     /// تأیید پرداخت پس از بازگشت کاربر از درگاه. Batch 5: سفارش لغوشده یا پرداخت‌شده → 409 ORDER_NOT_PAYABLE /
     /// ORDER_ALREADY_PAID و درگاه صدا زده نمی‌شود؛ نتیجهٔ نامعلوم درگاه → 503 PAYMENT_VERIFY_RETRY با هدر Retry-After
     /// (پرداخت Pending می‌ماند و تکرار همین درخواست آن را قطعی می‌کند).
+    /// Batch 43: هر تأیید یک تماس با درگاه است؛ سقف نرخ برای هر کاربر (RateLimiting:PaymentVerify، پیش‌فرض ۱۰ در
+    /// دقیقه) ⇒ 429 RATE_LIMIT_EXCEEDED با هدر Retry-After.
     /// </summary>
     [HttpPost("verify")]
     [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.PaymentVerify)]
     [ProducesResponseType(typeof(PaymentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<PaymentDto>> Verify(
         [FromQuery] string authority,
         CancellationToken cancellationToken)
         => Ok(await _paymentService.VerifyAsync(authority, cancellationToken));
+
+    /// <summary>
+    /// Batch 43 (FIN-05) — تطبیق دستی یک پرداخت با درگاه توسط ادمین («پرداخت کردم ولی سفارشم ثبت نشد»).
+    ///
+    /// از درگاه استعلام می‌کند و همان قواعد جاب پرداخت‌های رهاشده را برای همین یک Authority اجرا می‌کند:
+    ///   • پرداخت‌شدهٔ تأییدنشده و سفارش هنوز قابل پرداخت ⇒ برداشت از مسیر Verify (<c>outcome = Captured</c>)؛
+    ///   • قبلاً نزد درگاه تأییدشده ⇒ Succeeded ثبت می‌شود؛ اگر سفارش دیگر قابل پرداخت نیست، با برگشت وجه لازم به
+    ///     صف بررسی می‌رود (<c>CapturedNeedsReview</c>)؛
+    ///   • پرداخت‌شدهٔ تأییدنشده برای سفارش ناپرداختنی ⇒ بدون برداشت لغو می‌شود و درگاه پول را برمی‌گرداند (<c>Cancelled</c>)؛
+    ///   • پرداخت‌نشده یا پاسخ نامعلوم درگاه ⇒ دست نمی‌خورد (<c>LeftPending</c>)؛ پرداخت بسته ⇒ <c>NoChange</c>.
+    /// پاسخ همیشه 200 با شرح نتیجه است و هر فراخوانی در AuditLog (<c>Payment.VerifyByAuthority</c>) ثبت می‌شود.
+    /// 404 PAYMENT_NOT_FOUND برای Authority ناموجود؛ 422 بدون Authority.
+    /// </summary>
+    [HttpPost("verify-by-authority")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(PaymentReconciliationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<PaymentReconciliationDto>> VerifyByAuthority(
+        [FromBody] VerifyByAuthorityRequest body,
+        CancellationToken cancellationToken)
+        => Ok(await _paymentService.VerifyByAuthorityAsync(body.Authority ?? string.Empty, cancellationToken));
 
     /// <summary>
     /// Webhook درگاه.
