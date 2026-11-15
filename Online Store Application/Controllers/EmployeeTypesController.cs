@@ -52,15 +52,7 @@ public class EmployeeTypesController : ControllerBase
 
         if (!parseResult.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query syntax",
-                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query syntax", parseResult.Errors);
         }
 
         var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -68,15 +60,7 @@ public class EmployeeTypesController : ControllerBase
 
         if (!validation.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query values",
-                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query values", validation.Errors);
         }
 
         var result = await _employeeTypeService.GetByQueryAsync(validation.Value!);

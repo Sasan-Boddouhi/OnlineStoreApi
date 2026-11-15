@@ -56,7 +56,8 @@ public class ExceptionHandlingMiddlewareSqlServerTests
         var (status, body) = await InvokeAsync(wrapped);
 
         status.Should().Be((int)HttpStatusCode.InternalServerError);
-        body.TryGetProperty("code", out _).Should().BeFalse();
+        // Batch 53 (API-04): 500 پاسخ ProblemDetails یکپارچه با کد خطا «INTERNAL_ERROR» دارد.
+        body.GetProperty("code").GetString().Should().Be("INTERNAL_ERROR");
         AssertNoDatabaseDetails(body);
     }
 

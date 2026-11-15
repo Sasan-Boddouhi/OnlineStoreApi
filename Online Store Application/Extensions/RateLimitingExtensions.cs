@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using Application.Exceptions;
 using Application.Options;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -156,7 +157,7 @@ public static class RateLimitingExtensions
 
         var problem = new ProblemDetails
         {
-            Type = $"https://api.yourstore.com/errors/{ErrorCode.ToLowerInvariant()}",
+            Type = ErrorCodes.TypeUri(ErrorCode),
             Title = "Too Many Requests",
             Status = StatusCodes.Status429TooManyRequests,
             Detail = $"تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً {retryAfterSeconds} ثانیهٔ دیگر دوباره تلاش کنید.",

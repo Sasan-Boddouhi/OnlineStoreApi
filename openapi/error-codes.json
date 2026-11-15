@@ -1,0 +1,92 @@
+[
+  {
+    "code": "CONCURRENCY_CONFLICT",
+    "status": 409,
+    "message": "تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.",
+    "type": "urn:onlinestore:error:concurrency-conflict"
+  },
+  {
+    "code": "DUPLICATE_RECORD",
+    "status": 409,
+    "message": "رکوردی با همین مشخصات قبلاً ثبت شده است.",
+    "type": "urn:onlinestore:error:duplicate-record"
+  },
+  {
+    "code": "FORBIDDEN",
+    "status": 403,
+    "message": "شما اجازهٔ انجام این عملیات را ندارید.",
+    "type": "urn:onlinestore:error:forbidden"
+  },
+  {
+    "code": "INTERNAL_ERROR",
+    "status": 500,
+    "message": "خطای غیرمنتظره‌ای رخ داد. لطفاً بعداً دوباره تلاش کنید.",
+    "type": "urn:onlinestore:error:internal-error"
+  },
+  {
+    "code": "INVALID_QUERY",
+    "status": 400,
+    "message": "پارامترهای فیلتر یا مرتب‌سازی معتبر نیستند.",
+    "type": "urn:onlinestore:error:invalid-query"
+  },
+  {
+    "code": "METHOD_NOT_ALLOWED",
+    "status": 405,
+    "message": "این متد HTTP برای مسیر درخواستی مجاز نیست.",
+    "type": "urn:onlinestore:error:method-not-allowed"
+  },
+  {
+    "code": "NOT_FOUND",
+    "status": 404,
+    "message": "مورد درخواستی یافت نشد.",
+    "type": "urn:onlinestore:error:not-found"
+  },
+  {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "status": 429,
+    "message": "تعداد درخواست‌های شما بیش از حد مجاز است.",
+    "type": "urn:onlinestore:error:rate-limit-exceeded"
+  },
+  {
+    "code": "ROUTE_NOT_FOUND",
+    "status": 404,
+    "message": "مسیر درخواستی وجود ندارد.",
+    "type": "urn:onlinestore:error:route-not-found"
+  },
+  {
+    "code": "SESSION_REVOKED",
+    "status": 401,
+    "message": "نشست شما لغو شده است. لطفاً دوباره وارد شوید.",
+    "type": "urn:onlinestore:error:session-revoked"
+  },
+  {
+    "code": "TOKEN_EXPIRED",
+    "status": 401,
+    "message": "اعتبار نشست شما به پایان رسیده است. لطفاً توکن را تازه‌سازی کنید.",
+    "type": "urn:onlinestore:error:token-expired"
+  },
+  {
+    "code": "TOKEN_INVALID",
+    "status": 401,
+    "message": "توکن ارسال‌شده معتبر نیست.",
+    "type": "urn:onlinestore:error:token-invalid"
+  },
+  {
+    "code": "UNAUTHENTICATED",
+    "status": 401,
+    "message": "برای دسترسی باید وارد حساب کاربری شوید.",
+    "type": "urn:onlinestore:error:unauthenticated"
+  },
+  {
+    "code": "UNSUPPORTED_MEDIA_TYPE",
+    "status": 415,
+    "message": "نوع محتوای درخواست پشتیبانی نمی‌شود.",
+    "type": "urn:onlinestore:error:unsupported-media-type"
+  },
+  {
+    "code": "VALIDATION_ERROR",
+    "status": 422,
+    "message": "یک یا چند ورودی معتبر نیست.",
+    "type": "urn:onlinestore:error:validation-error"
+  }
+]

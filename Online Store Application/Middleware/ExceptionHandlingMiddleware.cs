@@ -40,7 +40,7 @@ public sealed class ExceptionHandlingMiddleware
 
             var problem = new ProblemDetails
             {
-                Type = $"https://api.yourstore.com/errors/{ex.Code.ToLowerInvariant()}",
+                Type = ErrorCodes.TypeUri(ex.Code),
                 Title = GetTitleForStatusCode(ex.StatusCode),
                 Status = ex.StatusCode,
                 Detail = ex.Message,
@@ -78,14 +78,14 @@ public sealed class ExceptionHandlingMiddleware
         {
             _logger.LogWarning(ex, "Concurrency conflict");
 
-            await WriteConflictAsync(context, "CONCURRENCY_CONFLICT", "تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.");
+            await WriteConflictAsync(context, ErrorCodes.ConcurrencyConflict.Code, ErrorCodes.ConcurrencyConflict.Message);
         }
         catch (Exception ex) when (DatabaseErrorClassifier.IsUniqueViolation(ex))
         {
             // جزئیات دیتابیس (نام جدول/ایندکس) عمداً در پاسخ نمی‌آید.
             _logger.LogWarning(ex, "Unique constraint violation");
 
-            await WriteConflictAsync(context, "DUPLICATE_RECORD", "رکوردی با همین مشخصات قبلاً ثبت شده است.");
+            await WriteConflictAsync(context, ErrorCodes.DuplicateRecord.Code, ErrorCodes.DuplicateRecord.Message);
         }
         catch (ValidationException ex)
         {
@@ -103,12 +103,13 @@ public sealed class ExceptionHandlingMiddleware
 
             var problem = new ValidationProblemDetails(errors)
             {
+                Type = ErrorCodes.TypeUri(ErrorCodes.ValidationError.Code),
                 Status = StatusCodes.Status422UnprocessableEntity,
                 Title = "Validation Error",
-                Detail = "One or more validation errors occurred.",
+                Detail = ErrorCodes.ValidationError.Message,
                 Instance = context.Request.Path
             };
-            problem.Extensions["code"] = "VALIDATION_ERROR";
+            problem.Extensions["code"] = ErrorCodes.ValidationError.Code;
             problem.Extensions["traceId"] = context.TraceIdentifier;
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
@@ -129,11 +130,13 @@ public sealed class ExceptionHandlingMiddleware
 
             var problem = new ProblemDetails
             {
+                Type = ErrorCodes.TypeUri(ErrorCodes.InternalError.Code),
                 Status = StatusCodes.Status500InternalServerError,
                 Title = "Internal Server Error",
-                Detail = "An unexpected error occurred. Please try again later.",
+                Detail = ErrorCodes.InternalError.Message,
                 Instance = context.Request.Path
             };
+            problem.Extensions["code"] = ErrorCodes.InternalError.Code;
             problem.Extensions["traceId"] = context.TraceIdentifier;
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
@@ -150,7 +153,7 @@ public sealed class ExceptionHandlingMiddleware
 
         var problem = new ProblemDetails
         {
-            Type = $"https://api.yourstore.com/errors/{code.ToLowerInvariant()}",
+            Type = ErrorCodes.TypeUri(code),
             Title = GetTitleForStatusCode(StatusCodes.Status409Conflict),
             Status = StatusCodes.Status409Conflict,
             Detail = detail,

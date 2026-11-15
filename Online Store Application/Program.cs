@@ -26,6 +26,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Online_Store_Application.Authorization;
+using Application.Exceptions;
 using Online_Store_Application.Extensions;
 using Online_Store_Application.Middleware;
 using Online_Store_Application.Services;
@@ -58,6 +59,8 @@ builder.Services.AddControllers(options =>
     Newtonsoft.Json.ReferenceLoopHandling.Ignore;
 });
 
+builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.ProblemDetailsFactory, CodedProblemDetailsFactory>();
+
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.SuppressModelStateInvalidFilter = false;
@@ -72,12 +75,13 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
         var problem = new ValidationProblemDetails(errors)
         {
+            Type = ErrorCodes.TypeUri(ErrorCodes.ValidationError.Code),
             Status = StatusCodes.Status422UnprocessableEntity,
             Title = "Validation failed",
-            Detail = "One or more validation errors occurred.",
+            Detail = ErrorCodes.ValidationError.Message,
             Instance = context.HttpContext.Request.Path
         };
-        problem.Extensions["code"] = "VALIDATION_ERROR";
+        problem.Extensions["code"] = ErrorCodes.ValidationError.Code;
         problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
         return new UnprocessableEntityObjectResult(problem);
@@ -273,6 +277,16 @@ builder.Services.AddAuthentication(options =>
 
     options.Events = new JwtBearerEvents
     {
+        // Batch 53 (API-04): 401 و 403 خط لولهٔ JWT بدنهٔ ProblemDetails با کد پایدار دارند (TOKEN_EXPIRED، TOKEN_INVALID، SESSION_REVOKED، FORBIDDEN).
+        OnChallenge = async context =>
+        {
+            context.HandleResponse();
+            context.Response.Headers.WWWAuthenticate = context.AuthenticateFailure is null
+                ? "Bearer"
+                : "Bearer error=\"invalid_token\"";
+            await ProblemDetailsWriter.WriteAsync(context.HttpContext, ProblemDetailsWriter.ClassifyJwtFailure(context.AuthenticateFailure));
+        },
+        OnForbidden = context => ProblemDetailsWriter.WriteAsync(context.HttpContext, ErrorCodes.Forbidden),
         OnTokenValidated = async context =>
         {
             var unitOfWork = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
@@ -283,7 +297,7 @@ builder.Services.AddAuthentication(options =>
             if (!int.TryParse(userId, out var uid) ||
                 !Guid.TryParse(sessionId, out var sid))
             {
-                context.Fail("Invalid token claims");
+                context.Fail(new JwtFailure(ErrorCodes.TokenInvalid));
                 return;
             }
 
@@ -295,7 +309,7 @@ builder.Services.AddAuthentication(options =>
 
             if (!isActive)
             {
-                context.Fail("Session revoked");
+                context.Fail(new JwtFailure(ErrorCodes.SessionRevoked));
                 return;
             }
 
@@ -305,7 +319,7 @@ builder.Services.AddAuthentication(options =>
 
             if (dbUser == null || stamp == null || dbUser.SecurityStamp != stamp)
             {
-                context.Fail("Security stamp invalid");
+                context.Fail(new JwtFailure(ErrorCodes.SessionRevoked));
                 return;
             }
         }
@@ -394,6 +408,22 @@ await app.Services.ApplyMigrationsAsync(
 app.UseTrustedForwardedHeaders();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// Batch 53 (API-04): پاسخ‌های بدون بدنه (مسیر ناموجود، متد یا نوع محتوای ناپشتیبانی‌شده) بدنهٔ ProblemDetails با code می‌گیرند.
+app.UseStatusCodePages(async statusContext =>
+{
+    var http = statusContext.HttpContext;
+    var info = http.Response.StatusCode switch
+    {
+        StatusCodes.Status404NotFound => http.GetEndpoint() is null ? ErrorCodes.RouteNotFound : ErrorCodes.NotFound,
+        StatusCodes.Status405MethodNotAllowed => ErrorCodes.MethodNotAllowed,
+        StatusCodes.Status415UnsupportedMediaType => ErrorCodes.UnsupportedMediaType,
+        _ => null
+    };
+
+    if (info is not null)
+        await ProblemDetailsWriter.WriteAsync(http, info);
+});
 
 // pipeline
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
