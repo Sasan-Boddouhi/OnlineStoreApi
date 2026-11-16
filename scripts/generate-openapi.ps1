@@ -34,7 +34,8 @@ dotnet swagger tofile --output $out $dll.FullName v1
 if ($LASTEXITCODE -ne 0) { throw 'swagger tofile failed' }
 
 # پایانهٔ خط یکسان تا diff بین ویندوز و لینوکس صفر شود.
-$text = ([IO.File]::ReadAllText($out)).Replace("`r`n", "`n").TrimEnd() + "`n"
+# Doc comments of CRLF source files end up as escaped \r\n inside JSON strings; Linux checkouts have LF.
+$text = ([IO.File]::ReadAllText($out)).Replace("`r`n", "`n").Replace('\r\n', '\n').TrimEnd() + "`n"
 [IO.File]::WriteAllText($out, $text, (New-Object Text.UTF8Encoding($false)))
 
 if ($Check) {

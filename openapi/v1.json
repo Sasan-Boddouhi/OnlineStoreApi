@@ -10,7 +10,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Batch 46: ارسال کد تأیید ۶ رقمی با پیامک (مرحلهٔ ۱ ثبت‌نام). پاسخ برای هر شمارهٔ معتبر یکسان است، حساب داشته باشد یا نه.\r\nسقف هر شماره → 429 RATE_LIMIT_EXCEEDED با Retry-After؛ سقف هر IP → 429 RATE_LIMIT_EXCEEDED؛ بودجهٔ روزانه یا خطای\r\nارائه‌دهنده → 503 OTP_SEND_UNAVAILABLE با Retry-After؛ شمارهٔ غیرموبایل ایران → 422 VALIDATION_ERROR.",
+        "summary": "Batch 46: ارسال کد تأیید ۶ رقمی با پیامک (مرحلهٔ ۱ ثبت‌نام). پاسخ برای هر شمارهٔ معتبر یکسان است، حساب داشته باشد یا نه.\nسقف هر شماره → 429 RATE_LIMIT_EXCEEDED با Retry-After؛ سقف هر IP → 429 RATE_LIMIT_EXCEEDED؛ بودجهٔ روزانه یا خطای\nارائه‌دهنده → 503 OTP_SEND_UNAVAILABLE با Retry-After؛ شمارهٔ غیرموبایل ایران → 422 VALIDATION_ERROR.",
         "operationId": "Auth_SendOtp",
         "parameters": [
           {
@@ -201,7 +201,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Batch 46: تأیید کد (مرحلهٔ ۲). موفق → `verificationToken` یک‌بار مصرف برای `auth/register`.\r\nکد نادرست → 422 OTP_INVALID؛ منقضی → 422 OTP_EXPIRED؛ پس از ۵ تلاش نادرست کد مرده است → 429 OTP_TOO_MANY_ATTEMPTS.",
+        "summary": "Batch 46: تأیید کد (مرحلهٔ ۲). موفق → `verificationToken` یک‌بار مصرف برای `auth/register`.\nکد نادرست → 422 OTP_INVALID؛ منقضی → 422 OTP_EXPIRED؛ پس از ۵ تلاش نادرست کد مرده است → 429 OTP_TOO_MANY_ATTEMPTS.",
         "operationId": "Auth_VerifyOtp",
         "parameters": [
           {
@@ -372,7 +372,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "ثبت‌نام کاربر جدید (مرحلهٔ ۳). Batch 46 (N9): فقط با `phoneVerificationToken` از `auth/otp/verify` برای همین شماره؛\r\nبدون آن 422 PHONE_NOT_VERIFIED. شمارهٔ تکراری (فقط پس از تأیید کد) 409 USER_PHONE_EXISTS.",
+        "summary": "ثبت‌نام کاربر جدید (مرحلهٔ ۳). Batch 46 (N9): فقط با `phoneVerificationToken` از `auth/otp/verify` برای همین شماره؛\nبدون آن 422 PHONE_NOT_VERIFIED. شمارهٔ تکراری (فقط پس از تأیید کد) 409 USER_PHONE_EXISTS.",
         "operationId": "Auth_Register",
         "parameters": [
           {
@@ -2968,7 +2968,7 @@
         "tags": [
           "Carts"
         ],
-        "summary": "ادغام سبد مهمان در سبد کاربر پس از ورود.\r\nشناسهٔ نشست از هدر خوانده می‌شود، نه از بدنه — تا کاربر نتواند\r\nسبد مهمانِ دیگری را به حساب خودش منتقل کند.",
+        "summary": "ادغام سبد مهمان در سبد کاربر پس از ورود.\nشناسهٔ نشست از هدر خوانده می‌شود، نه از بدنه — تا کاربر نتواند\nسبد مهمانِ دیگری را به حساب خودش منتقل کند.",
         "operationId": "Carts_Merge",
         "parameters": [
           {
@@ -11610,7 +11610,7 @@
         "tags": [
           "Listings"
         ],
-        "summary": "Phase 10 (R49) — ثبت موجودی روی یک پیشنهاد فروش.\r\n            \r\nچرا policy «CanManageCatalog» اینجا کافی نیست: آن policy فقط می‌گوید\r\n«اجازهٔ نوشتن کاتالوگ دارد»، نه «این Listing مال اوست». یک فروشنده\r\nباید فقط روی Listing خودش موجودی بگذارد، و این تنها با بررسی مالکیت\r\nدر سرویس قابل تضمین است. برای همین اینجا [Authorize] ساده است و\r\nکنترل واقعی در InventoryService.AddStockAsync انجام می‌شود.",
+        "summary": "Phase 10 (R49) — ثبت موجودی روی یک پیشنهاد فروش.\n            \nچرا policy «CanManageCatalog» اینجا کافی نیست: آن policy فقط می‌گوید\n«اجازهٔ نوشتن کاتالوگ دارد»، نه «این Listing مال اوست». یک فروشنده\nباید فقط روی Listing خودش موجودی بگذارد، و این تنها با بررسی مالکیت\nدر سرویس قابل تضمین است. برای همین اینجا [Authorize] ساده است و\nکنترل واقعی در InventoryService.AddStockAsync انجام می‌شود.",
         "operationId": "Listings_AddStock",
         "parameters": [
           {
@@ -12399,7 +12399,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Phase 3: تحویل سفارش و ایجاد تسویهٔ فروشندگان.\r\nعملیات مدیریتی است، پس Policy ادمین لازم دارد.",
+        "summary": "Phase 3: تحویل سفارش و ایجاد تسویهٔ فروشندگان.\nعملیات مدیریتی است، پس Policy ادمین لازم دارد.",
         "operationId": "Orders_Deliver",
         "parameters": [
           {
@@ -12593,7 +12593,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "لغو سفارش. مشتری فقط سفارش خودش را لغو می‌کند؛ ادمین هر سفارشی را.\r\nسفارش ارسال‌شده، تحویل‌شده یا مرجوعی لغو نمی‌شود (409).",
+        "summary": "لغو سفارش. مشتری فقط سفارش خودش را لغو می‌کند؛ ادمین هر سفارشی را.\nسفارش ارسال‌شده، تحویل‌شده یا مرجوعی لغو نمی‌شود (409).",
         "operationId": "Orders_Cancel",
         "parameters": [
           {
@@ -12974,7 +12974,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "شروع پرداخت برای یک سفارش.\r\n            \r\nIdempotencyKey از هدر `Idempotency-Key` یا بدنه خوانده می‌شود.\r\nاگر کلاینت به‌خاطر قطعی شبکه دوباره درخواست بدهد، همان پرداخت قبلی برمی‌گردد\r\nو پول دوباره از حساب کاربر کم نمی‌شود.\r\nBatch 5: درخواست تکراری برای سفارشی که پرداخت باز دارد همان پرداخت را برمی‌گرداند (isReplay=true)؛\r\n409 ORDER_ALREADY_PAID / ORDER_NOT_PAYABLE / PAYMENT_VERIFICATION_PENDING.",
+        "summary": "شروع پرداخت برای یک سفارش.\n            \nIdempotencyKey از هدر `Idempotency-Key` یا بدنه خوانده می‌شود.\nاگر کلاینت به‌خاطر قطعی شبکه دوباره درخواست بدهد، همان پرداخت قبلی برمی‌گردد\nو پول دوباره از حساب کاربر کم نمی‌شود.\nBatch 5: درخواست تکراری برای سفارشی که پرداخت باز دارد همان پرداخت را برمی‌گرداند (isReplay=true)؛\n409 ORDER_ALREADY_PAID / ORDER_NOT_PAYABLE / PAYMENT_VERIFICATION_PENDING.",
         "operationId": "Payments_Initiate",
         "parameters": [
           {
@@ -13189,7 +13189,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "تأیید پرداخت پس از بازگشت کاربر از درگاه. Batch 5: سفارش لغوشده یا پرداخت‌شده → 409 ORDER_NOT_PAYABLE /\r\nORDER_ALREADY_PAID و درگاه صدا زده نمی‌شود؛ نتیجهٔ نامعلوم درگاه → 503 PAYMENT_VERIFY_RETRY با هدر Retry-After\r\n(پرداخت Pending می‌ماند و تکرار همین درخواست آن را قطعی می‌کند).\r\nBatch 43: هر تأیید یک تماس با درگاه است؛ سقف نرخ برای هر کاربر (RateLimiting:PaymentVerify، پیش‌فرض ۱۰ در\r\nدقیقه) ⇒ 429 RATE_LIMIT_EXCEEDED با هدر Retry-After.",
+        "summary": "تأیید پرداخت پس از بازگشت کاربر از درگاه. Batch 5: سفارش لغوشده یا پرداخت‌شده → 409 ORDER_NOT_PAYABLE /\nORDER_ALREADY_PAID و درگاه صدا زده نمی‌شود؛ نتیجهٔ نامعلوم درگاه → 503 PAYMENT_VERIFY_RETRY با هدر Retry-After\n(پرداخت Pending می‌ماند و تکرار همین درخواست آن را قطعی می‌کند).\nBatch 43: هر تأیید یک تماس با درگاه است؛ سقف نرخ برای هر کاربر (RateLimiting:PaymentVerify، پیش‌فرض ۱۰ در\nدقیقه) ⇒ 429 RATE_LIMIT_EXCEEDED با هدر Retry-After.",
         "operationId": "Payments_Verify",
         "parameters": [
           {
@@ -13384,7 +13384,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Batch 43 (FIN-05) — تطبیق دستی یک پرداخت با درگاه توسط ادمین («پرداخت کردم ولی سفارشم ثبت نشد»).\r\n            \r\nاز درگاه استعلام می‌کند و همان قواعد جاب پرداخت‌های رهاشده را برای همین یک Authority اجرا می‌کند:\r\n  • پرداخت‌شدهٔ تأییدنشده و سفارش هنوز قابل پرداخت ⇒ برداشت از مسیر Verify (`outcome = Captured`)؛\r\n  • قبلاً نزد درگاه تأییدشده ⇒ Succeeded ثبت می‌شود؛ اگر سفارش دیگر قابل پرداخت نیست، با برگشت وجه لازم به\r\n    صف بررسی می‌رود (`CapturedNeedsReview`)؛\r\n  • پرداخت‌شدهٔ تأییدنشده برای سفارش ناپرداختنی ⇒ بدون برداشت لغو می‌شود و درگاه پول را برمی‌گرداند (`Cancelled`)؛\r\n  • پرداخت‌نشده یا پاسخ نامعلوم درگاه ⇒ دست نمی‌خورد (`LeftPending`)؛ پرداخت بسته ⇒ `NoChange`.\r\nپاسخ همیشه 200 با شرح نتیجه است و هر فراخوانی در AuditLog (`Payment.VerifyByAuthority`) ثبت می‌شود.\r\n404 PAYMENT_NOT_FOUND برای Authority ناموجود؛ 422 بدون Authority.",
+        "summary": "Batch 43 (FIN-05) — تطبیق دستی یک پرداخت با درگاه توسط ادمین («پرداخت کردم ولی سفارشم ثبت نشد»).\n            \nاز درگاه استعلام می‌کند و همان قواعد جاب پرداخت‌های رهاشده را برای همین یک Authority اجرا می‌کند:\n  • پرداخت‌شدهٔ تأییدنشده و سفارش هنوز قابل پرداخت ⇒ برداشت از مسیر Verify (`outcome = Captured`)؛\n  • قبلاً نزد درگاه تأییدشده ⇒ Succeeded ثبت می‌شود؛ اگر سفارش دیگر قابل پرداخت نیست، با برگشت وجه لازم به\n    صف بررسی می‌رود (`CapturedNeedsReview`)؛\n  • پرداخت‌شدهٔ تأییدنشده برای سفارش ناپرداختنی ⇒ بدون برداشت لغو می‌شود و درگاه پول را برمی‌گرداند (`Cancelled`)؛\n  • پرداخت‌نشده یا پاسخ نامعلوم درگاه ⇒ دست نمی‌خورد (`LeftPending`)؛ پرداخت بسته ⇒ `NoChange`.\nپاسخ همیشه 200 با شرح نتیجه است و هر فراخوانی در AuditLog (`Payment.VerifyByAuthority`) ثبت می‌شود.\n404 PAYMENT_NOT_FOUND برای Authority ناموجود؛ 422 بدون Authority.",
         "operationId": "Payments_VerifyByAuthority",
         "parameters": [
           {
@@ -13595,7 +13595,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Webhook درگاه.\r\n            \r\nاین endpoint [AllowAnonymous] است چون درگاه JWT نمی‌فرستد.\r\nاحراز هویت آن **فقط** امضای دیجیتال هدر `X-Payment-Signature` است،\r\nو امضا قبل از هر تفسیری از بدنه بررسی می‌شود.",
+        "summary": "Webhook درگاه.\n            \nاین endpoint [AllowAnonymous] است چون درگاه JWT نمی‌فرستد.\nاحراز هویت آن **فقط** امضای دیجیتال هدر `X-Payment-Signature` است،\nو امضا قبل از هر تفسیری از بدنه بررسی می‌شود.",
         "operationId": "Payments_Webhook",
         "parameters": [
           {
@@ -13904,7 +13904,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Phase 9 (R43) / Batch 42 — <b>درخواست</b> برگشت وجه توسط ادمین (دلیل الزامی).\r\n            \r\n<b>این endpoint پول را برنمی‌گرداند.</b> سفارش برگردانده می‌شود (بسته‌ها، موجودی، کوپن، تسویه‌ها) و پرداخت\r\nبه `RefundPending` می‌رود و در صف برگشت وجه (`GET payments/refunds`) می‌ماند. پس از واریز در پنل\r\nبانکی، `POST payments/{id}/refund/confirm` با شمارهٔ پیگیری آن را `Refunded` می‌کند.\r\n409 PAYMENT_NOT_REFUNDABLE برای پرداختی که موفق نیست (از جمله درخواست‌شده).",
+        "summary": "Phase 9 (R43) / Batch 42 — <b>درخواست</b> برگشت وجه توسط ادمین (دلیل الزامی).\n            \n<b>این endpoint پول را برنمی‌گرداند.</b> سفارش برگردانده می‌شود (بسته‌ها، موجودی، کوپن، تسویه‌ها) و پرداخت\nبه `RefundPending` می‌رود و در صف برگشت وجه (`GET payments/refunds`) می‌ماند. پس از واریز در پنل\nبانکی، `POST payments/{id}/refund/confirm` با شمارهٔ پیگیری آن را `Refunded` می‌کند.\n409 PAYMENT_NOT_REFUNDABLE برای پرداختی که موفق نیست (از جمله درخواست‌شده).",
         "operationId": "Payments_Refund",
         "parameters": [
           {
@@ -14126,7 +14126,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Batch 42 (FIN-12) — تأیید برگشت واقعی پول (پس از واریز در بانک): RefundPending ⇒ Refunded با شمارهٔ پیگیری\r\nبانکی و تاریخ اختیاری. 409 PAYMENT_NOT_REFUND_PENDING برای وضعیت دیگر؛ 422 بدون شمارهٔ پیگیری.",
+        "summary": "Batch 42 (FIN-12) — تأیید برگشت واقعی پول (پس از واریز در بانک): RefundPending ⇒ Refunded با شمارهٔ پیگیری\nبانکی و تاریخ اختیاری. 409 PAYMENT_NOT_REFUND_PENDING برای وضعیت دیگر؛ 422 بدون شمارهٔ پیگیری.",
         "operationId": "Payments_ConfirmRefund",
         "parameters": [
           {
@@ -14348,7 +14348,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Batch 42 (FIN-12) — صف برگشت وجه: پرداخت‌های RefundPending، قدیمی‌ترین درخواست اول.\r\nبا `includeRefunded=true` برگشت‌های تأییدشده هم (پس از آن‌ها، تازه‌ترین اول) می‌آیند.",
+        "summary": "Batch 42 (FIN-12) — صف برگشت وجه: پرداخت‌های RefundPending، قدیمی‌ترین درخواست اول.\nبا `includeRefunded=true` برگشت‌های تأییدشده هم (پس از آن‌ها، تازه‌ترین اول) می‌آیند.",
         "operationId": "Payments_GetRefundQueue",
         "parameters": [
           {
@@ -14551,7 +14551,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Batch 42 (FIN-12, CEO-02) — پرداخت‌هایی که بررسی دستی می‌خواهند (برداشت پول برای سفارش ناپرداختنی، تأییدِ\r\nبی‌نتیجه، ناسازگاری پس از برداشت)، قدیمی‌ترین اول. با `includeResolved=true` بسته‌شده‌ها هم می‌آیند.",
+        "summary": "Batch 42 (FIN-12, CEO-02) — پرداخت‌هایی که بررسی دستی می‌خواهند (برداشت پول برای سفارش ناپرداختنی، تأییدِ\nبی‌نتیجه، ناسازگاری پس از برداشت)، قدیمی‌ترین اول. با `includeResolved=true` بسته‌شده‌ها هم می‌آیند.",
         "operationId": "Payments_GetReviewQueue",
         "parameters": [
           {
@@ -14754,7 +14754,7 @@
         "tags": [
           "Payments"
         ],
-        "summary": "Batch 42 (FIN-12) — بستن بررسی دستی یک پرداخت با شرح آنچه انجام شد.\r\n409 PAYMENT_REVIEW_NOT_OPEN اگر بررسیِ بازی ندارد؛ 422 بدون شرح.",
+        "summary": "Batch 42 (FIN-12) — بستن بررسی دستی یک پرداخت با شرح آنچه انجام شد.\n409 PAYMENT_REVIEW_NOT_OPEN اگر بررسیِ بازی ندارد؛ 422 بدون شرح.",
         "operationId": "Payments_ResolveReview",
         "parameters": [
           {
@@ -15756,7 +15756,7 @@
           "Products"
         ],
         "summary": "جستجو و دریافت فهرست محصولات با فیلتر، مرتب‌سازی و صفحه‌بندی.",
-        "description": "F-04/F-23: کش خروجی ندارد؛ query آزاد است و هر ترکیب تصادفی یک ورودی جدید می‌ساخت.\r\nکش داده در ProductService با کلید هش‌شده و نسخه‌دار انجام می‌شود.\r\n            \r\nBatch 6 (F-15): محصولات غیرفعال (حذف‌شده) به‌طور پیش‌فرض برنمی‌گردند.\r\n`includeInactive=true` فقط برای دارندهٔ مجوز catalog.products.write اثر دارد\r\nو برای بقیه بی‌صدا نادیده گرفته می‌شود.\r\n            \r\nBatch 60 (F-24، API-10): پارامترهای نوع‌دار `q`، `categoryId`، `subcategoryId`، `brandId`،\r\n`inStock` و `sort=newest|rating|name`. همهٔ شرط‌ها (نوع‌دار، `filter`، فقط‌فعال) با AND ترکیب می‌شوند.\r\n`filter` با توکن اضافه یا ناقص کامل رد می‌شود (400 INVALID_QUERY) و هرگز نیمه‌کاره اعمال نمی‌شود.\r\nمقدار نامعتبر پارامتر نوع‌دار یا `sort` ناشناخته ← 422 VALIDATION_ERROR. دستور زبان: `docs/api-query-syntax.md`.",
+        "description": "F-04/F-23: کش خروجی ندارد؛ query آزاد است و هر ترکیب تصادفی یک ورودی جدید می‌ساخت.\nکش داده در ProductService با کلید هش‌شده و نسخه‌دار انجام می‌شود.\n            \nBatch 6 (F-15): محصولات غیرفعال (حذف‌شده) به‌طور پیش‌فرض برنمی‌گردند.\n`includeInactive=true` فقط برای دارندهٔ مجوز catalog.products.write اثر دارد\nو برای بقیه بی‌صدا نادیده گرفته می‌شود.\n            \nBatch 60 (F-24، API-10): پارامترهای نوع‌دار `q`، `categoryId`، `subcategoryId`، `brandId`،\n`inStock` و `sort=newest|rating|name`. همهٔ شرط‌ها (نوع‌دار، `filter`، فقط‌فعال) با AND ترکیب می‌شوند.\n`filter` با توکن اضافه یا ناقص کامل رد می‌شود (400 INVALID_QUERY) و هرگز نیمه‌کاره اعمال نمی‌شود.\nمقدار نامعتبر پارامتر نوع‌دار یا `sort` ناشناخته ← 422 VALIDATION_ERROR. دستور زبان: `docs/api-query-syntax.md`.",
         "operationId": "Products_GetProducts",
         "parameters": [
           {
@@ -15797,7 +15797,7 @@
           {
             "name": "InStock",
             "in": "query",
-            "description": "`true`: فقط محصولاتی که دست‌کم یک پیشنهاد فروش قابل خرید دارند (واریانت فعال، پیشنهاد فعال،\r\n            فروشندهٔ تأییدشده و فعال، موجودی فعال بیشتر از صفر). `false`: فقط محصولاتی که هیچ‌کدام ندارند.",
+            "description": "`true`: فقط محصولاتی که دست‌کم یک پیشنهاد فروش قابل خرید دارند (واریانت فعال، پیشنهاد فعال،\n            فروشندهٔ تأییدشده و فعال، موجودی فعال بیشتر از صفر). `false`: فقط محصولاتی که هیچ‌کدام ندارند.",
             "schema": {
               "type": "boolean"
             }
@@ -15813,7 +15813,7 @@
           {
             "name": "Sort",
             "in": "query",
-            "description": "یکی از `newest`، `rating`، `name`؛ یا برای سازگاری، فهرست فیلدهای مجاز با ویرگول\r\nو `-` برای نزولی (مثل `-name`). مقدار ناشناخته ← 422.",
+            "description": "یکی از `newest`، `rating`، `name`؛ یا برای سازگاری، فهرست فیلدهای مجاز با ویرگول\nو `-` برای نزولی (مثل `-name`). مقدار ناشناخته ← 422.",
             "schema": {
               "type": "string"
             }
@@ -16900,7 +16900,7 @@
         "tags": [
           "Products"
         ],
-        "summary": "ساخت واریانت جدید. برای هر محصول باید حداقل یک واریانت وجود داشته باشد،\r\nچون فروشنده فقط می‌تواند روی واریانت پیشنهاد فروش بسازد.",
+        "summary": "ساخت واریانت جدید. برای هر محصول باید حداقل یک واریانت وجود داشته باشد،\nچون فروشنده فقط می‌تواند روی واریانت پیشنهاد فروش بسازد.",
         "operationId": "Products_CreateVariant",
         "parameters": [
           {
@@ -24483,7 +24483,7 @@
         "tags": [
           "SellerPayouts"
         ],
-        "summary": "ثبت پرداخت و تسویه حساب توسط ادمین. Batch 44: پیش از availableAtUtc → 409 PAYOUT_ON_HOLD؛ بدهی‌های باز فروشنده\r\nکسر و netAmount ثبت می‌شود؛ expectedNetAmount (اختیاری) اگر با خالص واقعی نخواند → 409 PAYOUT_NET_CHANGED.",
+        "summary": "ثبت پرداخت و تسویه حساب توسط ادمین. Batch 44: پیش از availableAtUtc → 409 PAYOUT_ON_HOLD؛ بدهی‌های باز فروشنده\nکسر و netAmount ثبت می‌شود؛ expectedNetAmount (اختیاری) اگر با خالص واقعی نخواند → 409 PAYOUT_NET_CHANGED.",
         "operationId": "SellerPayouts_Pay",
         "parameters": [
           {
@@ -24708,7 +24708,7 @@
         "tags": [
           "SellerPayouts"
         ],
-        "summary": "ثبت پرداخت و تسویه حساب توسط ادمین. Batch 44: پیش از availableAtUtc → 409 PAYOUT_ON_HOLD؛ بدهی‌های باز فروشنده\r\nکسر و netAmount ثبت می‌شود؛ expectedNetAmount (اختیاری) اگر با خالص واقعی نخواند → 409 PAYOUT_NET_CHANGED.",
+        "summary": "ثبت پرداخت و تسویه حساب توسط ادمین. Batch 44: پیش از availableAtUtc → 409 PAYOUT_ON_HOLD؛ بدهی‌های باز فروشنده\nکسر و netAmount ثبت می‌شود؛ expectedNetAmount (اختیاری) اگر با خالص واقعی نخواند → 409 PAYOUT_NET_CHANGED.",
         "operationId": "SellerPayouts_Pay_Alias",
         "parameters": [
           {
@@ -25720,7 +25720,7 @@
         "tags": [
           "Sellers"
         ],
-        "summary": "Phase 8 (R36): پروفایل فروشگاهِ کاربر لاگین‌شده.\r\n            \r\nچرا لازم است: بدون این endpoint فروشنده باید sellerId خودش را از جای دیگری\r\nمی‌دانست؛ و هر جای دیگری که اشتباه پر شود، یعنی دیدن داشبورد فروشندهٔ دیگر.\r\n404 برای کاربری که فروشگاه ندارد عمدی است — نه 403، تا وجود/عدم وجود فروشگاه لو نرود.",
+        "summary": "Phase 8 (R36): پروفایل فروشگاهِ کاربر لاگین‌شده.\n            \nچرا لازم است: بدون این endpoint فروشنده باید sellerId خودش را از جای دیگری\nمی‌دانست؛ و هر جای دیگری که اشتباه پر شود، یعنی دیدن داشبورد فروشندهٔ دیگر.\n404 برای کاربری که فروشگاه ندارد عمدی است — نه 403، تا وجود/عدم وجود فروشگاه لو نرود.",
         "operationId": "Sellers_GetMe",
         "parameters": [
           {
@@ -29462,7 +29462,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "تغییر وضعیت فعال بودن کاربر توسط ادمین. غیرفعال‌سازی همهٔ نشست‌های کاربر را باطل می‌کند (Batch 11).\r\n409 CANNOT_DEACTIVATE_SELF / LAST_SUPERADMIN؛ 403 ADMIN_CANNOT_MODIFY_SUPERADMIN.",
+        "summary": "تغییر وضعیت فعال بودن کاربر توسط ادمین. غیرفعال‌سازی همهٔ نشست‌های کاربر را باطل می‌کند (Batch 11).\n409 CANNOT_DEACTIVATE_SELF / LAST_SUPERADMIN؛ 403 ADMIN_CANNOT_MODIFY_SUPERADMIN.",
         "operationId": "Users_PatchUserStatus",
         "parameters": [
           {
@@ -29668,7 +29668,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "«حذف» کاربر توسط ادمین: از Batch 11 حذف نرم است (غیرفعال‌سازی + باطل کردن همهٔ نشست‌ها)؛\r\nسفارش‌ها و سوابق کاربر می‌مانند. همان گاردهای غیرفعال‌سازی اعمال می‌شود.",
+        "summary": "«حذف» کاربر توسط ادمین: از Batch 11 حذف نرم است (غیرفعال‌سازی + باطل کردن همهٔ نشست‌ها)؛\nسفارش‌ها و سوابق کاربر می‌مانند. همان گاردهای غیرفعال‌سازی اعمال می‌شود.",
         "operationId": "Users_DeleteUser",
         "parameters": [
           {
@@ -30226,7 +30226,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "تخصیص نقش به کاربر توسط ادمین. نقش‌های مدیر ارشد را فقط مدیر ارشد تغییر می‌دهد (403) و\r\nآخرین مدیر ارشد فعال تنزل نمی‌یابد (409 LAST_SUPERADMIN).",
+        "summary": "تخصیص نقش به کاربر توسط ادمین. نقش‌های مدیر ارشد را فقط مدیر ارشد تغییر می‌دهد (403) و\nآخرین مدیر ارشد فعال تنزل نمی‌یابد (409 LAST_SUPERADMIN).",
         "operationId": "Users_AssignRoles",
         "parameters": [
           {
@@ -32402,7 +32402,7 @@
           },
           "warehouseId": {
             "type": "integer",
-            "description": "انبار مقصد. اگر خالی بماند، انبار پیش‌فرض پلتفرم استفاده می‌شود.\r\nاجباری نکردنش عمدی است: فروشندهٔ تازه هیچ انباری ندارد و\r\nوادار کردنش به ساختن انبار، دقیقاً همان بن‌بست R49 را بازمی‌سازد.\r\nBatch 49: انبار صریح باید مال فروشندهٔ همین Listing یا انبار پلتفرم باشد (وگرنه 403\r\nWAREHOUSE_FORBIDDEN)؛ اگر خالی بماند و انبار پلتفرمی تعریف نشده باشد، 409\r\nPLATFORM_WAREHOUSE_NOT_CONFIGURED.",
+            "description": "انبار مقصد. اگر خالی بماند، انبار پیش‌فرض پلتفرم استفاده می‌شود.\nاجباری نکردنش عمدی است: فروشندهٔ تازه هیچ انباری ندارد و\nوادار کردنش به ساختن انبار، دقیقاً همان بن‌بست R49 را بازمی‌سازد.\nBatch 49: انبار صریح باید مال فروشندهٔ همین Listing یا انبار پلتفرم باشد (وگرنه 403\nWAREHOUSE_FORBIDDEN)؛ اگر خالی بماند و انبار پلتفرمی تعریف نشده باشد، 409\nPLATFORM_WAREHOUSE_NOT_CONFIGURED.",
             "format": "int32",
             "nullable": true
           }
@@ -32619,7 +32619,7 @@
           },
           "variantName": {
             "type": "string",
-            "description": "Phase 7: نام واریانت انتخاب‌شده. بدون آن، دو تنوع از یک محصول\r\nدر سبد دقیقاً یکسان به‌نظر می‌رسند.",
+            "description": "Phase 7: نام واریانت انتخاب‌شده. بدون آن، دو تنوع از یک محصول\nدر سبد دقیقاً یکسان به‌نظر می‌رسند.",
             "nullable": true
           },
           "unitPrice": {
@@ -32701,7 +32701,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "اطلاعات لازم برای تبدیل سبد به سفارش.\r\nآدرس حمل فقط اینجا اجباری می‌شود، نه هنگام افزودن به سبد."
+        "description": "اطلاعات لازم برای تبدیل سبد به سفارش.\nآدرس حمل فقط اینجا اجباری می‌شود، نه هنگام افزودن به سبد."
       },
       "CityDto": {
         "required": [
@@ -33775,7 +33775,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "Phase 10 (R49) — پاسخ افزودن موجودی.\r\n«قابل فروش» را هم برمی‌گردانیم چون فروشنده بعد از ثبت موجودی\r\nدقیقاً همین عدد را می‌خواهد بداند، نه شناسه‌های داخلی."
+        "description": "Phase 10 (R49) — پاسخ افزودن موجودی.\n«قابل فروش» را هم برمی‌گردانیم چون فروشنده بعد از ثبت موجودی\nدقیقاً همین عدد را می‌خواهد بداند، نه شناسه‌های داخلی."
       },
       "InvoiceDto": {
         "required": [
@@ -33861,7 +33861,7 @@
           },
           "expectedNetAmount": {
             "type": "number",
-            "description": "Batch 44 (اختیاری): مبلغ خالصی که ادمین واقعاً واریز کرده است (همان `netAmount` فهرست). اگر با مبلغ خالص\r\nمحاسبه‌شده هنگام ثبت برابر نباشد، پاسخ 409 PAYOUT_NET_CHANGED است و پرداخت ثبت نمی‌شود.",
+            "description": "Batch 44 (اختیاری): مبلغ خالصی که ادمین واقعاً واریز کرده است (همان `netAmount` فهرست). اگر با مبلغ خالص\nمحاسبه‌شده هنگام ثبت برابر نباشد، پاسخ 409 PAYOUT_NET_CHANGED است و پرداخت ثبت نمی‌شود.",
             "format": "double",
             "nullable": true
           }
@@ -34289,7 +34289,7 @@
           },
           "cardPanMasked": {
             "type": "string",
-            "description": "شمارهٔ کارت ماسک‌شدهٔ پرداخت‌کننده (مثلاً 502229******5995). برای ادمین و برای مشتری روی پرداختِ سفارش\r\nخودش (پاسخ verify و GET payments/order/{orderId}) پر می‌شود؛ در غیر این صورت null.",
+            "description": "شمارهٔ کارت ماسک‌شدهٔ پرداخت‌کننده (مثلاً 502229******5995). برای ادمین و برای مشتری روی پرداختِ سفارش\nخودش (پاسخ verify و GET payments/order/{orderId}) پر می‌شود؛ در غیر این صورت null.",
             "nullable": true
           }
         },
@@ -34371,7 +34371,7 @@
           },
           "gatewayStatus": {
             "type": "string",
-            "description": "پاسخ درگاه به استعلام: `NotPaid`، `PaidNotVerified`، `Verified`، `Unknown`، یا\r\n`NotAsked` وقتی استعلام لازم نبود."
+            "description": "پاسخ درگاه به استعلام: `NotPaid`، `PaidNotVerified`، `Verified`، `Unknown`، یا\n`NotAsked` وقتی استعلام لازم نبود."
           },
           "gatewayRawStatus": {
             "type": "string",
@@ -34380,7 +34380,7 @@
           },
           "gatewayErrorCode": {
             "type": "string",
-            "description": "کد خطای استعلام وقتی BusinessLogic.DTOs.Payment.PaymentReconciliationDto.GatewayStatus برابر `Unknown` است (مثلاً `INQUIRY_DISABLED` وقتی\r\nاستعلام با تنظیمات خاموش است، یا `GATEWAY_UNAVAILABLE`)؛ در غیر این صورت null.",
+            "description": "کد خطای استعلام وقتی BusinessLogic.DTOs.Payment.PaymentReconciliationDto.GatewayStatus برابر `Unknown` است (مثلاً `INQUIRY_DISABLED` وقتی\nاستعلام با تنظیمات خاموش است، یا `GATEWAY_UNAVAILABLE`)؛ در غیر این صورت null.",
             "nullable": true
           },
           "outcome": {
@@ -34482,7 +34482,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "Batch 42 (FIN-12, CEO-02) — یک ردیف صف بررسی دستی پرداخت‌ها (فقط ادمین).\r\nجدا از BusinessLogic.DTOs.Payment.PaymentDto است، چون PaymentDto به مشتری هم برگردانده می‌شود و شرح بررسی داخلی است."
+        "description": "Batch 42 (FIN-12, CEO-02) — یک ردیف صف بررسی دستی پرداخت‌ها (فقط ادمین).\nجدا از BusinessLogic.DTOs.Payment.PaymentDto است، چون PaymentDto به مشتری هم برگردانده می‌شود و شرح بررسی داخلی است."
       },
       "PaymentReviewDtoPagedResult": {
         "required": [
@@ -35120,7 +35120,7 @@
           },
           "phoneVerificationToken": {
             "type": "string",
-            "description": "Batch 46 (N9): توکنی که `auth/otp/verify` برای همین شماره و هدف ثبت‌نام داده است. بدون آن (یا با توکن\r\nنادرست، منقضی یا مصرف‌شده) ثبت‌نام 422 `PHONE_NOT_VERIFIED` می‌گیرد.",
+            "description": "Batch 46 (N9): توکنی که `auth/otp/verify` برای همین شماره و هدف ثبت‌نام داده است. بدون آن (یا با توکن\nنادرست، منقضی یا مصرف‌شده) ثبت‌نام 422 `PHONE_NOT_VERIFIED` می‌گیرد.",
             "nullable": true
           },
           "deviceId": {
@@ -35404,7 +35404,7 @@
           },
           "debtOffsetAmount": {
             "type": "number",
-            "description": "Batch 44 (F-09): بخشی از مبلغ که بابت بدهی‌های فروشنده کسر می‌شود. برای Paid مقدار ثبت‌شده است؛ برای Pending\r\nپیش‌نمایش با بدهی‌های بازِ فعلی (به ترتیب AvailableAtUtc تسویه‌های Pending همان فروشنده تقسیم می‌شود).",
+            "description": "Batch 44 (F-09): بخشی از مبلغ که بابت بدهی‌های فروشنده کسر می‌شود. برای Paid مقدار ثبت‌شده است؛ برای Pending\nپیش‌نمایش با بدهی‌های بازِ فعلی (به ترتیب AvailableAtUtc تسویه‌های Pending همان فروشنده تقسیم می‌شود).",
             "format": "double"
           },
           "netAmount": {
@@ -36214,7 +36214,7 @@
           },
           "clearBrand": {
             "type": "boolean",
-            "description": "Batch 49b: true برند محصول را پاک می‌کند (BrandId = null). همراه با BusinessLogic.DTOs.Product.UpdateProductDto.BrandId مجاز نیست (422).\r\nچون null در BusinessLogic.DTOs.Product.UpdateProductDto.BrandId «بدون تغییر» است، پاک کردن فقط با این پرچم صریح ممکن است."
+            "description": "Batch 49b: true برند محصول را پاک می‌کند (BrandId = null). همراه با BusinessLogic.DTOs.Product.UpdateProductDto.BrandId مجاز نیست (422).\nچون null در BusinessLogic.DTOs.Product.UpdateProductDto.BrandId «بدون تغییر» است، پاک کردن فقط با این پرچم صریح ممکن است."
           }
         },
         "additionalProperties": false
@@ -36380,7 +36380,7 @@
             "maximum": 100,
             "minimum": 0,
             "type": "number",
-            "description": "Phase 3: نرخ کمیسیون اختصاصی (درصد). null یعنی «تغییر نده» و در نتیجه\r\nنرخ پیش‌فرض پلتفرم اعمال می‌شود.",
+            "description": "Phase 3: نرخ کمیسیون اختصاصی (درصد). null یعنی «تغییر نده» و در نتیجه\nنرخ پیش‌فرض پلتفرم اعمال می‌شود.",
             "format": "double",
             "nullable": true
           }
@@ -36427,7 +36427,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "M7.11 — مشخصات عمومی فروشگاه که توسط فروشنده مالک قابل ویرایش است.\r\nشامل هیچ فیلد مدیریتی مانند Status یا CommissionRate نمی‌باشد."
+        "description": "M7.11 — مشخصات عمومی فروشگاه که توسط فروشنده مالک قابل ویرایش است.\nشامل هیچ فیلد مدیریتی مانند Status یا CommissionRate نمی‌باشد."
       },
       "UpdateShippingMethodDto": {
         "required": [
