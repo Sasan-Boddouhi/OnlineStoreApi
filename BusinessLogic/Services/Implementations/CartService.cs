@@ -260,7 +260,8 @@ namespace BusinessLogic.Services.Implementations
                         VariantName = listing?.Variant?.Name ?? listing?.Variant?.Sku,
                         UnitPrice = unitPrice,
                         Quantity = i.Quantity,
-                        LineTotal = unitPrice * i.Quantity
+                        // Batch 45b: همان گرد کردن قلم سفارش، تا جمع سبد با مبلغ سفارش یکی باشد.
+                        LineTotal = RialMoney.LineTotal(i.Quantity, unitPrice)
                     };
                 })
                 .ToList();
@@ -606,7 +607,7 @@ namespace BusinessLogic.Services.Implementations
                 var itemsTotal = cart.Items.Sum(i =>
                 {
                     listings.TryGetValue(i.ListingId, out var l);
-                    return (l?.Price ?? i.UnitPrice) * i.Quantity;
+                    return RialMoney.LineTotal(i.Quantity, l?.Price ?? i.UnitPrice);
                 });
 
                 if (couponEntity.MinOrderAmount.HasValue && itemsTotal < couponEntity.MinOrderAmount.Value)

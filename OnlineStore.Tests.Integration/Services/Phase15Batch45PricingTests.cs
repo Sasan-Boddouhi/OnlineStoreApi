@@ -137,6 +137,35 @@ public class Phase15Batch45PricingTests : ControllerIntegrationTestBase
     }
 
     /// <summary>
+    /// Batch 45b: مقدار کسری مجاز است (کالای کیلویی/متری). ۱٫۵ × ۲۴٬۶۹۱ = ۳۷٬۰۳۶٫۵ پیش‌تر جمع گروه را کسری می‌کرد و
+    /// checkout با 409 AMOUNT_NOT_WHOLE_RIAL شکست می‌خورد. اکنون جمع هر قلم به ریال کامل گرد می‌شود (نیمه به دور از صفر، N6):
+    /// ۳۷٬۰۳۷؛ تخفیف ۷٪ = ۲٬۵۹۲٫۵۹ ⇒ ۲٬۵۹۳؛ با ارسال ۲۵٬۰۰۰ مشتری ۵۹٬۴۴۴ می‌پردازد.
+    /// </summary>
+    [Fact]
+    public async Task FractionalQuantity_LineTotalIsAWholeRial_OrderChecksOutAndCanBePaid()
+    {
+        var shipping = await AddShippingMethodAsync(25_000m);
+        var coupon = await AddCouponAsync(7m);
+
+        var seeded = await CreateOrderAsync(new[] { 24_691m }, coupon.Code, shipping.ShippingMethodId, quantity: 1.5m);
+
+        var item = await DbContext.OrderItem.AsNoTracking().SingleAsync(i => i.OrderId == seeded.OrderId);
+        item.TotalPrice.Should().Be(37_037m);
+
+        var order = await DbContext.Order.AsNoTracking().SingleAsync(o => o.OrderId == seeded.OrderId);
+        (order.DiscountAmount, order.ShippingCost, order.TotalAmount).Should().Be((2_593m, 25_000m, 59_444m));
+
+        var group = await DbContext.OrderSellerGroup.AsNoTracking().SingleAsync(g => g.OrderId == seeded.OrderId);
+        group.SubTotal.Should().Be(37_037m);
+        new[] { group.DiscountAmount, group.CommissionAmount, group.SellerPayable }
+            .Should().OnlyContain(v => v == decimal.Truncate(v));
+
+        SetCurrentUser(seeded.BuyerUserId, "Customer");
+        var initiation = await PaymentService.InitiateAsync(seeded.OrderId, null);
+        initiation.Amount.Should().Be(59_444m);
+    }
+
+    /// <summary>
     /// اصلاحیهٔ مالک ۲: باقی‌ماندهٔ بدهی یک ستون واقعی است (نه مقدار محاسبه‌شده یا حدس «تغییر بعد از ساخت»)،
     /// پس در SQL قابل فیلتر است و کسر بدهی از روی همان انجام می‌شود.
     /// </summary>
@@ -244,7 +273,7 @@ public class Phase15Batch45PricingTests : ControllerIntegrationTestBase
         }
     }
 
-    private async Task<SeededOrder> CreateOrderAsync(decimal[] prices, string? couponCode, int? shippingMethodId)
+    private async Task<SeededOrder> CreateOrderAsync(decimal[] prices, string? couponCode, int? shippingMethodId, decimal quantity = 1m)
     {
         var listings = new List<(Seller Seller, int ListingId)>();
         foreach (var price in prices)
@@ -256,7 +285,7 @@ public class Phase15Batch45PricingTests : ControllerIntegrationTestBase
         var (buyerUser, _) = await CreateUserAsync();
         SetCurrentUser(buyerUser.UserId, "Customer");
         foreach (var (_, listingId) in listings)
-            await CartService.AddItemAsync(buyerUser.UserId, null, new AddCartItemDto { ListingId = listingId, Quantity = 1 });
+            await CartService.AddItemAsync(buyerUser.UserId, null, new AddCartItemDto { ListingId = listingId, Quantity = quantity });
 
         var order = await CartService.CheckoutAsync(buyerUser.UserId, null, new CheckoutDto
         {

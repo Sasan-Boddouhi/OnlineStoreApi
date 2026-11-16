@@ -1,4 +1,5 @@
 using BusinessLogic.DTOs.Shipping;
+using BusinessLogic.Validators.Common;
 using FluentValidation;
 
 namespace BusinessLogic.Validators.Shipping;
@@ -18,11 +19,14 @@ public class CreateShippingMethodDtoValidator : AbstractValidator<CreateShipping
         RuleFor(x => x.CarrierName)
             .MaximumLength(100).WithMessage("نام حمل‌کننده نباید بیش از ۱۰۰ کاراکتر باشد.");
 
+        // Batch 45b (N6): هزینه‌ها ریال کامل‌اند.
         RuleFor(x => x.BaseCost)
-            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ پایه نمی‌تواند منفی باشد.");
+            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ پایه نمی‌تواند منفی باشد.")
+            .MustBeWholeRial();
 
         RuleFor(x => x.CostPerKg)
-            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ هر کیلوگرم نمی‌تواند منفی باشد.");
+            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ هر کیلوگرم نمی‌تواند منفی باشد.")
+            .MustBeWholeRial();
 
         RuleFor(x => x.EstimatedDays)
             .GreaterThanOrEqualTo(0).WithMessage("زمان تحویل نمی‌تواند منفی باشد.");
@@ -44,11 +48,14 @@ public class UpdateShippingMethodDtoValidator : AbstractValidator<UpdateShipping
         RuleFor(x => x.CarrierName)
             .MaximumLength(100).WithMessage("نام حمل‌کننده نباید بیش از ۱۰۰ کاراکتر باشد.");
 
+        // Batch 45b (N6): هزینه‌ها ریال کامل‌اند.
         RuleFor(x => x.BaseCost)
-            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ پایه نمی‌تواند منفی باشد.");
+            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ پایه نمی‌تواند منفی باشد.")
+            .MustBeWholeRial();
 
         RuleFor(x => x.CostPerKg)
-            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ هر کیلوگرم نمی‌تواند منفی باشد.");
+            .GreaterThanOrEqualTo(0).WithMessage("هزینهٔ هر کیلوگرم نمی‌تواند منفی باشد.")
+            .MustBeWholeRial();
 
         RuleFor(x => x.EstimatedDays)
             .GreaterThanOrEqualTo(0).WithMessage("زمان تحویل نمی‌تواند منفی باشد.");

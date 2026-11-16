@@ -34,6 +34,6 @@ namespace Application.Entities
 
         /// <summary>جمع اقلام سبد. قیمت واحد در CartItem قفل شده است.</summary>
         [NotMapped]
-        public decimal TotalAmount => Items.Sum(i => i.UnitPrice * i.Quantity);
+        public decimal TotalAmount => Items.Sum(i => i.LineTotal);
     }
 }

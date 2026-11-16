@@ -132,7 +132,7 @@ namespace Application.Entities
         /// </summary>
         public void ApplyDiscountsAndShipping(decimal discount, decimal shippingCost, int? couponId, int? shippingMethodId)
         {
-            var itemsTotal = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
+            var itemsTotal = ItemsTotal();
             if (discount < 0 || shippingCost < 0 || discount > itemsTotal
                 || !RialMoney.IsWhole(discount) || !RialMoney.IsWhole(shippingCost))
                 throw new BusinessRuleViolationException("Order discount or shipping is out of range or not whole rials.", "PRICING_INVARIANT_VIOLATED");
@@ -146,9 +146,11 @@ namespace Application.Entities
 
         private void RecalculateTotal()
         {
-            var itemsTotal = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
-            TotalAmount = Math.Max(0, itemsTotal - DiscountAmount + ShippingCost);
+            TotalAmount = Math.Max(0, ItemsTotal() - DiscountAmount + ShippingCost);
         }
+
+        /// <summary>Batch 45b: جمع اقلام با همان گرد کردن هر قلم که جمع گروه فروشنده دارد (<see cref="RialMoney.LineTotal"/>).</summary>
+        private decimal ItemsTotal() => OrderItems.Sum(i => RialMoney.LineTotal(i.Quantity, i.UnitPrice));
     }
 
     public enum OrderStatus

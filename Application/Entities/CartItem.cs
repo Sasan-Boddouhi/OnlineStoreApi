@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Application.Common.Helpers;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Application.Entities
@@ -44,7 +45,8 @@ namespace Application.Entities
 
         public DateTime AddedAt { get; set; }
 
+        /// <summary>Batch 45b: مقدار × قیمت واحد، گردشده به ریال کامل — همان مبلغی که قلم سفارش خواهد داشت.</summary>
         [NotMapped]
-        public decimal LineTotal => UnitPrice * Quantity;
+        public decimal LineTotal => RialMoney.LineTotal(Quantity, UnitPrice);
     }
 }

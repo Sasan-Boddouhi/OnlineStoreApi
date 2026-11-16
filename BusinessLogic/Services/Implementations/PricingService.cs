@@ -14,7 +14,7 @@ namespace BusinessLogic.Services.Implementations;
 /// هزینهٔ هر بسته به ارسال‌کنندهٔ همان بسته (فروشنده) بستانکار می‌شود — داخل سهم فروشنده است و هرگز کسر نمی‌شود
 /// (N4، FIN-04، FIN-10).</item>
 /// <item>تخفیف: درصد روی جمع اقلام، سپس سقف کوپن، سپس سقفی که مبلغ قابل پرداخت را در حداقل درگاه نگه می‌دارد (N7، FIN-09).
-/// سهم هر گروه به نسبت جمع اقلامش؛ باقیماندهٔ گرد کردن روی گروه آخر (به ترتیب شناسهٔ فروشنده).</item>
+/// سهم هر گروه به نسبت جمع اقلامش؛ باقیماندهٔ گرد کردن روی بزرگ‌ترین گروه (Batch 45b؛ در تساوی، بزرگ‌ترین شناسهٔ فروشنده).</item>
 /// <item>کمیسیون: کوپن پلتفرم ⇒ روی جمع اقلام پیش از تخفیف و تخفیف هزینهٔ پلتفرم است؛ کوپن فروشنده ⇒ روی مبلغ پس از
 /// تخفیف و تخفیف از سهم فروشنده کم می‌شود (N5، FIN-14).</item>
 /// </list>
@@ -29,7 +29,7 @@ public sealed class PricingService : IPricingService
         if (request.Groups is null || request.Groups.Count == 0)
             throw new ArgumentException("A priced order needs at least one seller group.", nameof(request));
 
-        // ترتیب قطعی: باقیماندهٔ تقسیم همیشه روی گروه با بزرگ‌ترین شناسهٔ فروشنده می‌نشیند.
+        // ترتیب قطعی (شناسهٔ فروشنده) تا در تساوی جمع اقلام، باقیماندهٔ تقسیم همیشه روی یک گروه مشخص بنشیند.
         var groups = request.Groups.OrderBy(g => g.SellerId).ToList();
 
         foreach (var group in groups)
@@ -122,9 +122,11 @@ public sealed class PricingService : IPricingService
     }
 
     /// <summary>
-    /// تقسیم تخفیف بین گروه‌ها به نسبت جمع اقلام، هر سهم گرد به ریال کامل و باقیمانده روی گروه آخر.
-    /// هیچ سهمی از جمع اقلام گروه خودش بیشتر نمی‌شود؛ اگر باقیماندهٔ گروه آخر از جمع اقلامش بیشتر شود
-    /// (فقط در تخفیف نزدیک ۱۰۰٪ ممکن است)، اضافه به گروه‌های قبلی که جا دارند برمی‌گردد.
+    /// تقسیم تخفیف بین گروه‌ها به نسبت جمع اقلام، هر سهم گرد به ریال کامل (نیمه به دور از صفر) و باقیمانده روی
+    /// <b>بزرگ‌ترین</b> گروه (بیشترین جمع اقلام؛ در تساوی، بزرگ‌ترین شناسهٔ فروشنده) — Batch 45b به درخواست مالک:
+    /// اختلاف گرد کردن روی گروهی می‌نشیند که نسبت به جمعش کمترین اثر را دارد.
+    /// هیچ سهمی از جمع اقلام گروه خودش بیشتر نمی‌شود؛ اگر باقیماندهٔ بزرگ‌ترین گروه از جمع اقلامش بیشتر شود
+    /// (فقط در تخفیف نزدیک ۱۰۰٪ ممکن است)، اضافه به گروه‌های دیگری که جا دارند برمی‌گردد.
     /// </summary>
     private static decimal[] SplitDiscount(decimal discount, IReadOnlyList<PricingGroupInput> groups)
     {
@@ -133,11 +135,21 @@ public sealed class PricingService : IPricingService
             return shares;
 
         var itemsTotal = groups.Sum(g => g.SubTotal);
-        var last = groups.Count - 1;
-        var allocated = 0m;
 
-        for (var i = 0; i < last; i++)
+        // گروه‌ها به ترتیب شناسهٔ فروشنده‌اند؛ «>=» در تساوی آخرین (بزرگ‌ترین شناسه) را برمی‌دارد.
+        var largest = 0;
+        for (var i = 1; i < groups.Count; i++)
         {
+            if (groups[i].SubTotal >= groups[largest].SubTotal)
+                largest = i;
+        }
+
+        var allocated = 0m;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (i == largest)
+                continue;
+
             var share = RialMoney.Round(discount * groups[i].SubTotal / itemsTotal);
             share = Math.Min(share, Math.Min(groups[i].SubTotal, discount - allocated));
             shares[i] = share;
@@ -145,19 +157,22 @@ public sealed class PricingService : IPricingService
         }
 
         var remainder = discount - allocated;
-        var overflow = remainder - groups[last].SubTotal;
+        var overflow = remainder - groups[largest].SubTotal;
         if (overflow > 0)
         {
-            remainder = groups[last].SubTotal;
-            for (var j = last - 1; j >= 0 && overflow > 0; j--)
+            remainder = groups[largest].SubTotal;
+            for (var j = groups.Count - 1; j >= 0 && overflow > 0; j--)
             {
+                if (j == largest)
+                    continue;
+
                 var take = Math.Min(groups[j].SubTotal - shares[j], overflow);
                 shares[j] += take;
                 overflow -= take;
             }
         }
 
-        shares[last] = remainder;
+        shares[largest] = remainder;
         return shares;
     }
 

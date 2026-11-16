@@ -4,7 +4,8 @@ namespace Application.Common.Helpers;
 /// Batch 45 (FIN-06، تصمیم N6): تنها قاعدهٔ گرد کردن پول در کل سیستم.
 /// <para>
 /// همهٔ مبالغ ریال کامل‌اند. تخفیف و کمیسیون با «نیمه به دور از صفر» به ریال کامل گرد می‌شوند
-/// (<see cref="MidpointRounding.AwayFromZero"/>)؛ باقیماندهٔ هر تقسیم به گروه آخر می‌رسد (در <c>PricingService</c>).
+/// (<see cref="MidpointRounding.AwayFromZero"/>)؛ باقیماندهٔ هر تقسیم به بزرگ‌ترین گروه می‌رسد (در <c>PricingService</c>، Batch 45b).
+/// جمع هر قلم (مقدار × قیمت واحد) هم با همین قاعده گرد می‌شود (<see cref="LineTotal"/>).
 /// هم سرویس قیمت‌گذاری و هم موجودیت گروه فروشنده همین توابع را صدا می‌زنند تا دو قاعدهٔ متفاوت هرگز کنار هم نباشند.
 /// </para>
 /// </summary>
@@ -18,6 +19,13 @@ public static class RialMoney
 
     /// <summary>گرد کردن به ریال کامل، نیمه به دور از صفر (۰٫۵ ⇒ ۱، −۰٫۵ ⇒ −۱).</summary>
     public static decimal Round(decimal amount) => Math.Round(amount, 0, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// Batch 45b: جمع یک قلم (سبد یا سفارش) = مقدار × قیمت واحد، گردشده به ریال کامل (نیمه به دور از صفر).
+    /// مقدار کسری مجاز است (کالای کیلویی/لیتری/متری)؛ بدون این گرد کردن ۰٫۵ × ۱۲٬۳۴۵ = ۶٬۱۷۲٫۵ جمع گروه را کسری می‌کرد
+    /// و checkout با 409 AMOUNT_NOT_WHOLE_RIAL شکست می‌خورد. سبد و سفارش هر دو همین تابع را صدا می‌زنند.
+    /// </summary>
+    public static decimal LineTotal(decimal quantity, decimal unitPrice) => Round(quantity * unitPrice);
 
     /// <summary>آیا مبلغ کسر ریال ندارد؟</summary>
     public static bool IsWhole(decimal amount) => amount == decimal.Truncate(amount);

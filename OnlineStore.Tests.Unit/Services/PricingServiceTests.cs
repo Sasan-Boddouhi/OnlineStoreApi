@@ -148,8 +148,11 @@ public class PricingServiceTests
             .Groups.Single().CommissionAmount.Should().Be(3m);
     }
 
+    /// <summary>
+    /// Batch 45b: در تساوی جمع اقلام، باقیمانده روی بزرگ‌ترین شناسهٔ فروشنده می‌نشیند (ترتیب قطعی؛ همان نتیجهٔ Batch 45).
+    /// </summary>
     [Fact]
-    public void SplitRemainder_GoesToTheLastGroupBySellerId()
+    public void SplitRemainder_TiedLargestGroups_GoesToTheHighestSellerId()
     {
         var result = _sut.Calculate(Request(
             new[] { (30, 100_000m, 10m), (10, 100_000m, 10m), (20, 100_000m, 10m) },
@@ -158,6 +161,97 @@ public class PricingServiceTests
         result.DiscountAmount.Should().Be(10_001m);
         result.Groups.Select(g => g.SellerId).Should().Equal(10, 20, 30);
         result.Groups.Select(g => g.DiscountAmount).Should().Equal(3_334m, 3_334m, 3_333m);
+    }
+
+    /// <summary>
+    /// Batch 45b (درخواست مالک): باقیماندهٔ گرد کردن به بزرگ‌ترین گروه می‌رسد، نه گروه آخر.
+    /// سهم‌های دقیق ۱٬۶۶۶٫۸۳ / ۵٬۰۰۰٫۵۰ / ۳٬۳۳۳٫۶۷ ⇒ ۱٬۶۶۷ و ۳٬۳۳۴ گرد می‌شوند و بزرگ‌ترین (فروشندهٔ ۲۰) باقیماندهٔ ۵٬۰۰۰ را می‌گیرد.
+    /// پیش‌تر: ۱٬۶۶۷ / ۵٬۰۰۱ / ۳٬۳۳۳ (باقیمانده روی گروه آخر، فروشندهٔ ۳۰).
+    /// </summary>
+    [Fact]
+    public void SplitRemainder_GoesToTheLargestGroup_NotTheLast()
+    {
+        var result = _sut.Calculate(Request(
+            new[] { (10, 100_000m, 10m), (20, 300_000m, 10m), (30, 200_000m, 10m) },
+            coupon: Platform(50m, max: 10_001m)));
+
+        result.DiscountAmount.Should().Be(10_001m);
+        result.Groups.Select(g => g.SellerId).Should().Equal(10, 20, 30);
+        result.Groups.Select(g => g.DiscountAmount).Should().Equal(1_667m, 5_000m, 3_334m);
+    }
+
+    /// <summary>
+    /// Batch 45b: کوپن ۷٪ روی اقلامی به جمع ۱۲۳٬۴۵۷ (۸٬۶۴۱٫۹۹ ⇒ ۸٬۶۴۲). سهم‌های دقیق ۴٬۳۲۱٫۰۴ / ۲٬۱۶۰٫۴۸ / ۲٬۱۶۰٫۴۸؛
+    /// دو گروه کوچک ۲٬۱۶۰ می‌گیرند و بزرگ‌ترین گروه (فروشندهٔ ۱، نه آخرین) باقیماندهٔ ۴٬۳۲۲ را.
+    /// همهٔ مبالغ ریال کامل و ناوردا برقرار. پیش‌تر: ۴٬۳۲۱ / ۲٬۱۶۰ / ۲٬۱۶۱.
+    /// </summary>
+    [Fact]
+    public void SevenPercentCouponOn123457_AllAmountsWhole_InvariantHolds_RemainderOnLargestGroup()
+    {
+        var result = _sut.Calculate(Request(
+            new[] { (1, 61_729m, 10m), (2, 30_864m, 10m), (3, 30_864m, 10m) },
+            shippingPerParcel: 25_000m,
+            coupon: Platform(7m)));
+
+        result.ItemsTotal.Should().Be(123_457m);
+        result.DiscountAmount.Should().Be(8_642m, "8,641.99 rounds half away from zero to 8,642");
+        result.Groups.Select(g => g.DiscountAmount).Should().Equal(4_322m, 2_160m, 2_160m);
+        result.Groups.Select(g => g.CommissionAmount).Should().Equal(6_173m, 3_086m, 3_086m);
+        result.Groups.Select(g => g.SellerPayable).Should().Equal(80_556m, 52_778m, 52_778m);
+        result.PayableTotal.Should().Be(123_457m - 8_642m + 75_000m);
+
+        var all = new List<decimal> { result.DiscountAmount, result.PayableTotal, result.ShippingTotal, result.PlatformDiscountCost };
+        all.AddRange(result.Groups.SelectMany(g => new[]
+        {
+            g.DiscountAmount, g.PlatformDiscountShare, g.SellerFundedDiscount, g.ShippingAmount, g.CommissionAmount, g.SellerPayable
+        }));
+        all.Should().OnlyContain(v => RialMoney.IsWhole(v) && v >= 0);
+
+        result.Groups.Sum(g => g.DiscountAmount).Should().Be(result.DiscountAmount);
+        (result.Groups.Sum(g => g.SellerPayable) + result.Groups.Sum(g => g.CommissionAmount) - result.PlatformDiscountCost)
+            .Should().Be(result.PayableTotal);
+    }
+
+    // ==================== مقدار کسری × قیمت (Batch 45b) ====================
+
+    [Theory]
+    [InlineData(0.5, 12_345, 6_173)]      // 6,172.5 ⇒ 6,173 (نیمه به دور از صفر)
+    [InlineData(1.5, 24_691, 37_037)]     // 37,036.5 ⇒ 37,037
+    [InlineData(0.33, 10_000, 3_300)]
+    [InlineData(2.25, 99_999, 224_998)]   // 224,997.75 ⇒ 224,998
+    [InlineData(3, 12_345, 37_035)]
+    public void LineTotal_FractionalQuantity_IsRoundedToAWholeRial(double quantity, int unitPrice, int expected)
+    {
+        RialMoney.LineTotal((decimal)quantity, unitPrice).Should().Be(expected);
+    }
+
+    [Fact]
+    public void OrderItem_FractionalQuantity_HasAWholeRialTotal_AndTheOrderTotalMatches()
+    {
+        var item = new OrderItem(productId: 1, quantity: 0.5m, unitPrice: 12_345m);
+        item.TotalPrice.Should().Be(6_173m);
+
+        item.UpdateQuantity(1.5m);
+        item.TotalPrice.Should().Be(18_518m, "18,517.5 ⇒ 18,518");
+
+        var order = new Order();
+        order.AddItem(item);
+        order.TotalAmount.Should().Be(18_518m);
+
+        var act = () => order.ApplyDiscountsAndShipping(0m, 0m, null, null);
+        act.Should().NotThrow();
+        order.TotalAmount.Should().Be(item.TotalPrice);
+    }
+
+    [Fact]
+    public void CartItem_FractionalQuantity_HasAWholeRialLineTotal()
+    {
+        var cart = new Cart();
+        cart.Items.Add(new CartItem { ListingId = 1, Quantity = 0.5m, UnitPrice = 12_345m });
+        cart.Items.Add(new CartItem { ListingId = 2, Quantity = 0.5m, UnitPrice = 12_345m });
+
+        cart.Items.Should().OnlyContain(i => i.LineTotal == 6_173m);
+        cart.TotalAmount.Should().Be(12_346m, "each line is rounded on its own, the same way the order rounds it");
     }
 
     [Fact]

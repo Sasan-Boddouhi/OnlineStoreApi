@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -53,6 +54,7 @@ namespace Application.Entities
         [Column(TypeName = "decimal(18,2)")]
         public decimal UnitPrice { get; set; }
 
+        /// <summary>مقدار × قیمت واحد، گردشده به ریال کامل (Batch 45b، <see cref="RialMoney.LineTotal"/>).</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal TotalPrice { get; private set; }
 
@@ -83,7 +85,7 @@ namespace Application.Entities
             Quantity = quantity;
             UnitPrice = unitPrice;
             Description = description;
-            TotalPrice = quantity * unitPrice;
+            TotalPrice = RialMoney.LineTotal(quantity, unitPrice);
         }
 
         // متد به‌روزرسانی مقدار (در صورت نیاز)
@@ -91,7 +93,7 @@ namespace Application.Entities
         {
             if (newQuantity <= 0) throw new ArgumentException("Quantity must be positive.");
             Quantity = newQuantity;
-            TotalPrice = Quantity * UnitPrice;
+            TotalPrice = RialMoney.LineTotal(Quantity, UnitPrice);
         }
     }
 }

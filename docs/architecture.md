@@ -383,7 +383,11 @@ the winner after `DbUpdateException`.
 `IPricingService` (`PricingService`, pure, no database) is the only place that
 prices an order; checkout calls it and writes the result to `Order` and each
 `OrderSellerGroup`. All amounts are whole Rial (`RialMoney`: half away from
-zero; the remainder of a split goes to the last group by seller id).
+zero; the remainder of a split goes to the largest group by items sub-total,
+ties to the highest seller id — Batch 45b). A line total (quantity × unit
+price, quantity may be fractional) is rounded the same way
+(`RialMoney.LineTotal`) in the cart and in the order. Listing prices and
+shipping-method costs with a fraction are refused with 422 `VALIDATION_ERROR`.
 
 - Shipping is per parcel: each seller group pays the method's `BaseCost`
   (`OrderSellerGroup.ShippingAmount`) and that amount is **credited** to the
