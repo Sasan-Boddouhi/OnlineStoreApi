@@ -57,6 +57,8 @@ builder.Services.AddControllers(options =>
 {
     options.SerializerSettings.ReferenceLoopHandling =
     Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+    // N14: سقف عمق بدنهٔ JSON صریح (همان پیش‌فرض Newtonsoft 13)؛ تست N14JsonDepthTests آن را قفل می‌کند.
+    options.SerializerSettings.MaxDepth = Online_Store_Application.Middleware.JsonDepthGuardMiddleware.MaxDepth;
 });
 
 builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.ProblemDetailsFactory, CodedProblemDetailsFactory>();
@@ -413,6 +415,7 @@ await app.Services.ApplyMigrationsAsync(
 app.UseTrustedForwardedHeaders();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<JsonDepthGuardMiddleware>();
 
 // Batch 53 (API-04): پاسخ‌های بدون بدنه (مسیر ناموجود، متد یا نوع محتوای ناپشتیبانی‌شده) بدنهٔ ProblemDetails با code می‌گیرند.
 app.UseStatusCodePages(async statusContext =>
