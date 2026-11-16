@@ -1438,7 +1438,8 @@ public sealed class PaymentService : IPaymentService
     //   • استعلام خاموش (EnableInquiry=false، پیش‌فرض تا پاسخ N2) ⇒ جاب هرگز Verify نمی‌کند. Batch 43b: زرین‌پال فقط با
     //     Verify خودِ ما برداشت می‌کند، پس پرداخت کهنه‌ای که Verify آن هرگز آغاز نشده مثل قبل لغو می‌شود (بدون صف بررسی؛
     //     پول تأییدنشده را درگاه برمی‌گرداند). Verify آغازشده با نتیجهٔ نامعلوم Pending می‌ماند و یک بار به صف بررسی
-    //     می‌رود. جاب سفارش‌های رهاشده (CancelWhenNotPaid=false) لغو نمی‌کند و علامت می‌زند. ادمین با verify-by-authority
+    //     می‌رود. Batch 43c: جاب سفارش‌های رهاشده هم همین قاعده را دارد (پرداختِ هرگز Verify‌نشده لغو، سپس سفارش لغو و
+    //     موجودی آزاد؛ بدون علامت)، پس نتیجه به ترتیب اجرای دو جاب وابسته نیست. ادمین با verify-by-authority
     //     همان مسیر Verify را اجرا می‌کند (پرداخت‌شده ⇒ برداشت؛ پرداخت‌نشده ⇒ Failed).
     //   • پرداختی که Verify آن قبلاً آغاز شده (VerifyStartedAtUtc) هرگز اینجا لغو نمی‌شود: Verified / PaidNotVerified با
     //     سفارش قابل پرداخت ⇒ مسیر Verify؛ بقیه ⇒ Pending می‌ماند و یک بار علامت می‌خورد (رفتار Batch 5/41).
@@ -1587,14 +1588,17 @@ public sealed class PaymentService : IPaymentService
                 // Batch 43b (صف مالک ۲۰۲۶-۱۱-۱۶): زرین‌پال فقط با Verify خودِ ما پول برداشت می‌کند. پرداخت کهنه‌ای که
                 // Verify آن هرگز آغاز نشده نمی‌تواند برداشت شده باشد؛ جاب آن را مثل پیش از Batch 43 لغو می‌کند (پول
                 // تأییدنشده را درگاه برمی‌گرداند) و به صف بررسی نمی‌فرستد. فقط Verify آغازشده با نتیجهٔ نامعلوم می‌ماند.
-                if (!verifyStarted && rules.CancelWhenNotPaid)
+                // Batch 43c: همین قاعده برای هر دو جاب (اقدام ادمین بالاتر برگشته است)؛ جاب سفارش‌های رهاشده
+                // (CancelWhenNotPaid=false) هم پرداخت را لغو می‌کند و سپس سفارش را لغو و موجودی را آزاد می‌کند، تا
+                // نتیجه به ترتیب اجرای دو جاب وابسته نباشد.
+                if (!verifyStarted)
                     return await CancelAbandonedPaymentAsync(payment, inquiry, rules);
 
                 return await LeavePendingAsync(
                     payment,
                     inquiry,
                     rules,
-                    verifyStarted ? UnresolvedVerificationNote(payment) : InquiryDisabledNote(payment),
+                    UnresolvedVerificationNote(payment),
                     "استعلام از درگاه خاموش است؛ پرداخت نه خودکار تأیید شد و نه لغو. در صف بررسی است تا ادمین آن را با verify-by-authority قطعی کند.");
 
             case PaymentInquiryStatus.Unknown:
@@ -1763,7 +1767,10 @@ public sealed class PaymentService : IPaymentService
         await AuditAsync(
             PaymentLifecycle.CancelledAction,
             payment.PaymentId,
-            $"abandoned after {rules.AbandonedAfterMinutes} minutes | source={rules.Source} | {GatewayText(inquiry)}" +
+            (rules.AbandonedAfterMinutes > 0
+                ? $"abandoned after {rules.AbandonedAfterMinutes} minutes"
+                : "abandoned with its order (abandoned-order cleanup)") +
+            $" | source={rules.Source} | {GatewayText(inquiry)}" +
             (reviewClosed ? " | the open 'waiting for the gateway' review was closed automatically" : string.Empty) +
             (inquiryDisabled
                 ? " | gateway inquiry is off; verification never started and the gateway captures only on our Verify, " +
@@ -2033,7 +2040,11 @@ public sealed class PaymentService : IPaymentService
            "| paymentState=Pending | issues: the gateway inquiry gave no definitive answer for this stale pending payment; " +
            "it was left Pending and is asked again on the next run";
 
-    /// <summary>شرحِ ثابتِ «استعلام خاموش است» (جایگزین امنِ تصمیم باز N2).</summary>
+    /// <summary>
+    /// شرحِ ثابتِ «استعلام خاموش است» (جایگزین امنِ تصمیم باز N2). از Batch 43c دیگر نوشته نمی‌شود (پرداختِ هرگز
+    /// Verify‌نشده لغو می‌شود)؛ فقط برای بستن خودکار علامت‌هایی که نسخه‌های پیشین گذاشته‌اند نگه داشته شده است.
+    /// متن را تغییر ندهید، وگرنه آن علامت‌ها دیگر خودکار بسته نمی‌شوند.
+    /// </summary>
     private static string InquiryDisabledNote(Payment payment)
         => $"source=abandoned-payment sweep | order={payment.OrderId?.ToString() ?? "none"} | amount={FormatAmount(payment.Amount)} " +
            "| paymentState=Pending | issues: the gateway inquiry is turned off (PaymentGatewaySettings:EnableInquiry=false), so it is not known " +

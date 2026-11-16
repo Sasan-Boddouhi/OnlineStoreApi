@@ -20,11 +20,13 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
 {
     private const string ReviewRequiredAction = "Payment.ReviewRequired";
 
+    /// <summary>سفارش Pending پس از این مدت (از OrderDate) رهاشده تلقی و لغو می‌شود.</summary>
+    public static readonly TimeSpan OrderTimeout = TimeSpan.FromMinutes(60);
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AbandonedOrderCleanupService> _logger;
     private readonly TimeSpan _interval = TimeSpan.FromMinutes(10);
-    private readonly TimeSpan _orderTimeout = TimeSpan.FromMinutes(60);
 
     public AbandonedOrderCleanupService(
         IServiceScopeFactory scopeFactory,
@@ -77,7 +79,7 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            var cutoff = _timeProvider.GetUtcNow().UtcDateTime.Subtract(_orderTimeout);
+            var cutoff = _timeProvider.GetUtcNow().UtcDateTime.Subtract(OrderTimeout);
 
             staleOrderIds = (await unitOfWork.Repository<Order>()
                     .ListAsync(
@@ -215,7 +217,8 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
     /// گفته و هیچ‌چیز عوض نشده است؛ آنگاه سفارش مثل قبل لغو می‌شود و روال برگرداندن، پرداخت‌های باز را لغو می‌کند.
     /// هر نتیجهٔ دیگر (برداشت شد، پاسخ نامعلوم، رد Verify، تغییر هم‌زمان) ⇒ false: این اجرا سفارش را رها می‌کند و
     /// اجرای بعدی با وضعیت تازه تصمیم می‌گیرد. با <c>AbandonedPaymentSettings:InquireGatewayBeforeCancel = false</c>
-    /// استعلام انجام نمی‌شود (رفتار قبلی).
+    /// استعلام انجام نمی‌شود (رفتار قبلی). Batch 43c: با استعلام خاموش (<c>INQUIRY_DISABLED</c>) پرداختِ هرگز Verify‌نشده
+    /// همان‌جا لغو شده و «پرداخت‌نشده» حساب می‌شود (همان قاعدهٔ جاب پرداخت‌ها، مستقل از ترتیب اجرای دو جاب).
     /// </summary>
     private async Task<bool> OpenPaymentsAreUnpaidAsync(
         IServiceProvider services, Order order, CancellationToken cancellationToken)
@@ -234,10 +237,20 @@ public sealed class AbandonedOrderCleanupService : BackgroundService
 
         foreach (var paymentId in openPaymentIds)
         {
+            var verifyStarted = order.Payments.First(p => p.PaymentId == paymentId).VerifyStartedAtUtc is not null;
             var result = await paymentService.ReconcileBeforeOrderCancellationAsync(paymentId, cancellationToken);
 
-            var unpaid = result.GatewayStatus == nameof(PaymentInquiryStatus.NotPaid)
-                         && result.Outcome == nameof(PaymentReconciliationOutcome.LeftPending);
+            // Batch 43c: با استعلام خاموش، پرداختی که Verify آن هرگز آغاز نشده همان‌جا لغو شده است (زرین‌پال فقط با Verify
+            // خودِ ما برداشت می‌کند، پس پولی گرفته نشده). سفارش مثل «پرداخت‌نشده» لغو و موجودی آزاد می‌شود؛ بدون صف بررسی.
+            // پرداختی که Verify آن آغاز شده اینجا نمی‌رسد (بالاتر فقط علامت می‌خورد) و تطبیق هم هرگز لغوش نمی‌کند.
+            var neverVerifiedWithInquiryOff =
+                result.GatewayErrorCode == PaymentInquiryResult.InquiryDisabledCode
+                && result.Outcome == nameof(PaymentReconciliationOutcome.Cancelled)
+                && !verifyStarted;
+
+            var unpaid = neverVerifiedWithInquiryOff
+                         || (result.GatewayStatus == nameof(PaymentInquiryStatus.NotPaid)
+                             && result.Outcome == nameof(PaymentReconciliationOutcome.LeftPending));
             if (unpaid)
                 continue;
 

@@ -107,6 +107,8 @@ public interface IPaymentService
     /// <see cref="ReconcileStalePaymentAsync"/>، با این تفاوت که پرداختِ «پرداخت‌نشده» را خودش لغو نمی‌کند: لغو آن با
     /// روال برگرداندن سفارش است (مثل قبل). فراخوان از <c>GatewayStatus</c> و <c>Outcome</c> تصمیم می‌گیرد:
     /// برداشت‌شده ⇒ سفارش دیگر رهاشده نیست؛ نامعلوم ⇒ سفارش در این اجرا لغو نمی‌شود.
+    /// Batch 43c: با استعلام خاموش (<c>INQUIRY_DISABLED</c>)، پرداختی که Verify آن هرگز آغاز نشده همین‌جا لغو می‌شود
+    /// (<c>Outcome = Cancelled</c>، بدون صف بررسی؛ مثل جاب پرداخت‌ها) و فراخوان سفارش را لغو و موجودی را آزاد می‌کند.
     /// </summary>
     Task<PaymentReconciliationDto> ReconcileBeforeOrderCancellationAsync(
         int paymentId,

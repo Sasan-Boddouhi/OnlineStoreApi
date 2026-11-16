@@ -104,9 +104,8 @@ public sealed class InventoryService : IInventoryService
         if (quantity <= 0)
             return;
 
-        // Batch 45c: آزادسازی هم همان قاعدهٔ رزرو را دارد؛ مقدار نامعتبر بی‌صدا گرد یا به موجودی افزوده نمی‌شود.
-        await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listingId, quantity, cancellationToken);
-
+        // Batch 43c: قاعدهٔ مقدار (Batch 45c) فقط برای رزرو است. آزادسازی همان مقداری را برمی‌گرداند که قبلاً رزرو شده
+        // (شاید پیش از 45c، مثلاً ۰٫۵ کالای عددی) و هرگز نباید جلوی لغو یا برگرداندن سفارش را بگیرد.
         var rows = await GetActiveRowsAsync(listingId, cancellationToken);
 
         if (rows.Count == 0)

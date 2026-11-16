@@ -218,17 +218,84 @@ public class Phase15Batch45cQuantityUnitTests : ControllerIntegrationTestBase
     [Theory]
     [InlineData(UnitOfMeasurement.Piece, "0.5")]
     [InlineData(UnitOfMeasurement.Kilogram, "1.255")]
-    public async Task ReserveAndRelease_ApplyTheSameRule_AndLeaveTheStockUntouched(UnitOfMeasurement unit, string quantityText)
+    public async Task Reserve_AppliesTheRule_ButRelease_NeverRejects_AndRestoresWhatWasReserved(UnitOfMeasurement unit, string quantityText)
     {
+        // Batch 43c: رزرو قاعده را اجرا می‌کند؛ آزادسازی فقط همان مقداری را برمی‌گرداند که قبلاً رزرو شده بود
+        // (شاید پیش از 45c) و هرگز نباید جلوی لغو یا برگرداندن سفارش را بگیرد.
         var quantity = decimal.Parse(quantityText, System.Globalization.CultureInfo.InvariantCulture);
         var listingId = await CreateListingAsync(unit);
         var inventory = GetService<IInventoryService>();
 
         await ShouldBeRejectedAsync(() => inventory.ReserveAsync(listingId, quantity));
-        await ShouldBeRejectedAsync(() => inventory.ReleaseAsync(listingId, quantity));
-
         await GetService<IUnitOfWork>().SaveChangesAsync();
         (await StockAsync(listingId)).Should().Be(Stock);
+
+        await inventory.ReleaseAsync(listingId, quantity);
+        await GetService<IUnitOfWork>().SaveChangesAsync();
+        (await StockAsync(listingId)).Should().Be(Stock + quantity);
+    }
+
+    // ==================== Batch 43c: لغو سفارشِ پیش از 45c ====================
+    //
+    // سفارشی که پیش از 45c با مقدار کسری برای کالای عددی (یا بیش از دو رقم اعشار) ثبت شده، باید همچنان لغو شود و
+    // موجودی رزروشده‌اش برگردد. پیش از این اصلاح، آزادسازی موجودی همان قاعدهٔ رزرو را اجرا می‌کرد و لغو 422 می‌داد.
+
+    [Theory]
+    [InlineData(UnitOfMeasurement.Piece, "0.5")]
+    [InlineData(UnitOfMeasurement.Kilogram, "1.255")]
+    public async Task CancelOrder_PlacedBefore45c_WithAQuantityTheRuleNowRejects_IsCancelled_AndReleasesTheStock(
+        UnitOfMeasurement unit, string quantityText)
+    {
+        var quantity = decimal.Parse(quantityText, System.Globalization.CultureInfo.InvariantCulture);
+        var (orderId, listingId) = await CreatePre45cOrderAsync(unit, quantity);
+
+        var cancelled = await GetService<IOrderService>().CancelOrderAsync(orderId);
+
+        cancelled.Status.Should().Be(nameof(OrderStatus.Cancelled));
+        (await Db.Order.AsNoTracking().Where(o => o.OrderId == orderId).Select(o => o.Status).SingleAsync())
+            .Should().Be(OrderStatus.Cancelled);
+        (await StockAsync(listingId)).Should().Be(Stock, "the quantity reserved before 45c is released in full");
+    }
+
+    [Theory]
+    [InlineData(UnitOfMeasurement.Piece, "0.5")]
+    [InlineData(UnitOfMeasurement.Kilogram, "1.255")]
+    public async Task RemoveItem_PlacedBefore45c_WithAQuantityTheRuleNowRejects_IsRemoved_AndReleasesTheStock(
+        UnitOfMeasurement unit, string quantityText)
+    {
+        var quantity = decimal.Parse(quantityText, System.Globalization.CultureInfo.InvariantCulture);
+        var (orderId, listingId) = await CreatePre45cOrderAsync(unit, quantity);
+        var itemId = await Db.OrderItem.AsNoTracking().Where(i => i.OrderId == orderId).Select(i => i.OrderItemId).SingleAsync();
+
+        await GetService<IOrderService>().RemoveItemFromOrderAsync(orderId, itemId);
+
+        (await Db.OrderItem.AsNoTracking().AnyAsync(i => i.OrderId == orderId)).Should().BeFalse();
+        (await StockAsync(listingId)).Should().Be(Stock);
+    }
+
+    /// <summary>
+    /// سفارش Pending با یک قلم از مسیر واقعی، سپس مقدار قلم و موجودی رزروشده مثل دادهٔ پیش از 45c بازنویسی می‌شوند
+    /// (پیش از 45c مقدار کسری کالای عددی پذیرفته و همان مقدار از موجودی کم می‌شد).
+    /// </summary>
+    private async Task<(int OrderId, int ListingId)> CreatePre45cOrderAsync(UnitOfMeasurement unit, decimal legacyQuantity)
+    {
+        var orderId = await CreateEmptyOrderAsync();
+        var listingId = await CreateListingAsync(unit);
+        await GetService<IOrderService>().AddItemToOrderAsync(orderId, new AddOrderItemDto { ListingId = listingId, Quantity = 1m });
+        Db.ChangeTracker.Clear();
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var item = await db.OrderItem.AsTracking().SingleAsync(i => i.OrderId == orderId);
+            item.Quantity = legacyQuantity;
+            var row = await db.Inventory.AsTracking().SingleAsync(i => i.ListingId == listingId);
+            db.Entry(row).Property(nameof(Inventory.Quantity)).CurrentValue = Stock - legacyQuantity;
+            await db.SaveChangesAsync();
+        }
+
+        (await StockAsync(listingId)).Should().Be(Stock - legacyQuantity);
+        return (orderId, listingId);
     }
 
     [Fact]

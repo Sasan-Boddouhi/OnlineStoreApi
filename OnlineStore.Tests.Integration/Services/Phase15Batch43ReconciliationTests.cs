@@ -524,18 +524,20 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Sweep_WithInquiryOff_NeverVerifiedPaymentAlreadyWaitingForReview_IsCancelled_AndTheReviewIsClosed(
-        bool adminClosedTheReviewFirst)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task WithInquiryOff_NeverVerifiedPaymentAlreadyWaitingForReview_IsCancelled_AndTheReviewIsClosed(
+        bool adminClosedTheReviewFirst, bool byOrderCleanup)
     {
-        // پرداختی که جاب سفارش‌های رهاشده (یا جاب پرداخت‌ها پیش از 43b) با «استعلام خاموش» علامت زده و بعد کهنه شده است.
+        // پرداختی که پیش از 43b/43c (جاب پرداخت‌ها یا جاب سفارش‌ها) با «استعلام خاموش» علامت خورده و بعد کهنه شده است.
+        // نسخه‌های فعلی دیگر این علامت را نمی‌گذارند؛ ردیف موجود هر کدام از دو جاب که اول برسد خودکار بسته می‌شود.
         var open = await CreatePendingPaymentAsync();
+        var listingId = await ListingOfAsync(open.OrderId);
+        var stockWhileReserved = await StockAsync(listingId);
         await AgeOrderAsync(open.OrderId);
-        Gateway.InquiryTurnedOff = true;
-        await NewOrderCleanup().RunCleanupAsync();
-        DbContext.ChangeTracker.Clear();
-        (await PaymentAsync(open.PaymentId)).ReviewNote.Should().Contain("EnableInquiry=false");
+        await FlagAsBefore43cWithInquiryOffAsync(open);
         if (adminClosedTheReviewFirst)
         {
             SetCurrentUser(1, "Admin");
@@ -543,10 +545,13 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
             DbContext.ChangeTracker.Clear();
         }
         await AgePaymentAsync(open.PaymentId);
+        Gateway.InquiryTurnedOff = true;
 
-        var cancelled = await Sweeper.SweepAsync();
+        if (byOrderCleanup)
+            (await NewOrderCleanup().RunCleanupAsync()).Should().Be(1, "the abandoned order must not stay Pending for ever");
+        else
+            (await Sweeper.SweepAsync()).Should().Be(1, "the payment must not stay Pending for ever");
 
-        cancelled.Should().Be(1, "the payment must not stay Pending for ever");
         DbContext.ChangeTracker.Clear();
         var payment = await PaymentAsync(open.PaymentId);
         payment.State.Should().Be(PaymentState.Cancelled);
@@ -555,8 +560,15 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
             payment.ReviewNote.Should().Contain("closed automatically by reconciliation",
                 "the 'inquiry is off' waiting flag answered itself: nothing was captured");
         Gateway.VerifyCalls.Should().BeEmpty();
-        (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Should().ContainSingle()
-            .Which.Should().Contain("abandoned");
+        var cancelledAudit = (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Should().ContainSingle().Which;
+        cancelledAudit.Should().Contain("abandoned");
+        if (!adminClosedTheReviewFirst)
+            cancelledAudit.Should().Contain("review was closed automatically");
+        if (byOrderCleanup)
+        {
+            (await OrderStatusAsync(open.OrderId)).Should().Be(OrderStatus.Cancelled);
+            (await StockAsync(listingId)).Should().Be(stockWhileReserved + 1m);
+        }
     }
 
     [Fact]
@@ -643,17 +655,12 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
         (await PaymentAsync(open.PaymentId)).State.Should().Be(PaymentState.Succeeded);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task OrderCleanup_WhenTheGatewayCannotSay_KeepsTheOrder_AndFlagsThePaymentOnce(bool inquiryTurnedOff)
+    [Fact]
+    public async Task OrderCleanup_WhenTheGatewayCannotSay_KeepsTheOrder_AndFlagsThePaymentOnce()
     {
         var open = await CreatePendingPaymentAsync();
         await AgeOrderAsync(open.OrderId);
-        if (inquiryTurnedOff)
-            Gateway.InquiryTurnedOff = true;
-        else
-            Gateway.SetInquiryResult(open.Authority, PaymentInquiryResult.Unknown("GATEWAY_UNAVAILABLE", "down"));
+        Gateway.SetInquiryResult(open.Authority, PaymentInquiryResult.Unknown("GATEWAY_UNAVAILABLE", "down"));
 
         var first = await NewOrderCleanup().RunCleanupAsync();
         var second = await NewOrderCleanup().RunCleanupAsync();
@@ -666,6 +673,27 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
         payment.IsReviewOpen.Should().BeTrue();
         (await AuditDetailsAsync(open.PaymentId, "Payment.ReviewRequired")).Should().ContainSingle();
         Gateway.VerifyCalls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OrderCleanup_WithInquiryOff_NeverVerifiedPayment_CancelsThePaymentAndTheOrder_AndReleasesTheStock_WithoutAReviewFlag()
+    {
+        // Batch 43c: پیش‌تر جاب سفارش‌ها با استعلام خاموش پرداخت را علامت می‌زد و سفارش را Pending نگه می‌داشت.
+        var open = await CreatePendingPaymentAsync();
+        var listingId = await ListingOfAsync(open.OrderId);
+        var stockWhileReserved = await StockAsync(listingId);
+        await AgeOrderAsync(open.OrderId);
+        Gateway.InquiryTurnedOff = true;
+
+        var first = await NewOrderCleanup().RunCleanupAsync();
+        var second = await NewOrderCleanup().RunCleanupAsync();
+
+        first.Should().Be(1);
+        second.Should().Be(0);
+        await AssertCancelledWithoutReviewAsync(open, listingId, stockWhileReserved + 1m);
+        (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Single()
+            .Should().Contain("abandoned with its order").And.Contain("gatewayError=INQUIRY_DISABLED")
+            .And.Contain("verification never started");
     }
 
     [Fact]
@@ -682,6 +710,66 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
         (await OrderStatusAsync(open.OrderId)).Should().Be(OrderStatus.Cancelled);
         (await PaymentAsync(open.PaymentId)).State.Should().Be(PaymentState.Cancelled);
         Gateway.InquiryCalls.Should().Contain(open.Authority, "the gateway is asked before an order with an open payment is cancelled");
+    }
+
+    // ==================== Batch 43c: هر دو جاب، هر دو ترتیب، با استعلام خاموش ====================
+    //
+    // صف مالک ۲۰۲۶-۱۱-۱۶: با PaymentGatewaySettings:EnableInquiry=false، checkout رهاشده‌ای که Verify پرداختش هرگز آغاز
+    // نشده باید به این برسد: پرداخت Cancelled، سفارش Cancelled، موجودی آزاد، هیچ مورد بازی در صف بررسی — مستقل از اینکه
+    // کدام جاب (AbandonedPaymentSweeper / AbandonedOrderCleanupService) اول اجرا شود. ساعت با مهلت‌های پیکربندی‌شده
+    // (AbandonedPaymentSettings:TimeoutMinutes و AbandonedOrderCleanupService.OrderTimeout) جلو می‌رود.
+    // پرداختی که Verify آن آغاز شده و نتیجه‌اش نامعلوم است در هر دو ترتیب فقط یک بار علامت می‌خورد و هرگز لغو نمی‌شود.
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BothJobs_WithInquiryOff_NeverVerifiedAbandonedCheckout_EndsCancelled_WithStockReleased_AndNoReviewFlag(
+        bool sweeperFirst)
+    {
+        var open = await CreatePendingPaymentAsync();
+        var listingId = await ListingOfAsync(open.OrderId);
+        var stockWhileReserved = await StockAsync(listingId);
+        Gateway.InquiryTurnedOff = true;
+
+        AdvancePastBothConfiguredTimeouts();
+        await RunBothJobsAsync(sweeperFirst);
+
+        await AssertCancelledWithoutReviewAsync(open, listingId, stockWhileReserved + 1m);
+
+        // اجرای بعدی هیچ‌چیز را عوض نمی‌کند (موجودی دوباره آزاد نمی‌شود، علامتی ساخته نمی‌شود).
+        await RunBothJobsAsync(sweeperFirst);
+        await AssertCancelledWithoutReviewAsync(open, listingId, stockWhileReserved + 1m);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BothJobs_WithInquiryOff_VerifyStartedWithUnknownOutcome_IsFlaggedOnce_AndNeverCancelled(bool sweeperFirst)
+    {
+        var open = await CreatePendingPaymentAsync();
+        var listingId = await ListingOfAsync(open.OrderId);
+        var stockWhileReserved = await StockAsync(listingId);
+        SetCurrentUser(open.BuyerUserId, "Customer");
+        Gateway.EnqueueVerifyResult(PaymentVerificationResult.TransientError("GATEWAY_TIMEOUT", "timeout"));
+        var verify = () => PaymentService.VerifyAsync(open.Authority);
+        await verify.Should().ThrowAsync<Application.Exceptions.ServiceUnavailableException>();
+        DbContext.ChangeTracker.Clear();
+        Gateway.InquiryTurnedOff = true;
+
+        AdvancePastBothConfiguredTimeouts();
+        await RunBothJobsAsync(sweeperFirst);
+        await RunBothJobsAsync(sweeperFirst);
+
+        DbContext.ChangeTracker.Clear();
+        var payment = await PaymentAsync(open.PaymentId);
+        payment.VerifyStartedAtUtc.Should().NotBeNull();
+        payment.State.Should().Be(PaymentState.Pending, "a verify that started may have captured the money; no job cancels it blindly");
+        payment.IsReviewOpen.Should().BeTrue();
+        (await AuditDetailsAsync(open.PaymentId, "Payment.ReviewRequired")).Should().ContainSingle("it is queued once, whichever job sees it first");
+        (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Should().BeEmpty();
+        (await OrderStatusAsync(open.OrderId)).Should().Be(OrderStatus.Pending, "the order is not cancelled while its payment may have been paid");
+        (await StockAsync(listingId)).Should().Be(stockWhileReserved, "the stock stays reserved for an order that may have been paid");
+        Gateway.VerifyCalls.Should().ContainSingle("only the buyer's own verify ran; the jobs never verify without an inquiry");
     }
 
     // ==================== FIN-07: جزئیات درگاه ====================
@@ -857,6 +945,79 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
             Factory.Services.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Online_Store_Application.Services.AbandonedOrderCleanupService>.Instance,
             Factory.Clock);
+
+    /// <summary>
+    /// Batch 43c: ساعت را از هر دو مهلت پیکربندی‌شده می‌گذراند — مهلت پرداخت رهاشده
+    /// (AbandonedPaymentSettings:TimeoutMinutes) و مهلت سفارش رهاشده (AbandonedOrderCleanupService.OrderTimeout).
+    /// </summary>
+    private void AdvancePastBothConfiguredTimeouts()
+    {
+        var settings = GetService<Microsoft.Extensions.Options.IOptions<Application.Options.AbandonedPaymentSettings>>().Value;
+        var paymentTimeout = TimeSpan.FromMinutes(Math.Max(1, settings.TimeoutMinutes));
+        var orderTimeout = Online_Store_Application.Services.AbandonedOrderCleanupService.OrderTimeout;
+
+        Factory.Clock.Advance((paymentTimeout > orderTimeout ? paymentTimeout : orderTimeout) + TimeSpan.FromMinutes(1));
+    }
+
+    /// <summary>Batch 43c: هر دو جاب، هر کدام در scope خودش (مثل اجرای واقعی)، به ترتیب خواسته‌شده.</summary>
+    private async Task RunBothJobsAsync(bool sweeperFirst)
+    {
+        if (sweeperFirst)
+        {
+            await RunSweepInOwnScopeAsync();
+            await NewOrderCleanup().RunCleanupAsync();
+        }
+        else
+        {
+            await NewOrderCleanup().RunCleanupAsync();
+            await RunSweepInOwnScopeAsync();
+        }
+    }
+
+    private async Task RunSweepInOwnScopeAsync()
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IAbandonedPaymentSweeper>().SweepAsync();
+    }
+
+    private async Task AssertCancelledWithoutReviewAsync(OpenPayment open, int listingId, decimal expectedStock)
+    {
+        DbContext.ChangeTracker.Clear();
+        var payment = await PaymentAsync(open.PaymentId);
+        payment.State.Should().Be(PaymentState.Cancelled, "a never-verified payment holds no money (Zarinpal captures only on our Verify)");
+        payment.ReviewRequiredAtUtc.Should().BeNull("a never-verified abandoned payment does not belong in the manual review queue");
+        payment.IsReviewOpen.Should().BeFalse();
+        (await AuditDetailsAsync(open.PaymentId, "Payment.ReviewRequired")).Should().BeEmpty();
+        (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Should().ContainSingle();
+        (await OrderStatusAsync(open.OrderId)).Should().Be(OrderStatus.Cancelled, "the abandoned order is cancelled whichever job runs first");
+        (await StockAsync(listingId)).Should().Be(expectedStock, "the reserved stock is released exactly once");
+        Gateway.VerifyCalls.Should().BeEmpty("the jobs never verify (capture) without an inquiry");
+    }
+
+    private Task<int> ListingOfAsync(int orderId)
+        => DbContext.OrderItem.AsNoTracking().Where(i => i.OrderId == orderId).Select(i => i.ListingId).SingleAsync();
+
+    private async Task<decimal> StockAsync(int listingId)
+        // SQLite cannot SUM decimals; the rows are summed on the client.
+        => (await DbContext.Inventory.AsNoTracking().Where(i => i.ListingId == listingId).Select(i => i.Quantity).ToListAsync()).Sum();
+
+    /// <summary>
+    /// Batch 43c: علامتِ «استعلام خاموش است» را همان‌طور که نسخه‌های پیش از 43c (جاب سفارش‌ها؛ جاب پرداخت‌ها پیش از 43b)
+    /// می‌نوشتند، روی پرداخت می‌گذارد. متن عمداً اینجا تکرار شده است: داده‌ای است که نسخهٔ قدیمی نوشته و تغییر متن در کد
+    /// باید این آزمون را بشکند، وگرنه آن ردیف‌ها دیگر خودکار بسته نمی‌شوند.
+    /// </summary>
+    private async Task FlagAsBefore43cWithInquiryOffAsync(OpenPayment open)
+    {
+        var payment = await DbContext.Payment.AsTracking().SingleAsync(p => p.PaymentId == open.PaymentId);
+        var note =
+            $"source=abandoned-payment sweep | order={payment.OrderId} | amount={payment.Amount.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} " +
+            "| paymentState=Pending | issues: the gateway inquiry is turned off (PaymentGatewaySettings:EnableInquiry=false), so it is not known " +
+            "whether this stale pending payment was paid; it was neither verified nor cancelled automatically. Check the gateway panel: " +
+            "if it was paid run POST payments/verify-by-authority, otherwise cancel the order";
+        payment.FlagForReview(DateTime.UtcNow.AddMinutes(-5), note);
+        await DbContext.SaveChangesAsync();
+        DbContext.ChangeTracker.Clear();
+    }
 
     /// <summary>سفارش را ۷۵ دقیقه پیش می‌برد (از مهلت ۶۰ دقیقه‌ای جاب سفارش‌های رهاشده گذشته).</summary>
     private async Task AgeOrderAsync(int orderId)
