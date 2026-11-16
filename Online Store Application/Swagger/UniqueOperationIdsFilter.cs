@@ -31,5 +31,11 @@ public sealed class UniqueOperationIdsFilter : IDocumentFilter
             for (var i = 1; i < ordered.Count; i++)
                 ordered[i].Operation.OperationId = i == 1 ? $"{group.Key}_Alias" : $"{group.Key}_Alias{i}";
         }
+
+        // Same file on every OS/ICU setup: paths in ordinal order (the discovery order is culture-dependent).
+        var sorted = document.Paths.OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
+        document.Paths.Clear();
+        foreach (var (key, value) in sorted)
+            document.Paths.Add(key, value);
     }
 }
