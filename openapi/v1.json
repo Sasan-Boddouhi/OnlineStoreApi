@@ -279,26 +279,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -330,6 +310,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -562,6 +562,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -581,19 +594,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -799,6 +799,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -818,24 +836,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -1351,26 +1351,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -1402,6 +1382,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -1643,6 +1643,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -1662,19 +1675,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -1880,6 +1880,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -1899,24 +1917,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -2472,26 +2472,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -2523,6 +2503,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -2609,6 +2609,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -2668,19 +2681,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -2886,6 +2886,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -2905,24 +2923,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -2990,6 +2990,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -3049,19 +3062,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -3471,26 +3471,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -3522,6 +3502,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -3599,6 +3599,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -3619,6 +3632,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -3638,32 +3664,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -3784,6 +3784,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -3843,19 +3856,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -4161,6 +4161,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -4220,19 +4233,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -4377,6 +4377,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -4436,19 +4449,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -4644,26 +4644,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -4695,6 +4675,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -5335,6 +5335,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -5355,6 +5368,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -5374,32 +5400,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -5520,6 +5520,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -5539,19 +5552,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -5699,6 +5699,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -5719,6 +5732,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -5738,32 +5764,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -6598,6 +6598,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -6617,19 +6630,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -6935,6 +6935,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -6994,19 +7007,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -7619,46 +7619,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "403": {
             "description": "Not allowed.",
             "content": {
@@ -7685,6 +7645,46 @@
               "NOT_FOUND",
               "ROUTE_NOT_FOUND"
             ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -7774,6 +7774,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -7793,19 +7806,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -7970,6 +7970,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -8009,19 +8022,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -8173,6 +8173,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -8212,19 +8225,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -8397,49 +8397,6 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable"
-          },
           "403": {
             "description": "Not allowed.",
             "content": {
@@ -8467,6 +8424,26 @@
               "ROUTE_NOT_FOUND"
             ]
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation failed.",
             "content": {
@@ -8483,6 +8460,26 @@
               "PHONE_NOT_VERIFIED"
             ]
           },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error.",
             "content": {
@@ -8495,6 +8492,9 @@
             "x-error-codes": [
               "INTERNAL_ERROR"
             ]
+          },
+          "503": {
+            "description": "Service Unavailable"
           }
         }
       }
@@ -8569,6 +8569,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -8629,6 +8642,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -8648,37 +8679,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -8916,6 +8916,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -9015,19 +9028,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -9138,6 +9138,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -9237,19 +9250,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -9360,6 +9360,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -9459,19 +9472,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -9653,26 +9653,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -9704,6 +9684,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -9863,26 +9863,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -9914,6 +9894,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -10000,6 +10000,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -10019,19 +10032,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -10254,6 +10254,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -10273,24 +10291,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -10358,6 +10358,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -10417,19 +10430,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -11157,26 +11157,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -11208,6 +11188,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -11310,6 +11310,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -11369,19 +11382,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -11492,6 +11492,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -11551,19 +11564,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -11933,26 +11933,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -11984,6 +11964,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -12070,6 +12070,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -12089,19 +12102,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -12307,6 +12307,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -12326,24 +12344,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -12610,6 +12610,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -12649,19 +12662,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -12869,26 +12869,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -12920,6 +12900,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -13005,6 +13005,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -13064,19 +13077,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -13197,6 +13197,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -13236,19 +13249,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -13383,6 +13383,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -13442,19 +13455,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -13575,6 +13575,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -13634,19 +13647,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -13852,6 +13852,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -13871,24 +13889,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -13956,6 +13956,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -14015,19 +14028,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -14148,6 +14148,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -14187,19 +14200,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -14334,6 +14334,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -14353,19 +14366,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -14992,26 +14992,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "403": {
             "description": "Not allowed.",
             "content": {
@@ -15056,6 +15036,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -15140,6 +15140,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -15179,19 +15192,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -15317,6 +15317,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -15337,6 +15350,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -15356,32 +15382,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -15502,6 +15502,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -15521,19 +15534,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -15756,6 +15756,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -15775,24 +15793,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -15860,6 +15860,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -15919,19 +15932,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -16156,6 +16156,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -16175,24 +16193,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -16528,26 +16528,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -16579,6 +16559,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -16794,6 +16794,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -16813,19 +16826,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -17031,6 +17031,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -17050,24 +17068,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -17623,6 +17623,20 @@
               }
             }
           },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "NOT_FOUND",
+              "ROUTE_NOT_FOUND"
+            ]
+          },
           "409": {
             "description": "Conflict",
             "content": {
@@ -17662,20 +17676,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Not found.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "NOT_FOUND",
-              "ROUTE_NOT_FOUND"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -17817,6 +17817,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -17836,19 +17849,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -17958,6 +17958,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -17978,6 +17991,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -17997,32 +18023,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -18143,6 +18143,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -18162,19 +18175,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -18375,26 +18375,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "403": {
             "description": "Not allowed.",
             "content": {
@@ -18439,6 +18419,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -18589,6 +18589,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -18609,6 +18622,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -18628,37 +18659,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -18726,6 +18726,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -18746,6 +18759,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -18765,32 +18791,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -18918,6 +18918,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -18957,19 +18970,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -19112,6 +19112,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -19171,19 +19184,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -19701,6 +19701,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -19780,19 +19793,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "422": {
             "description": "Validation failed.",
@@ -19962,6 +19962,20 @@
               }
             }
           },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "NOT_FOUND",
+              "ROUTE_NOT_FOUND"
+            ]
+          },
           "409": {
             "description": "Conflict",
             "content": {
@@ -19981,20 +19995,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Not found.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "NOT_FOUND",
-              "ROUTE_NOT_FOUND"
-            ]
           },
           "422": {
             "description": "Validation failed.",
@@ -20105,6 +20105,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -20124,19 +20137,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -20337,26 +20337,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "403": {
             "description": "Not allowed.",
             "content": {
@@ -20401,6 +20381,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -20487,6 +20487,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -20546,19 +20559,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -20764,6 +20764,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -20783,24 +20801,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -20868,6 +20868,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -20927,19 +20940,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -21075,6 +21075,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -21115,6 +21128,38 @@
               }
             }
           },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "NOT_FOUND",
+              "ROUTE_NOT_FOUND"
+            ]
+          },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -21154,51 +21199,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "404": {
-            "description": "Not found.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "NOT_FOUND",
-              "ROUTE_NOT_FOUND"
-            ]
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "500": {
             "description": "Unexpected server error.",
@@ -21245,6 +21245,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -21264,19 +21277,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -21415,6 +21415,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -21434,19 +21447,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -21609,66 +21609,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Bad request or invalid query parameters.",
             "content": {
@@ -21714,6 +21654,46 @@
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
           },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error.",
             "content": {
@@ -21726,6 +21706,26 @@
             "x-error-codes": [
               "INTERNAL_ERROR"
             ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -21800,46 +21800,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Bad request or invalid query parameters.",
             "content": {
@@ -21884,6 +21844,46 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "500": {
             "description": "Unexpected server error.",
@@ -21971,6 +21971,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -21990,39 +22003,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -22071,6 +22051,26 @@
               "OTP_EXPIRED",
               "PHONE_NOT_VERIFIED"
             ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "500": {
             "description": "Unexpected server error.",
@@ -22158,66 +22158,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Bad request or invalid query parameters.",
             "content": {
@@ -22244,6 +22184,66 @@
               "NOT_FOUND",
               "ROUTE_NOT_FOUND"
             ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "500": {
             "description": "Unexpected server error.",
@@ -22668,6 +22668,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -22687,19 +22700,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -23022,6 +23022,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -23081,19 +23094,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -23277,26 +23277,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "403": {
             "description": "Not allowed.",
             "content": {
@@ -23341,6 +23321,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -23741,26 +23741,6 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            }
-          },
           "404": {
             "description": "Not found.",
             "content": {
@@ -23792,6 +23772,26 @@
               "USER_IS_SYSTEM",
               "PLATFORM_WAREHOUSE_EXISTS"
             ]
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -23950,6 +23950,24 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict with the current state.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "CONCURRENCY_CONFLICT",
+              "DUPLICATE_RECORD",
+              "PAYOUT_ON_HOLD",
+              "PAYOUT_NET_CHANGED",
+              "USER_IS_SYSTEM",
+              "PLATFORM_WAREHOUSE_EXISTS"
+            ]
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -23969,24 +23987,6 @@
                 }
               }
             }
-          },
-          "409": {
-            "description": "Conflict with the current state.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "CONCURRENCY_CONFLICT",
-              "DUPLICATE_RECORD",
-              "PAYOUT_ON_HOLD",
-              "PAYOUT_NET_CHANGED",
-              "USER_IS_SYSTEM",
-              "PLATFORM_WAREHOUSE_EXISTS"
-            ]
           },
           "429": {
             "description": "Rate limit exceeded; see the Retry-After header.",
@@ -24079,6 +24079,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -24098,19 +24111,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -24230,6 +24230,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -24249,19 +24262,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -24409,6 +24409,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -24448,19 +24461,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -24801,6 +24801,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -24860,19 +24873,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -25195,6 +25195,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -25254,19 +25267,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -25387,6 +25387,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -25406,19 +25419,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -25582,6 +25582,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -25621,19 +25634,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -25768,6 +25768,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -25788,6 +25801,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -25807,32 +25833,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -25953,6 +25953,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -25972,6 +25985,19 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "FORBIDDEN"
+            ]
           },
           "404": {
             "description": "Not Found",
@@ -26012,32 +26038,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
-          },
-          "403": {
-            "description": "Not allowed.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "FORBIDDEN"
-            ]
           },
           "422": {
             "description": "Validation failed.",
@@ -26140,25 +26140,18 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
+          "400": {
+            "description": "Bad request or invalid query parameters.",
             "content": {
-              "text/plain": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
                 }
               }
-            }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
           },
           "401": {
             "description": "Unauthorized",
@@ -26220,18 +26213,25 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
+          "409": {
+            "description": "Conflict",
             "content": {
-              "application/problem+json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
+            }
           },
           "422": {
             "description": "Validation failed.",
@@ -26334,25 +26334,18 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
+          "400": {
+            "description": "Bad request or invalid query parameters.",
             "content": {
-              "text/plain": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
                 }
               }
-            }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
           },
           "401": {
             "description": "Unauthorized",
@@ -26414,18 +26407,25 @@
               }
             }
           },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
+          "409": {
+            "description": "Conflict",
             "content": {
-              "application/problem+json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
+            }
           },
           "422": {
             "description": "Validation failed.",
@@ -27115,6 +27115,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -27174,19 +27187,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -27307,6 +27307,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -27346,19 +27359,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -27476,6 +27476,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -27535,19 +27548,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -27651,6 +27651,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -27710,19 +27723,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -28189,6 +28189,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -28248,19 +28261,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -28381,6 +28381,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -28420,19 +28433,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -28550,6 +28550,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -28609,19 +28622,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -28725,6 +28725,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -28784,19 +28797,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -28900,6 +28900,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -28959,19 +28972,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -29455,6 +29455,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -29494,19 +29507,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "404": {
             "description": "Not found.",
@@ -29641,6 +29641,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -29660,19 +29673,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "403": {
             "description": "Not allowed.",
@@ -30244,6 +30244,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -30303,19 +30316,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -30894,6 +30894,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -30953,19 +30966,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -31102,6 +31102,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -31161,19 +31174,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -31312,6 +31312,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -31371,19 +31384,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -31856,6 +31856,19 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "404": {
             "description": "Not Found",
             "content": {
@@ -31875,19 +31888,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",
@@ -32210,6 +32210,19 @@
           "204": {
             "description": "No Content"
           },
+          "400": {
+            "description": "Bad request or invalid query parameters.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            },
+            "x-error-codes": [
+              "INVALID_QUERY"
+            ]
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -32269,19 +32282,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Bad request or invalid query parameters.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetails"
-                }
-              }
-            },
-            "x-error-codes": [
-              "INVALID_QUERY"
-            ]
           },
           "409": {
             "description": "Conflict with the current state.",

@@ -37,5 +37,14 @@ public sealed class UniqueOperationIdsFilter : IDocumentFilter
         document.Paths.Clear();
         foreach (var (key, value) in sorted)
             document.Paths.Add(key, value);
+
+        // Response codes too: attribute reflection order is not stable across runtimes.
+        foreach (var operation in document.Paths.Values.SelectMany(p => p.Operations.Values))
+        {
+            var responses = operation.Responses.OrderBy(r => r.Key, StringComparer.Ordinal).ToList();
+            operation.Responses.Clear();
+            foreach (var (code, response) in responses)
+                operation.Responses.Add(code, response);
+        }
     }
 }
