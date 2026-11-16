@@ -20,14 +20,17 @@ public class CommerceProfile : Profile
             .ForMember(d => d.ShippingMethodId, opt => opt.Ignore());
 
         CreateMap<Coupon, CouponDto>();
+        // Batch 45: FundedBy از API تنظیم نمی‌شود؛ کوپن‌های ساخته‌شده از پنل همیشه پلتفرمی‌اند (N5).
         CreateMap<CreateCouponDto, Coupon>()
             .ConfigureDbDestination()
             .ForMember(d => d.CouponId, opt => opt.Ignore())
-            .ForMember(d => d.UsedCount, opt => opt.Ignore());
+            .ForMember(d => d.UsedCount, opt => opt.Ignore())
+            .ForMember(d => d.FundedBy, opt => opt.Ignore());
         CreateMap<UpdateCouponDto, Coupon>()
             .ConfigureDbDestination()
             .ForMember(d => d.CouponId, opt => opt.Ignore())
-            .ForMember(d => d.UsedCount, opt => opt.Ignore());
+            .ForMember(d => d.UsedCount, opt => opt.Ignore())
+            .ForMember(d => d.FundedBy, opt => opt.Ignore());
 
         CreateMap<Brand, BrandDto>();
         CreateMap<CreateBrandDto, Brand>()

@@ -1,14 +1,18 @@
+using Application.Common.Helpers;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Options;
 using AutoMapper;
 using BusinessLogic.DTOs.Cart;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
+using BusinessLogic.DTOs.Pricing;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessLogic.Services.Implementations
 {
@@ -25,19 +29,25 @@ namespace BusinessLogic.Services.Implementations
         private readonly IInventoryService _inventoryService;
         private readonly IOrderService _orderService;
         private readonly IMapper _mapper;
+        private readonly IPricingService _pricingService;
+        private readonly PaymentGatewaySettings _gatewaySettings;
 
         public CartService(
             IUnitOfWork unitOfWork,
             ILogger<CartService> logger,
             IInventoryService inventoryService,
             IOrderService orderService,
-            IMapper mapper)
+            IMapper mapper,
+            IPricingService pricingService,
+            IOptions<PaymentGatewaySettings> gatewaySettings)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _inventoryService = inventoryService;
             _orderService = orderService;
             _mapper = mapper;
+            _pricingService = pricingService;
+            _gatewaySettings = gatewaySettings.Value;
         }
 
         public CartService(
@@ -45,7 +55,8 @@ namespace BusinessLogic.Services.Implementations
             ILogger<CartService> logger,
             IInventoryService inventoryService,
             IOrderService orderService)
-            : this(unitOfWork, logger, inventoryService, orderService, null!)
+            : this(unitOfWork, logger, inventoryService, orderService, null!,
+                new PricingService(), Options.Create(new PaymentGatewaySettings()))
         {
         }
 
@@ -169,13 +180,33 @@ namespace BusinessLogic.Services.Implementations
             if (listing is null)
                 throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
-            if (listing.Status != SellerProductStatus.Active ||
-                listing.Seller == null ||
-                listing.Seller.Status != SellerStatus.Approved ||
-                !listing.Seller.IsActive)
-                throw new BusinessException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
+            await EnsureListingPurchasableAsync(listing, "این پیشنهاد فروش در حال حاضر فعال نیست.", cancellationToken);
 
             return listing;
+        }
+
+        /// <summary>
+        /// Batch 6 (F-15): پیشنهاد فروش فقط وقتی قابل خرید است که خودش Active، فروشنده‌اش
+        /// تأییدشده و فعال، و واریانت و محصولش هم فعال باشند. محصول حذف‌شده (IsActive = false)
+        /// پیش‌تر از همین مسیر قابل خرید می‌ماند.
+        /// تعارض وضعیت است، نه ورودی نامعتبر ⇒ 409.
+        /// </summary>
+        private async Task EnsureListingPurchasableAsync(
+            SellerProduct listing,
+            string message,
+            CancellationToken cancellationToken)
+        {
+            var purchasable =
+                listing.Status == SellerProductStatus.Active &&
+                listing.Seller != null &&
+                listing.Seller.Status == SellerStatus.Approved &&
+                listing.Seller.IsActive &&
+                await _unitOfWork.Repository<ProductVariant>().AnyAsync(
+                    v => v.VariantId == listing.VariantId && v.IsActive && v.Product.IsActive,
+                    cancellationToken);
+
+            if (!purchasable)
+                throw new ConflictException(message, "LISTING_NOT_AVAILABLE");
         }
 
         private async Task EnsureStockAsync(int listingId, decimal quantity, CancellationToken cancellationToken)
@@ -187,18 +218,15 @@ namespace BusinessLogic.Services.Implementations
                         .Include(l => l.Seller),
                     cancellationToken);
 
-            if (listing is null ||
-                listing.Status != SellerProductStatus.Active ||
-                listing.Seller == null ||
-                listing.Seller.Status != SellerStatus.Approved ||
-                !listing.Seller.IsActive)
-            {
-                throw new BusinessException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
-            }
+            if (listing is null)
+                throw new ConflictException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_AVAILABLE");
+
+            await EnsureListingPurchasableAsync(listing, "این پیشنهاد فروش در حال حاضر فعال نیست.", cancellationToken);
 
             var available = await _inventoryService.GetAvailableAsync(listingId, cancellationToken);
             if (available < quantity)
-                throw new BusinessException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
+                // Batch 7b: کمبود موجودی تعارض وضعیت است (409)، هم‌سو با Inventory.Reserve در دامنه.
+                throw new ConflictException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
         }
 
         /// <summary>
@@ -232,7 +260,8 @@ namespace BusinessLogic.Services.Implementations
                         VariantName = listing?.Variant?.Name ?? listing?.Variant?.Sku,
                         UnitPrice = unitPrice,
                         Quantity = i.Quantity,
-                        LineTotal = unitPrice * i.Quantity
+                        // Batch 45b: همان گرد کردن قلم سفارش، تا جمع سبد با مبلغ سفارش یکی باشد.
+                        LineTotal = RialMoney.LineTotal(i.Quantity, unitPrice)
                     };
                 })
                 .ToList();
@@ -277,10 +306,17 @@ namespace BusinessLogic.Services.Implementations
                 throw new BusinessException("تعداد باید بزرگ‌تر از صفر باشد.", "INVALID_QUANTITY");
 
             var listing = await LoadActiveListingAsync(dto.ListingId, cancellationToken);
+
+            // Batch 45c: مقدار تابع واحد کالاست (نیم گوشی ممکن نیست؛ بیش از دو رقم اعشار رد می‌شود، گرد نمی‌شود).
+            await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listing.ListingId, dto.Quantity, cancellationToken);
+
             var cart = await GetOrCreateCartAsync(userId, sessionId, cancellationToken);
 
             var existing = cart.Items.FirstOrDefault(i => i.ListingId == dto.ListingId);
             var newQuantity = (existing?.Quantity ?? 0) + dto.Quantity;
+
+            if (existing is not null)
+                await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listing.ListingId, newQuantity, cancellationToken);
 
             if (newQuantity > MaxLineQuantity)
                 throw new BusinessException($"حداکثر تعداد هر قلم {MaxLineQuantity} است.", "QUANTITY_LIMIT_EXCEEDED");
@@ -337,6 +373,7 @@ namespace BusinessLogic.Services.Implementations
             if (cart is null || item is null)
                 throw new NotFoundException("این قلم در سبد خرید نیست.", "CART_ITEM_NOT_FOUND");
 
+            await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listingId, quantity, cancellationToken);
             await EnsureStockAsync(listingId, quantity, cancellationToken);
 
             item.Quantity = quantity;
@@ -409,6 +446,9 @@ namespace BusinessLogic.Services.Implementations
 
             foreach (var entry in planned)
             {
+                // Batch 45c: سبد مهمانِ پیش از 45c ممکن است مقدار کسری برای کالای عددی داشته باشد؛ ادغام آن را منتقل نمی‌کند.
+                await ListingQuantityRule.EnsureValidAsync(_unitOfWork, entry.ListingId, entry.Quantity, cancellationToken);
+
                 if (entry.Quantity > MaxLineQuantity)
                     throw new BusinessException($"حداکثر تعداد هر قلم {MaxLineQuantity} است.", "QUANTITY_LIMIT_EXCEEDED");
 
@@ -455,13 +495,16 @@ namespace BusinessLogic.Services.Implementations
             CancellationToken cancellationToken = default)
         {
             if (!userId.HasValue)
-                throw new BusinessException(
+                throw new UnauthorizedException(
                     "برای نهایی‌کردن سفارش باید وارد حساب کاربری شوید.", "CHECKOUT_REQUIRES_LOGIN");
 
             if (string.IsNullOrWhiteSpace(dto.ShippingFullName)
                 || string.IsNullOrWhiteSpace(dto.ShippingAddress)
                 || string.IsNullOrWhiteSpace(dto.ShippingPhoneNumber))
                 throw new BusinessException("اطلاعات ارسال سفارش کامل نیست.", "CHECKOUT_SHIPPING_REQUIRED");
+
+            // Batch 48b: شمارهٔ تحویل‌گیرنده فقط به شکل استاندارد 09… روی سفارش ذخیره می‌شود.
+            var shippingPhone = IranianPhoneNumber.NormalizeOrThrow(dto.ShippingPhoneNumber);
 
             var customer = await _unitOfWork.Repository<Customer>()
                 .FirstOrDefaultAsync(
@@ -513,34 +556,41 @@ namespace BusinessLogic.Services.Implementations
             foreach (var item in cart.Items.OrderBy(i => i.CartItemId))
             {
                 if (!listings.TryGetValue(item.ListingId, out var listing))
-                    throw new BusinessException(
+                    throw new NotFoundException(
                         $"پیشنهاد فروش {item.ListingId} دیگر موجود نیست.", "LISTING_NOT_FOUND");
 
-                if (listing.Status != SellerProductStatus.Active ||
-                    listing.Seller == null ||
-                    listing.Seller.Status != SellerStatus.Approved ||
-                    !listing.Seller.IsActive)
-                    throw new BusinessException(
-                        $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.", "LISTING_NOT_ACTIVE");
+                await EnsureListingPurchasableAsync(
+                    listing,
+                    $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.",
+                    cancellationToken);
 
+                // Batch 45c: قلمی که پیش از 45c با مقدار نامعتبر در سبد مانده، به سفارش نمی‌رسد.
+                await ListingQuantityRule.EnsureValidAsync(_unitOfWork, item.ListingId, item.Quantity, cancellationToken);
                 await EnsureStockAsync(item.ListingId, item.Quantity, cancellationToken);
             }
 
             // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11 & M7.12) ----
-            decimal shippingCost = 0;
+            // Batch 6 (F-11): هزینهٔ ارسال فقط از روش ارسال روی سرور خوانده می‌شود. اگر دست‌کم یک
+            // روش فعال وجود دارد، نفرستادن روش ارسال رد می‌شود؛ پیش‌تر همین حذف یک فیلد ارسال را رایگان می‌کرد.
+            // Batch 45 (N4): BaseCost هزینهٔ هر بسته است؛ هر گروه فروشنده یک بسته (جمع در PricingService).
+            decimal shippingFeePerParcel = 0;
             if (dto.ShippingMethodId.HasValue)
             {
                 var shippingMethod = await _unitOfWork.Repository<ShippingMethod>()
                     .GetByIdAsync(dto.ShippingMethodId.Value, cancellationToken);
                 if (shippingMethod is null || !shippingMethod.IsActive)
-                    throw new BusinessException("روش ارسال نامعتبر یا غیرفعال است.", "INVALID_SHIPPING_METHOD");
+                    throw new UnprocessableEntityException("روش ارسال نامعتبر یا غیرفعال است.", "INVALID_SHIPPING_METHOD");
 
-                shippingCost = shippingMethod.BaseCost;
+                shippingFeePerParcel = shippingMethod.BaseCost;
+            }
+            else if (await _unitOfWork.Repository<ShippingMethod>().AnyAsync(m => m.IsActive, cancellationToken))
+            {
+                throw new UnprocessableEntityException("انتخاب روش ارسال برای ثبت سفارش الزامی است.", "SHIPPING_METHOD_REQUIRED");
             }
 
-            decimal discountAmount = 0;
             int? couponId = null;
             Coupon? couponEntity = null;
+            PricingCoupon? pricingCoupon = null;
             if (!string.IsNullOrWhiteSpace(dto.CouponCode))
             {
                 var normalizedCode = dto.CouponCode.Trim().ToUpperInvariant();
@@ -548,14 +598,14 @@ namespace BusinessLogic.Services.Implementations
                     .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode && c.IsActive).AsTracking(), cancellationToken);
 
                 if (couponEntity is null)
-                    throw new BusinessException("کد تخفیف معتبر نیست.", "INVALID_COUPON");
+                    throw new UnprocessableEntityException("کد تخفیف معتبر نیست.", "INVALID_COUPON");
 
                 if (couponEntity.ExpiresAtUtc.HasValue && couponEntity.ExpiresAtUtc.Value < DateTime.UtcNow)
-                    throw new BusinessException("کد تخفیف منقضی شده است.", "COUPON_EXPIRED");
+                    throw new UnprocessableEntityException("کد تخفیف منقضی شده است.", "COUPON_EXPIRED");
 
                 // بررسی سقف استفاده کلی کوپن (M7.12)
                 if (couponEntity.UsageLimit.HasValue && couponEntity.UsedCount >= couponEntity.UsageLimit.Value)
-                    throw new BusinessException("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.", "COUPON_LIMIT_REACHED");
+                    throw new UnprocessableEntityException("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.", "COUPON_LIMIT_REACHED");
 
                 // بررسی سقف استفاده به ازای هر کاربر — به استثنای سفارش‌های لغوشده (M7.13)
                 if (couponEntity.UsageLimitPerUser.HasValue)
@@ -564,22 +614,21 @@ namespace BusinessLogic.Services.Implementations
                         .CountAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.CouponId == couponEntity.CouponId && o.Status != OrderStatus.Cancelled), cancellationToken);
 
                     if (userUsageCount >= couponEntity.UsageLimitPerUser.Value)
-                        throw new BusinessException("شما به سقف مجاز استفاده از این کد تخفیف رسیده‌اید.", "COUPON_LIMIT_REACHED");
+                        throw new UnprocessableEntityException("شما به سقف مجاز استفاده از این کد تخفیف رسیده‌اید.", "COUPON_LIMIT_REACHED");
                 }
 
                 var itemsTotal = cart.Items.Sum(i =>
                 {
                     listings.TryGetValue(i.ListingId, out var l);
-                    return (l?.Price ?? i.UnitPrice) * i.Quantity;
+                    return RialMoney.LineTotal(i.Quantity, l?.Price ?? i.UnitPrice);
                 });
 
                 if (couponEntity.MinOrderAmount.HasValue && itemsTotal < couponEntity.MinOrderAmount.Value)
-                    throw new BusinessException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {couponEntity.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
+                    throw new UnprocessableEntityException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {couponEntity.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
 
-                discountAmount = Math.Round(itemsTotal * (couponEntity.DiscountPercentage / 100m), 2);
-                if (couponEntity.MaxDiscountAmount.HasValue && discountAmount > couponEntity.MaxDiscountAmount.Value)
-                    discountAmount = couponEntity.MaxDiscountAmount.Value;
-
+                // Batch 45 (FIN-06/FIN-09): مبلغ تخفیف فقط در PricingService حساب می‌شود (ریال کامل، سقف N7).
+                pricingCoupon = new PricingCoupon(
+                    couponEntity.DiscountPercentage, couponEntity.MaxDiscountAmount, couponEntity.FundedBy);
                 couponId = couponEntity.CouponId;
             }
 
@@ -597,7 +646,7 @@ namespace BusinessLogic.Services.Implementations
                     customer.CustomerId,
                     dto.ShippingFullName,
                     dto.ShippingAddress,
-                    dto.ShippingPhoneNumber,
+                    shippingPhone,
                     dto.IdempotencyKey,
                     cancellationToken);
 
@@ -609,43 +658,37 @@ namespace BusinessLogic.Services.Implementations
 
                 result = await _orderService.AddItemsToOrderAsync(orderId, itemsDto, cancellationToken);
 
-                // اعمال تخفیف و هزینه ارسال به سفارش و تسهیم بین گروه‌های فروشنده (M7.12)
+                // Batch 45 (FIN-04/06/09/10/14): تخفیف، ارسال هر بسته و سهم هر گروه فقط از PricingService می‌آید.
                 var orderEntity = await _unitOfWork.Repository<Order>()
-                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.OrderId == orderId).Include(o => o.SellerGroups).AsTracking(), cancellationToken);
+                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.OrderId == orderId)
+                        .Include(o => o.SellerGroups).Include(o => o.OrderItems).AsTracking(), cancellationToken);
 
                 if (orderEntity != null)
                 {
-                    orderEntity.ApplyDiscountsAndShipping(discountAmount, shippingCost, couponId, dto.ShippingMethodId);
+                    var groupsBySeller = orderEntity.SellerGroups.ToDictionary(g => g.SellerId);
+                    var pricing = _pricingService.Calculate(new PricingRequest(
+                        groupsBySeller.Values.Select(g => new PricingGroupInput(g.SellerId, g.SubTotal, g.CommissionRate)).ToList(),
+                        shippingFeePerParcel,
+                        pricingCoupon,
+                        _gatewaySettings.MinimumAmountRial));
 
-                    var totalItemsSubTotal = orderEntity.SellerGroups.Sum(g => g.SubTotal);
-                    var groupCount = orderEntity.SellerGroups.Count;
+                    if (pricing.DiscountCappedByMinimumPayable)
+                        _logger.LogInformation(
+                            "Coupon {CouponId} discount on order {OrderId} capped to {Discount} IRR to keep the payable at the gateway minimum",
+                            couponId, orderId, pricing.DiscountAmount);
 
-                    decimal allocatedDiscount = 0;
-                    decimal allocatedShipping = 0;
-                    var groupsList = orderEntity.SellerGroups.ToList();
+                    orderEntity.ApplyDiscountsAndShipping(pricing.DiscountAmount, pricing.ShippingTotal, couponId, dto.ShippingMethodId);
+                    if (orderEntity.TotalAmount != pricing.PayableTotal)
+                        throw new InvalidOperationException(
+                            $"Order {orderId} total {orderEntity.TotalAmount} differs from the priced total {pricing.PayableTotal}.");
 
-                    for (int i = 0; i < groupsList.Count; i++)
+                    foreach (var priced in pricing.Groups)
                     {
-                        var group = groupsList[i];
-                        decimal groupDiscount;
-                        decimal groupShipping;
-
-                        if (i == groupsList.Count - 1)
-                        {
-                            groupDiscount = Math.Max(0, discountAmount - allocatedDiscount);
-                            groupShipping = Math.Max(0, shippingCost - allocatedShipping);
-                        }
-                        else
-                        {
-                            decimal ratio = totalItemsSubTotal > 0 ? group.SubTotal / totalItemsSubTotal : (1m / groupCount);
-                            groupDiscount = Math.Round(discountAmount * ratio, 2, MidpointRounding.AwayFromZero);
-                            groupShipping = Math.Round(shippingCost / groupCount, 2, MidpointRounding.AwayFromZero);
-
-                            allocatedDiscount += groupDiscount;
-                            allocatedShipping += groupShipping;
-                        }
-
-                        group.SetDiscountAndShippingShare(groupDiscount, groupShipping);
+                        var group = groupsBySeller[priced.SellerId];
+                        group.ApplyPricing(priced.DiscountAmount, priced.PlatformDiscountShare, priced.ShippingAmount);
+                        if (group.CommissionAmount != priced.CommissionAmount || group.SellerPayable != priced.SellerPayable)
+                            throw new InvalidOperationException(
+                                $"Seller group {priced.SellerId} of order {orderId} does not match the priced settlement.");
                         _unitOfWork.Repository<OrderSellerGroup>().Update(group);
                     }
 

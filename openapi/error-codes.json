@@ -1,0 +1,152 @@
+[
+  {
+    "code": "CONCURRENCY_CONFLICT",
+    "status": 409,
+    "message": "تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.",
+    "type": "urn:onlinestore:error:concurrency-conflict"
+  },
+  {
+    "code": "DUPLICATE_RECORD",
+    "status": 409,
+    "message": "رکوردی با همین مشخصات قبلاً ثبت شده است.",
+    "type": "urn:onlinestore:error:duplicate-record"
+  },
+  {
+    "code": "FORBIDDEN",
+    "status": 403,
+    "message": "شما اجازهٔ انجام این عملیات را ندارید.",
+    "type": "urn:onlinestore:error:forbidden"
+  },
+  {
+    "code": "INTERNAL_ERROR",
+    "status": 500,
+    "message": "خطای غیرمنتظره‌ای رخ داد. لطفاً بعداً دوباره تلاش کنید.",
+    "type": "urn:onlinestore:error:internal-error"
+  },
+  {
+    "code": "INVALID_QUERY",
+    "status": 400,
+    "message": "پارامترهای فیلتر یا مرتب‌سازی معتبر نیستند.",
+    "type": "urn:onlinestore:error:invalid-query"
+  },
+  {
+    "code": "METHOD_NOT_ALLOWED",
+    "status": 405,
+    "message": "این متد HTTP برای مسیر درخواستی مجاز نیست.",
+    "type": "urn:onlinestore:error:method-not-allowed"
+  },
+  {
+    "code": "NOT_FOUND",
+    "status": 404,
+    "message": "مورد درخواستی یافت نشد.",
+    "type": "urn:onlinestore:error:not-found"
+  },
+  {
+    "code": "OTP_EXPIRED",
+    "status": 422,
+    "message": "کد تأیید منقضی شده است. کد تازه درخواست کنید.",
+    "type": "urn:onlinestore:error:otp-expired"
+  },
+  {
+    "code": "OTP_INVALID",
+    "status": 422,
+    "message": "کد تأیید نادرست است یا دیگر معتبر نیست.",
+    "type": "urn:onlinestore:error:otp-invalid"
+  },
+  {
+    "code": "OTP_SEND_UNAVAILABLE",
+    "status": 503,
+    "message": "ارسال پیامک تأیید در حال حاضر ممکن نیست. لطفاً بعداً تلاش کنید.",
+    "type": "urn:onlinestore:error:otp-send-unavailable"
+  },
+  {
+    "code": "OTP_TOO_MANY_ATTEMPTS",
+    "status": 429,
+    "message": "تعداد تلاش‌های نادرست بیش از حد مجاز است. کد تازه درخواست کنید.",
+    "type": "urn:onlinestore:error:otp-too-many-attempts"
+  },
+  {
+    "code": "PAYOUT_NET_CHANGED",
+    "status": 409,
+    "message": "مبلغ خالص تسویه تغییر کرده است؛ فهرست را تازه کنید.",
+    "type": "urn:onlinestore:error:payout-net-changed"
+  },
+  {
+    "code": "PAYOUT_ON_HOLD",
+    "status": 409,
+    "message": "این تسویه هنوز در دورهٔ نگه‌داشت است و قابل پرداخت نیست.",
+    "type": "urn:onlinestore:error:payout-on-hold"
+  },
+  {
+    "code": "PHONE_NOT_VERIFIED",
+    "status": 422,
+    "message": "شماره موبایل تأیید نشده است. ابتدا کد تأیید را وارد کنید.",
+    "type": "urn:onlinestore:error:phone-not-verified"
+  },
+  {
+    "code": "PLATFORM_WAREHOUSE_EXISTS",
+    "status": 409,
+    "message": "انبار پلتفرم از قبل وجود دارد.",
+    "type": "urn:onlinestore:error:platform-warehouse-exists"
+  },
+  {
+    "code": "QUANTITY_INVALID_FOR_UNIT",
+    "status": 422,
+    "message": "مقدار برای واحد این کالا مجاز نیست: کالای عددی فقط عدد صحیح ۱ یا بیشتر، کالای وزنی و حجمی حداکثر دو رقم اعشار.",
+    "type": "urn:onlinestore:error:quantity-invalid-for-unit"
+  },
+  {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "status": 429,
+    "message": "تعداد درخواست‌های شما بیش از حد مجاز است.",
+    "type": "urn:onlinestore:error:rate-limit-exceeded"
+  },
+  {
+    "code": "ROUTE_NOT_FOUND",
+    "status": 404,
+    "message": "مسیر درخواستی وجود ندارد.",
+    "type": "urn:onlinestore:error:route-not-found"
+  },
+  {
+    "code": "SESSION_REVOKED",
+    "status": 401,
+    "message": "نشست شما لغو شده است. لطفاً دوباره وارد شوید.",
+    "type": "urn:onlinestore:error:session-revoked"
+  },
+  {
+    "code": "TOKEN_EXPIRED",
+    "status": 401,
+    "message": "اعتبار نشست شما به پایان رسیده است. لطفاً توکن را تازه‌سازی کنید.",
+    "type": "urn:onlinestore:error:token-expired"
+  },
+  {
+    "code": "TOKEN_INVALID",
+    "status": 401,
+    "message": "توکن ارسال‌شده معتبر نیست.",
+    "type": "urn:onlinestore:error:token-invalid"
+  },
+  {
+    "code": "UNAUTHENTICATED",
+    "status": 401,
+    "message": "برای دسترسی باید وارد حساب کاربری شوید.",
+    "type": "urn:onlinestore:error:unauthenticated"
+  },
+  {
+    "code": "UNSUPPORTED_MEDIA_TYPE",
+    "status": 415,
+    "message": "نوع محتوای درخواست پشتیبانی نمی‌شود.",
+    "type": "urn:onlinestore:error:unsupported-media-type"
+  },
+  {
+    "code": "USER_IS_SYSTEM",
+    "status": 409,
+    "message": "این حساب سیستمی است و قابل تغییر نیست.",
+    "type": "urn:onlinestore:error:user-is-system"
+  },
+  {
+    "code": "VALIDATION_ERROR",
+    "status": 422,
+    "message": "یک یا چند ورودی معتبر نیست.",
+    "type": "urn:onlinestore:error:validation-error"
+  }
+]

@@ -23,16 +23,19 @@ namespace BusinessLogic.Services.Implementations
         private readonly IStorageService _storageService;
         private readonly ILogger<ProductImageService> _logger;
         private readonly StorageSettings _storageSettings;
+        private readonly ProductImageUrlOptions _urlOptions;
 
         public ProductImageService(
             IUnitOfWork unitOfWork,
             IStorageService storageService,
             IOptions<StorageSettings> storageSettings,
+            IOptions<ProductImageUrlOptions> urlOptions,
             ILogger<ProductImageService> logger)
         {
             _unitOfWork = unitOfWork;
             _storageService = storageService;
             _storageSettings = storageSettings.Value;
+            _urlOptions = urlOptions.Value;
             _logger = logger;
         }
 
@@ -56,7 +59,7 @@ namespace BusinessLogic.Services.Implementations
 
             try
             {
-                return await AddAsync(productId, url, alt, isPrimary, cancellationToken);
+                return await RegisterAsync(productId, url, alt, isPrimary, cancellationToken);
             }
             catch
             {
@@ -78,6 +81,59 @@ namespace BusinessLogic.Services.Implementations
             if (string.IsNullOrWhiteSpace(url))
                 throw new BusinessException("آدرس تصویر الزامی است.", "IMAGE_URL_REQUIRED");
 
+            // Batch 48c: مسیر «ثبت با آدرس» فقط آدرس خارجی مجاز را می‌پذیرد؛ آدرس محلی آپلود از RegisterAsync می‌گذرد.
+            EnsureExternalUrlAllowed(url.Trim());
+
+            return await RegisterAsync(productId, url, alt, isPrimary, cancellationToken);
+        }
+
+        /// <summary>
+        /// آدرس باید مطلق و https باشد، user-info و پورت غیرپیش‌فرض نداشته باشد و میزبانش (IdnHost، بدون حساسیت به حروف،
+        /// مطابقت دقیق) در <see cref="ProductImageUrlOptions.AllowedExternalHosts"/> باشد.
+        /// </summary>
+        private void EnsureExternalUrlAllowed(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                || uri.Scheme != Uri.UriSchemeHttps
+                || string.IsNullOrEmpty(uri.Host))
+                throw new UnprocessableEntityException(
+                    "آدرس تصویر باید یک آدرس مطلق با پروتکل https باشد.", "VALIDATION_ERROR");
+
+            if (!string.IsNullOrEmpty(uri.UserInfo))
+                throw new UnprocessableEntityException(
+                    "آدرس تصویر نباید شامل نام کاربری یا گذرواژه باشد.", "IMAGE_HOST_NOT_ALLOWED");
+
+            if (!uri.IsDefaultPort)
+                throw new UnprocessableEntityException(
+                    "آدرس تصویر باید از پورت پیش‌فرض https استفاده کند.", "IMAGE_HOST_NOT_ALLOWED");
+
+            var allowed = (_urlOptions.AllowedExternalHosts ?? [])
+                .Where(ProductImageUrlOptions.IsValidHost)
+                .Select(h => new Uri("https://" + h).IdnHost);
+
+            if (!allowed.Contains(uri.IdnHost, StringComparer.OrdinalIgnoreCase))
+                throw new UnprocessableEntityException(
+                    "میزبان این آدرس تصویر مجاز نیست.", "IMAGE_HOST_NOT_ALLOWED");
+        }
+
+        /// <summary>آدرس محلی تولیدشده توسط همین سرور: <c>{PublicBaseUrl}/{نام‌فایل}</c> بدون هیچ زیرمسیر.</summary>
+        private bool IsLocalUploadUrl(string url)
+        {
+            var prefix = _storageSettings.PublicBaseUrl.TrimEnd('/') + "/";
+            if (!url.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            var name = url[prefix.Length..];
+            return name.Length > 0 && name.IndexOfAny(['/', '\\', '?', '#', ':']) < 0 && name != "." && name != "..";
+        }
+
+        private async Task<ProductImageDto> RegisterAsync(
+            int productId,
+            string url,
+            string? alt,
+            bool isPrimary,
+            CancellationToken cancellationToken)
+        {
             var existing = await LoadImagesAsync(productId, tracking: true, cancellationToken);
 
             if (existing.Count >= MaxImagesPerProduct)
@@ -130,7 +186,9 @@ namespace BusinessLogic.Services.Implementations
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            await _storageService.DeleteAsync(image.Url, cancellationToken);
+            // Batch 48c: StorageService نام فایل را از آدرس می‌گیرد؛ آدرس خارجی با همان نام فایل نباید فایل آپلودشده را پاک کند.
+            if (IsLocalUploadUrl(image.Url))
+                await _storageService.DeleteAsync(image.Url, cancellationToken);
 
             _logger.LogInformation("Image {ImageId} removed from product {ProductId}", imageId, productId);
         }

@@ -1,5 +1,7 @@
 using FluentValidation;
 using BusinessLogic.DTOs.Auth;
+using BusinessLogic.Validators.Common;
+using BusinessLogic.Common.Validation;
 
 namespace BusinessLogic.Validators.Auth
 {
@@ -17,7 +19,7 @@ namespace BusinessLogic.Validators.Auth
 
             RuleFor(x => x.PhoneNumber)
                 .NotEmpty().WithMessage("شماره تماس الزامی است")
-                .Matches(@"^09\d{9}$").WithMessage("شماره موبایل معتبر نیست (مثال: 09123456789)");
+                .MustBeIranianMobile();
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("رمز عبور الزامی است")
@@ -27,9 +29,10 @@ namespace BusinessLogic.Validators.Auth
                 .EmailAddress().When(x => !string.IsNullOrEmpty(x.Email))
                 .WithMessage("ایمیل معتبر نیست");
 
+            // Batch 11 (F-41): فقط قالب کافی نیست؛ 1400/13/40 از regex می‌گذشت و در تبدیل به میلادی 500 می‌داد.
             RuleFor(x => x.DateOfBirth)
-                .Matches(@"^\d{4}/\d{2}/\d{2}$").When(x => !string.IsNullOrEmpty(x.DateOfBirth))
-                .WithMessage("فرمت تاریخ تولد باید YYYY/MM/DD باشد");
+                .Must(PersianDateValidator.IsValid).When(x => !string.IsNullOrEmpty(x.DateOfBirth))
+                .WithMessage("فرمت تاریخ تولد باید YYYY/MM/DD باشد و تاریخ معتبری باشد");
         }
     }
 }

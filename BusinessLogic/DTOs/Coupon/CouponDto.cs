@@ -14,6 +14,9 @@ public class CouponDto
     public int? UsageLimit { get; set; }
     public int? UsageLimitPerUser { get; set; }
     public int UsedCount { get; set; }
+
+    /// <summary>Batch 45: تأمین‌کنندهٔ هزینهٔ تخفیف — "Platform" (پیش‌فرض) یا "Seller". فقط خواندنی.</summary>
+    public string FundedBy { get; set; } = string.Empty;
 }
 
 public class CreateCouponDto

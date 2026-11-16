@@ -57,6 +57,22 @@ public class UserServiceTests
         _uowMock.Setup(u => u.Repository<User>()).Returns(_userRepoMock.Object);
         _uowMock.Setup(u => u.Repository<Address>()).Returns(_addressRepoMock.Object);
 
+        // Batch 11: غیرفعال‌سازی نشست‌ها و توکن‌ها را باطل می‌کند و گاردهای مدیر ارشد نقش‌ها را می‌خوانند.
+        var roleRepoMock = new Mock<IGenericRepository<Role>>();
+        var userRoleRepoMock = new Mock<IGenericRepository<UserRole>>();
+        var sessionRepoMock = new Mock<IGenericRepository<UserSession>>();
+        var refreshTokenRepoMock = new Mock<IGenericRepository<RefreshTokenEntity>>();
+        roleRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Role>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Role?)null);
+        sessionRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<UserSession>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<UserSession>());
+        refreshTokenRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<RefreshTokenEntity>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RefreshTokenEntity>());
+        _uowMock.Setup(u => u.Repository<Role>()).Returns(roleRepoMock.Object);
+        _uowMock.Setup(u => u.Repository<UserRole>()).Returns(userRoleRepoMock.Object);
+        _uowMock.Setup(u => u.Repository<UserSession>()).Returns(sessionRepoMock.Object);
+        _uowMock.Setup(u => u.Repository<RefreshTokenEntity>()).Returns(refreshTokenRepoMock.Object);
+
         _uowMock.Setup(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -199,6 +215,47 @@ public class UserServiceTests
         result!.PhoneNumber.Should().Be("09120000001");
     }
 
+    // Batch 46: شمارهٔ تازه‌ای که ادمین ثبت می‌کند را مالکش با OTP تأیید نکرده است.
+    [Fact]
+    public async Task UpdateAsync_AdminChangesPhone_ResetsPhoneVerification()
+    {
+        var user = CreateValidUser(1, "09120000000");
+        user.PhoneNumberConfirmed = true;
+        var oldStamp = user.SecurityStamp;
+        SetupUpdate(user);
+
+        await _service.UpdateAsync(new UpdateUserDto { UserId = 1, PhoneNumber = "09120000001", FirstName = "Test", LastName = "User" });
+
+        user.PhoneNumber.Should().Be("09120000001");
+        user.PhoneNumberConfirmed.Should().BeFalse("the new number was never verified by OTP");
+        user.SecurityStamp.Should().NotBe(oldStamp);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SamePhoneInAnotherFormat_KeepsPhoneVerification()
+    {
+        var user = CreateValidUser(1, "09120000000");
+        user.PhoneNumberConfirmed = true;
+        SetupUpdate(user);
+
+        await _service.UpdateAsync(new UpdateUserDto { UserId = 1, PhoneNumber = "+98 912 000 0000", FirstName = "Test", LastName = "User" });
+
+        user.PhoneNumber.Should().Be("09120000000");
+        user.PhoneNumberConfirmed.Should().BeTrue("the canonical number did not change");
+    }
+
+    private void SetupUpdate(User user)
+    {
+        _userRepoMock.Setup(r => r.GetByIdAsync(user.UserId, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        _userRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                It.IsAny<Spec<User>>(),
+                It.IsAny<Expression<Func<User, UserDto>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserDto { UserId = user.UserId, PhoneNumber = user.PhoneNumber });
+    }
+
     [Fact]
     public async Task UpdateAsync_UserNotFound_ReturnsNull()
     {
@@ -209,7 +266,7 @@ public class UserServiceTests
 
     // ---- DeleteAsync ----
     [Fact]
-    public async Task DeleteAsync_UserExists_ReturnsTrue()
+    public async Task DeleteAsync_UserExists_DeactivatesInsteadOfDeleting()
     {
         var user = CreateValidUser(1);
         _userRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(user);
@@ -217,7 +274,9 @@ public class UserServiceTests
 
         var result = await _service.DeleteAsync(1);
         result.Should().BeTrue();
-        _userRepoMock.Verify(r => r.Delete(user), Times.Once);
+        // Batch 11: حذف نرم؛ کاربر غیرفعال می‌شود و ردیفش حذف نمی‌شود.
+        _userRepoMock.Verify(r => r.Delete(It.IsAny<User>()), Times.Never);
+        user.IsActive.Should().BeFalse();
     }
 
     [Fact]

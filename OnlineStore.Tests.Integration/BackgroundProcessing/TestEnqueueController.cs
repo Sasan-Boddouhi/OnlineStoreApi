@@ -1,11 +1,14 @@
 ﻿using Asp.Versioning;
 using Application.BackgroundJobs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace OnlineStore.Tests.Integration.BackgroundProcessing;
 
 [ApiController]
 [ApiVersionNeutral]
+// Batch 40: کنترلر آزمایشی؛ با سیاست پیش‌فرض (احراز هویت) باید صریحاً عمومی باشد.
+[AllowAnonymous]
 [Route("test/enqueue")]
 public sealed class TestEnqueueController : ControllerBase
 {

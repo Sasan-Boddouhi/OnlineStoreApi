@@ -206,13 +206,15 @@ Important relationship groups include:
 Application-specific failures are represented under `Application/Exceptions`, including:
 
 - `AppException`
-- `BusinessException`
-- `ConflictException`
+- `BusinessException` (400 — invalid input)
+- `UnprocessableEntityException` (422 — well-formed input rejected by a business precondition)
+- `ConflictException` (409 — the resource is in a state that does not allow the action)
 - `ForbiddenException`
 - `NotFoundException`
 - `UnauthorizedException`
+- `BusinessRuleViolationException` — thrown by domain entities (`Order`, `OrderSellerGroup`, `Payment`, `SellerPayout`, `Inventory`) when a state-machine rule is broken. It derives from `InvalidOperationException` (so existing catch blocks keep working) and carries a `Code` (for example `ORDER_INVALID_STATE`, `GROUP_INVALID_STATE`, `PAYMENT_INVALID_TRANSITION`, `PAYOUT_INVALID_STATE`, `INSUFFICIENT_STOCK`). It is not an `AppException`, so the domain layer stays free of HTTP concerns.
 
-`ExceptionHandlingMiddleware` translates these exceptions into HTTP Problem Details responses.
+`ExceptionHandlingMiddleware` translates these exceptions into HTTP Problem Details responses. Status convention: invalid input 400/422, state conflict 409, never 500 for a domain rule. The middleware also maps `DbUpdateConcurrencyException` to 409 `CONCURRENCY_CONFLICT` and a database unique-index/key violation to 409 `DUPLICATE_RECORD` (SQL Server error 2601/2627; database details are not returned). Any other `DbUpdateException` stays a 500.
 
 FluentValidation exceptions are returned as validation Problem Details with HTTP 422 and property-level validation errors. Unexpected exceptions become HTTP 500 responses with a generic client-facing message and are logged server-side.
 
@@ -251,6 +253,17 @@ Detailed authentication/session behavior belongs in `docs/authentication.md`.
 ## 13. Caching and Cross-cutting Infrastructure
 
 The API composition root registers memory caching and Redis-based caching. Redis is also used for distributed output caching outside the Testing environment.
+
+Output caching is opt-in. There is no base policy: an endpoint is cached only when it carries a named policy from `OutputCachePolicies` (`Online Store Application/Extensions/OutputCacheExtensions.cs`). Both policies ignore the query string, so random query parameters cannot add entries.
+
+| Policy | Duration | Endpoints |
+|---|---|---|
+| `ReferenceData` | 60 s | `GET categories`, `categories/tree`, `categories/{id}`, `brands`, `brands/{id}`, `shipping-methods`, `shipping-methods/{id}`, `provinces/{id}`, `cities/{id}`, `cities/by-province/{provinceId}` |
+| `ProductDetail` | 30 s | `GET products/{id}` |
+
+Carts, inventory, auth and health endpoints are explicitly marked no-store. Never put a policy on anything that depends on the current user, the guest cart session header (`X-Cart-Session`), payments, orders, or live stock. The product list is not output-cached; it uses the data cache below. `UseOutputCache` runs after CORS, authentication and authorization. Output caching is off in the Testing environment unless `OutputCaching:Enabled=true` (see `OutputCacheIsolationTests`).
+
+The data cache (`ICacheService` / `RedisCacheService`) is an optimisation only: a Redis error is logged and treated as a miss (reads) or ignored (writes and removals), so the catalog keeps working from the database when Redis is down. Query cache keys are `{prefix}:q:{sha256}` of the normalised query (paging, filter, sort field and direction), so key length is fixed whatever the filter text.
 
 Serilog provides structured logging. Query metrics middleware provides request/query diagnostics. Health checks cover SQL Server and Redis and are exposed through the API health endpoint.
 
@@ -365,6 +378,34 @@ Idempotency is enforced at three levels: a filtered unique index on
 `IdempotencyKey`, a service-level replay check, and a race handler that re-reads
 the winner after `DbUpdateException`.
 
+#### Money model (Batch 45)
+
+`IPricingService` (`PricingService`, pure, no database) is the only place that
+prices an order; checkout calls it and writes the result to `Order` and each
+`OrderSellerGroup`. All amounts are whole Rial (`RialMoney`: half away from
+zero; the remainder of a split goes to the largest group by items sub-total,
+ties to the highest seller id — Batch 45b). A line total (quantity × unit
+price, quantity may be fractional) is rounded the same way
+(`RialMoney.LineTotal`) in the cart and in the order. Listing prices and
+shipping-method costs with a fraction are refused with 422 `VALIDATION_ERROR`.
+
+- Shipping is per parcel: each seller group pays the method's `BaseCost`
+  (`OrderSellerGroup.ShippingAmount`) and that amount is **credited** to the
+  seller who ships it.
+- A platform-funded coupon (`Coupon.FundedBy = Platform`, the default) is the
+  platform's cost (`PlatformDiscountShare`); it is never deducted from the
+  seller, and commission is taken on the item price before the coupon.
+- The coupon is capped so the payable total stays at or above
+  `PaymentGatewaySettings:MinimumAmountRial`.
+- Seller payable = sub-total − seller-funded discount − commission + shipping.
+- Invariant: `Σ seller payable + Σ commission − platform coupon cost = amount paid`.
+
+`PaymentService` refuses (409 `AMOUNT_NOT_WHOLE_RIAL`) an order total with a
+fraction of a Rial instead of flooring it. Seller debts keep an explicit
+`RemainingAmount`; payout netting reads it. Groups priced before Batch 45 keep
+their stored `SellerPayable`. Parcel- or item-level reversal and partial refunds
+are not part of this model yet (Batch 64).
+
 ### 12.4 Denormalized rating cache
 
 `Product` and `Seller` carry `AverageRating` and `ReviewCount`. They are **cache,
@@ -387,9 +428,29 @@ deletion, order cancellation.
 ### 12.6 Background work
 
 `AbandonedPaymentCleanupService` (`BackgroundService`, every 15 minutes) delegates
-to `IAbandonedPaymentSweeper`, which cancels `Pending` payments older than 30
-minutes. The clock is injected as `TimeProvider` so the behaviour is testable
-without waiting.
+to `IAbandonedPaymentSweeper`, which reconciles `Pending` payments older than 30
+minutes with the gateway before anything is cancelled (Batch 43). The money
+decision for each payment is in `IPaymentService.ReconcileStalePaymentAsync`:
+
+| Gateway inquiry answer | Result |
+|---|---|
+| paid, not verified, order still payable | captured through the normal verify path (`source=reconciliation`) |
+| already verified (money captured) | recorded `Succeeded`; if the order is no longer payable it goes to the review queue with `refundNeeded=true` |
+| paid, not verified, order no longer payable | **not** verified, cancelled, flagged for review (the gateway returns unverified money) |
+| not paid | cancelled |
+| unknown | left `Pending`, flagged for review once |
+| inquiry turned off, verify never started | cancelled, not flagged (Batch 43b: Zarinpal captures only on our Verify, so nothing was captured) |
+| inquiry turned off, verify started, outcome unknown | left `Pending`, flagged for review once |
+
+`AbandonedOrderCleanupService` asks the same question for the open payments of an
+order before it cancels the order. `PaymentGatewaySettings:EnableInquiry` is
+`false` by default (the Zarinpal inquiry method is documented but not yet
+confirmed for the merchant); while it is off the jobs never verify a payment,
+the payment job cancels stale payments whose verify never started (the order job
+flags them instead of cancelling), and an admin settles each flagged payment with
+`POST /api/v1/payments/verify-by-authority`. `AbandonedPaymentSettings:InquireGatewayBeforeCancel=false`
+restores the old behaviour (cancel after the timeout without asking).
+The clock is injected as `TimeProvider` so the behaviour is testable without waiting.
 
 A failed payment does **not** release its inventory reservation. The order stays
 `Pending` so the customer can retry; release happens only on explicit

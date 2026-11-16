@@ -56,7 +56,9 @@ Base route:
 
 | Method | Endpoint | Authentication | Purpose |
 |---|---|---|---|
-| POST | `/api/auth/register` | Public | Register a user and create an initial session |
+| POST | `/api/auth/otp/send` | Public | Batch 46: send a 6-digit SMS code (same answer for every valid phone) |
+| POST | `/api/auth/otp/verify` | Public | Batch 46: check the code; returns a single-use `verificationToken` |
+| POST | `/api/auth/register` | Public | Register a user and create an initial session; since Batch 46 requires `phoneVerificationToken` (otherwise 422 `PHONE_NOT_VERIFIED`). See `docs/api-contract.md` |
 | POST | `/api/auth/login` | Public | Authenticate a user and issue access/refresh tokens |
 | GET | `/api/auth/me` | Required | Return the current user's profile from claims |
 | POST | `/api/auth/refresh` | Public | Rotate the refresh token and issue new tokens |
@@ -166,17 +168,31 @@ LockoutEnd = null
 
 ## 7. Login Rate Limiting
 
-The login endpoint uses the `LoginLimiter` rate-limiting policy.
+The login endpoint uses the `LoginLimiter` policy and the register endpoint its own `RegisterLimiter` policy. Both are partitioned **per client IP**: each IP has its own quota, so one client cannot lock everyone else out.
 
-For normal environments:
+Defaults (configurable through `RateLimiting:Login` and `RateLimiting:Register`):
 
 ```text
-PermitLimit = 5
-Window = 1 minute
-QueueLimit = 0
+Login:    PermitLimit = 5, WindowSeconds = 60, QueueLimit = 0
+Register: PermitLimit = 5, WindowSeconds = 60, QueueLimit = 0
 ```
 
-The Testing environment uses a much higher limit so automated tests are not blocked by the production-oriented policy.
+The client IP is the TCP peer address, or the `X-Forwarded-For` address when the request comes from a trusted proxy configured in `ForwardedHeaders` (see `docs/deployment.md` §7). A rejected request receives `429 Too Many Requests` with a `Retry-After` header (seconds) and a ProblemDetails body:
+
+```json
+{
+  "type": "https://api.yourstore.com/errors/rate_limit_exceeded",
+  "title": "Too Many Requests",
+  "status": 429,
+  "detail": "تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً 60 ثانیهٔ دیگر دوباره تلاش کنید.",
+  "instance": "/api/v1/auth/login",
+  "code": "RATE_LIMIT_EXCEEDED",
+  "traceId": "...",
+  "retryAfterSeconds": 60
+}
+```
+
+The integration test host raises the limits to 10 000 through configuration; `RateLimitingTestFactory` runs the real, small limits.
 
 ## 8. User Sessions
 
@@ -197,6 +213,8 @@ AbsoluteExpiryUtc
 Status
 ```
 
+`Device Id` and `Device Name` come from the request body. `IP Address` and `User Agent` come from the HTTP request itself: the resolved client IP (see section 7) and the `User-Agent` header, truncated to the column sizes. `ipAddress` and `userAgent` fields in the login or register body are ignored.
+
 New sessions are created with:
 
 ```text
@@ -207,16 +225,23 @@ The session is the server-side state that connects authentication tokens to a re
 
 ## 9. Session Lifetime
 
-The current `AuthService` session limits are:
+Session limits come from `UserSessionOptions` (section `Session`) and `JwtOptions`, validated at startup (`ValidateOnStart`):
 
-```text
-Absolute lifetime = 30 days
-Idle timeout      = 30 minutes
-```
+| Setting | Config key | Default |
+|---|---|---|
+| Access-token lifetime | `Jwt:ExpireMinutes` | 15 minutes |
+| Idle timeout | `Session:IdleTimeoutDays` | 7 days |
+| Absolute session lifetime | `Session:AbsoluteLifetimeDays` | 30 days |
+| Rotated-token reuse grace window | `Session:RefreshReuseGraceSeconds` | 10 seconds |
 
-Refresh operations check both idle and absolute expiration.
+- **Idle timeout** is measured from the last successful login or refresh (`UserSession.LastActivityUtc`). Ordinary authenticated requests do not update it; there is no database write per request. Refresh is the activity signal.
+- **Absolute lifetime** starts at login. After it, the user must log in again, however active they were.
+- Each refresh token lives for the idle timeout, capped at the session's absolute expiry.
+- Startup fails unless the idle timeout is longer than the access-token lifetime, the absolute lifetime is at least the idle timeout, and the grace window is shorter than the access-token lifetime. (An idle timeout shorter than the access token was the cause of F-13: the first refresh after the access token expired always found the session idle and logged the user out.)
 
-When a session is expired through this flow, its status is changed to `Expired` and refresh is rejected.
+Refresh operations check both idle and absolute expiration. When a session is expired through this flow, its status is changed to `Expired` and refresh is rejected.
+
+All session times use the injected `TimeProvider`. JWT signature and lifetime validation in `JwtBearer` still use the system clock.
 
 ## 10. Maximum Active Sessions
 
@@ -392,13 +417,14 @@ ReplacedByTokenId
 
 ## 18. Refresh Token Lifetime
 
-A newly created refresh token currently has:
+A newly created or rotated refresh token has:
 
 ```text
-ExpiryDate = UtcNow + 7 days
+ExpiryDate     = min(UtcNow + Session:IdleTimeoutDays, session AbsoluteExpiryUtc)
+AbsoluteExpiry = session AbsoluteExpiryUtc
 ```
 
-The token also carries the session/token-family absolute expiration information used by the refresh flow.
+Presenting an expired refresh token revokes it and marks its session `Expired` (each session has exactly one live refresh token, so an expired token means the session can no longer be extended).
 
 ## 19. Refresh Token Rate Limiting
 
@@ -408,17 +434,17 @@ The refresh endpoint:
 POST /api/auth/refresh
 ```
 
-uses the `RefreshLimiter` policy.
+uses the `RefreshLimiter` policy, partitioned per client IP.
 
-For normal environments:
+Defaults (configurable through `RateLimiting:Refresh`):
 
 ```text
-PermitLimit = 20
-Window = 1 minute
+PermitLimit = 60
+WindowSeconds = 60
 QueueLimit = 0
 ```
 
-The Testing environment uses a higher limit.
+Rejections use the same `429` response as login (section 7).
 
 ## 20. Refresh Token Rotation
 
@@ -452,31 +478,15 @@ The old token is revoked and points to its replacement through `ReplacedByTokenI
 
 ## 21. Refresh Token Reuse Detection
 
-A revoked refresh token is handled differently depending on whether it has a replacement.
+A revoked refresh token is always rejected (`401`). What else happens depends on when and why it was revoked. The check runs before the expiry check, so a stolen token is detected even after it has expired.
 
-### Normal rotation
+| Case | Result |
+|---|---|
+| The session is no longer `Active` (logout, expiry, earlier revocation) | Rejected; nothing else to protect |
+| Rotated (`ReplacedByTokenId != null`) and presented within `Session:RefreshReuseGraceSeconds` (default 10 s) of rotation | Rejected only. This covers two tabs refreshing at the same moment; the session and the newer token keep working |
+| Rotated and presented after the grace window, or revoked without a replacement | **Reuse detected**: the whole token family is revoked (the session plus every refresh token in it, including the newer one). The access token of that session fails on its next request because the session is no longer `Active`. Metric `RefreshTokenReuse` is incremented |
 
-If:
-
-```text
-ReplacedByTokenId != null
-```
-
-then the token was revoked as part of normal rotation. It is treated as a stale token and the refresh request is rejected.
-
-### Suspicious reuse
-
-If:
-
-```text
-IsRevoked = true
-AND
-ReplacedByTokenId == null
-```
-
-the service treats the presentation as possible refresh-token reuse.
-
-The associated session is revoked and its related refresh tokens are revoked as well.
+Set `Session:RefreshReuseGraceSeconds` to `0` for strict detection with no grace window.
 
 ## 22. Refresh Token Signature Mismatch
 
@@ -525,6 +535,38 @@ UserSession
 `AuthService` also provides `LogoutAllAsync(userId)`.
 
 It finds all active sessions for the user and revokes each session and its related refresh tokens inside a transaction.
+
+### 25.1 Client refresh contract
+
+Access tokens live 15 minutes by default, so clients must refresh:
+
+1. **Proactively**: refresh shortly before the access token's `exp` (for example 60 seconds before), and/or
+2. **On 401**: when an API call returns `401`, call `POST /api/auth/refresh` once, then retry the original request with the new access token.
+
+Rules:
+
+- Every successful refresh returns a **new** refresh token. Replace the stored one immediately; the old one is now rotated.
+- Run only one refresh at a time per session (a single in-flight promise, shared across tabs if the token is shared). A second refresh with the old token inside the grace window gets `401` without logging the user out; read the newly stored token and retry. After the grace window the same replay revokes the whole session.
+- If refresh returns `401`, the session is over (idle more than 7 days, past 30 days, logged out, deactivated, or reuse detected). Clear the tokens and send the user to login. Do not retry refresh in a loop.
+- A user who opens the site at least once every 7 days stays logged in for up to 30 days from login.
+
+### 25.2 User deactivation and delete
+
+`PATCH /api/users/{id}` with `isActive = false` and `DELETE /api/users/{id}` both deactivate the account. Delete is a soft delete: the row, orders and history remain. Deactivation:
+
+- rotates the user's `SecurityStamp`, so every existing access token fails on its next request;
+- revokes all of the user's sessions and refresh tokens in the same save.
+
+Admin guards (`UserService`):
+
+| Case | Response |
+|---|---|
+| An admin deactivates or deletes their own account | `409 CANNOT_DEACTIVATE_SELF` |
+| Deactivating, deleting or removing the SuperAdmin role from the last active SuperAdmin | `409 LAST_SUPERADMIN` |
+| A non-SuperAdmin deactivates, reactivates, deletes, edits (`PUT /api/users/{id}`: phone, email, name) or changes the roles of a SuperAdmin | `403 ADMIN_CANNOT_MODIFY_SUPERADMIN` |
+| A non-SuperAdmin assigns the SuperAdmin role to anyone, including themselves | `403 ADMIN_CANNOT_ASSIGN_SUPERADMIN` |
+
+Registration, admin user creation and admin user update return `409 USER_EMAIL_EXISTS` for an email and `409 USER_PHONE_EXISTS` for a phone number that another user already has (the phone case was `400` before Batch 11b). An invalid Persian date of birth on register returns `422`.
 
 ## 26. Authorization
 
@@ -648,9 +690,11 @@ Controller
 | User not found during login | Login fails |
 | Wrong password | Failed-attempt counter increases |
 | Five failed attempts | 15-minute lockout is applied |
-| Expired refresh token | Token is revoked and refresh is rejected |
-| Revoked token from normal rotation | Treated as a stale token |
+| Expired refresh token | Token is revoked, session is marked `Expired`, refresh is rejected |
+| Rotated token replayed inside the grace window | Refresh is rejected; session stays active |
+| Rotated token replayed after the grace window | Session and all its refresh tokens are revoked |
 | Suspicious revoked-token reuse | Session and related refresh tokens are revoked |
+| User deactivated or deleted | All sessions and refresh tokens revoked; SecurityStamp rotated |
 | Refresh-token value mismatch | Associated session is revoked |
 | Inactive session | Authentication/refresh is rejected |
 | Idle-expired session | Session is marked `Expired` |
@@ -692,6 +736,8 @@ Online Store Application/
 │   └── AuthController.cs
 ├── Services/
 │   └── JwtTokenService.cs
+├── Extensions/
+│   └── UserSessionOptionsExtensions.cs
 └── Program.cs
 
 BusinessLogic/
@@ -713,7 +759,8 @@ Application/
 │       ├── IJwtTokenService.cs
 │       └── IPasswordHasher.cs
 └── Options/
-    └── JwtOptions.cs
+    ├── JwtOptions.cs
+    └── UserSessionOptions.cs
 
 DataLayer/
 └── Security/
@@ -728,6 +775,8 @@ The authentication behavior documented here is based on the current implementati
 - `AuthService.cs`
 - `JwtTokenService.cs`
 - `Program.cs`
+- `UserSessionOptions.cs` / `UserSessionOptionsExtensions.cs`
+- `UserService.cs` (deactivation and admin guards)
 - `User.cs`
 - `UserSession.cs`
 - `RefreshTokenEntity.cs`

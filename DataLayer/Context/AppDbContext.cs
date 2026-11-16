@@ -7,6 +7,12 @@ namespace DataLayer.Context
 {
     public class AppDbContext : DbContext
     {
+        /// <summary>Batch 44: ستون محاسبه‌شده (سایه) که برای انبار پلتفرم (SellerId = NULL) برابر ۱ است.</summary>
+        public const string PlatformWarehouseFlagColumn = "IsPlatform";
+
+        /// <summary>Batch 44: ایندکس یکتای «حداکثر یک انبار پلتفرم».</summary>
+        public const string SinglePlatformWarehouseIndex = "UX_Warehouse_SinglePlatform";
+
         private readonly IEnumerable<ISaveChangesInterceptor> _interceptors;
 
         public AppDbContext(DbContextOptions<AppDbContext> options, IEnumerable<ISaveChangesInterceptor> interceptors)
@@ -73,6 +79,9 @@ namespace DataLayer.Context
         // M7.12 — بدهی و مطالبات فروشنده
         public DbSet<SellerDebt> SellerDebt { get; set; }
 
+        // Batch 46 — کدهای یک‌بار مصرف پیامکی
+        public DbSet<OtpCode> OtpCode { get; set; }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             foreach (var interceptor in _interceptors)
@@ -102,6 +111,18 @@ namespace DataLayer.Context
                 .HasIndex(w => w.Name)
                 .IsUnique()
                 .HasFilter("[SellerId] IS NULL");
+
+            // Batch 44 (پاسخ مالک به Batch 49b): حداکثر یک انبار پلتفرم. ستون محاسبه‌شدهٔ ذخیره‌شدهٔ IsPlatform برای همهٔ
+            // انبارهای پلتفرم ۱ است و ایندکس یکتای فیلترشده روی آن دومی را رد می‌کند (هم SQL Server و هم SQLite تست‌ها؛
+            // ایندکس یکتا روی خودِ SellerId در SQLite NULLها را متمایز می‌داند). ویژگی سایه است تا در نگاشت‌ها دیده نشود.
+            modelBuilder.Entity<Warehouse>()
+                .Property<bool>(PlatformWarehouseFlagColumn)
+                .HasComputedColumnSql("CASE WHEN [SellerId] IS NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", stored: true);
+            modelBuilder.Entity<Warehouse>()
+                .HasIndex(PlatformWarehouseFlagColumn)
+                .IsUnique()
+                .HasFilter("[SellerId] IS NULL")
+                .HasDatabaseName(SinglePlatformWarehouseIndex);
             modelBuilder.Entity<Order>().HasIndex(o => o.OrderDate);
             modelBuilder.Entity<Order>().HasIndex(o => o.CustomerId);
             modelBuilder.Entity<Order>().HasIndex(o => o.Status);
@@ -740,6 +761,20 @@ namespace DataLayer.Context
                 entity.HasIndex(o => new { o.CustomerId, o.IdempotencyKey })
                     .IsUnique()
                     .HasFilter("[IdempotencyKey] IS NOT NULL");
+            });
+
+            // Batch 46 — OTP: جست‌وجوی کد فعال هر (شماره، هدف)، سقف‌های هر شماره و بودجهٔ روزانه، پاک‌سازی منقضی‌ها.
+            modelBuilder.Entity<OtpCode>(entity =>
+            {
+                entity.Property(o => o.Purpose).HasConversion<int>();
+                entity.Property(o => o.CodeHash).IsUnicode(false);
+                entity.Property(o => o.VerificationTokenHash).IsUnicode(false);
+                entity.Property(o => o.PhoneNumber).IsUnicode(false);
+
+                entity.HasIndex(o => new { o.PhoneNumber, o.Purpose });
+                entity.HasIndex(o => new { o.PhoneNumber, o.CreatedAtUtc });
+                entity.HasIndex(o => o.CreatedAtUtc);
+                entity.HasIndex(o => o.ExpiresAtUtc);
             });
         }
     }

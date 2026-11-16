@@ -7,6 +7,8 @@ using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Cities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -46,15 +48,7 @@ public class CitiesController : ControllerBase
 
         if (!parseResult.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query syntax",
-                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query syntax", parseResult.Errors);
         }
 
         var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -62,15 +56,7 @@ public class CitiesController : ControllerBase
 
         if (!validation.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query values",
-                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query values", validation.Errors);
         }
 
         var result = await _cityService.GetByQueryAsync(validation.Value!, cancellationToken);
@@ -80,6 +66,7 @@ public class CitiesController : ControllerBase
     /// <summary>دریافت مشخصات شهر بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(CityDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
@@ -91,6 +78,7 @@ public class CitiesController : ControllerBase
     /// <summary>دریافت فهرست شهرهای یک استان بر اساس شناسه استان (جهت لیست‌های آبشاری فرانت‌اند).</summary>
     [HttpGet("by-province/{provinceId:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(IEnumerable<CityDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<CityDto>>> GetByProvince(int provinceId, CancellationToken cancellationToken)
     {

@@ -122,7 +122,8 @@ public class CachingIntegrationTests
         var key2 = query2.ToCacheKey("products");
 
         key1.Should().Be(key2);
-        key1.Should().StartWith("products:all:p1:s20");
+        // F-23: کلید هش‌شده با طول ثابت است.
+        key1.Should().MatchRegex("^products:q:[0-9a-f]{64}$");
     }
 
     [Fact]

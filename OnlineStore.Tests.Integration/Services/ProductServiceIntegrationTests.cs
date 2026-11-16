@@ -107,7 +107,7 @@ public class ProductServiceIntegrationTests : BaseIntegrationTest
         };
 
         Func<Task> act = () => ProductService.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<NotFoundException>() // Batch 54 (API-06): unknown subcategory is 404
             .WithMessage("*زیردسته*");
     }
 
@@ -126,7 +126,7 @@ public class ProductServiceIntegrationTests : BaseIntegrationTest
         await ProductService.CreateAsync(dto);
 
         Func<Task> act = () => ProductService.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ConflictException>() // Batch 54 (API-06): duplicate name is 409
             .WithMessage("*نام*ثبت شده*");
     }
 
@@ -200,7 +200,7 @@ public class ProductServiceIntegrationTests : BaseIntegrationTest
         };
 
         Func<Task> act = () => ProductService.UpdateAsync(updateDto);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ConflictException>() // Batch 54 (API-06): duplicate name is 409
             .WithMessage("*نام*ثبت شده*");
     }
 

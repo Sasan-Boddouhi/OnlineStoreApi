@@ -49,7 +49,7 @@ public class ProductImagesControllerIntegrationTests : ControllerIntegrationTest
 
         var request = new AddProductImageUrlRequest
         {
-            Url = "https://example.com/img1.jpg",
+            Url = "https://cdn.example.test/img1.jpg",
             Alt = "Image 1",
             IsPrimary = true
         };
@@ -66,7 +66,7 @@ public class ProductImagesControllerIntegrationTests : ControllerIntegrationTest
 
         var request = new AddProductImageUrlRequest
         {
-            Url = "https://example.com/img1.jpg",
+            Url = "https://cdn.example.test/img1.jpg",
             Alt = "Image 1"
         };
 

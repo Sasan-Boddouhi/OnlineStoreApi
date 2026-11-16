@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Linq.Expressions;
+using Application.Common.Helpers;
 using Application.Common.Queries;
 using Application.Common.Specifications;
 using Application.Entities;
@@ -46,14 +48,28 @@ public sealed class ProductService : IProductService
 
     #region Query
 
+    public Task<PagedResult<ProductDto>> GetByQueryAsync(
+        QueryContract<Product> query,
+        bool includeInactive = false,
+        CancellationToken cancellationToken = default)
+        => GetByQueryAsync(query, ProductListCriteria.None, includeInactive, cancellationToken);
+
     public async Task<PagedResult<ProductDto>> GetByQueryAsync(
         QueryContract<Product> query,
+        ProductListCriteria criteria,
+        bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
         using var activity = ActivitySource.StartActivity("Product.GetByQuery", ActivityKind.Internal);
 
+        // Batch 60 (API-10): شرط‌های نوع‌دار پیش از ساخت کلید کش در خود query ادغام می‌شوند،
+        // پس کلید کش آن‌ها را هم در بر دارد (همهٔ مقدارها ثابت‌اند، نه متغیر بسته‌شده).
+        query = ApplyCriteria(query, criteria);
+
+        // Batch 6 (F-15): فهرست با و بدون محصولات غیرفعال کلید کش جدا دارد؛
+        // وگرنه پاسخ مدیر کاتالوگ (شامل حذف‌شده‌ها) به کاربر عمومی برمی‌گشت.
         var version = _cacheService != null ? await _cacheService.GetAsync<string>("products:version", cancellationToken) ?? "v1" : "v1";
-        var cacheKey = $"{query.ToCacheKey("products")}:{version}";
+        var cacheKey = $"{query.ToCacheKey(includeInactive ? "products:all" : "products")}:{version}";
         if (_cacheService != null)
         {
             var cached = await _cacheService.GetAsync<PagedResult<ProductDto>>(cacheKey, cancellationToken);
@@ -67,6 +83,11 @@ public sealed class ProductService : IProductService
         try
         {
             var spec = query.ToSpec();
+
+            // Batch 6 (F-15): محصول حذف‌شده (IsActive = false) در فهرست عمومی دیده نمی‌شود،
+            // همان قاعده‌ای که GetByIdAsync از قبل داشت.
+            if (!includeInactive)
+                spec.Where(p => p.IsActive);
 
         var items = await _unitOfWork.Repository<Product>()
             .ListAsync(spec, ProductQueryConfig.Projection, cancellationToken);
@@ -156,6 +177,103 @@ public sealed class ProductService : IProductService
         }
     }
 
+    // ---------------- Batch 60 (API-10): پارامترهای نوع‌دار فهرست ----------------
+
+    /// <summary>
+    /// شرط‌های نوع‌دار را با AND به فیلتر زبان کوچک اضافه می‌کند و مرتب‌سازی آماده را (اگر باشد)
+    /// جایگزین مرتب‌سازی زبان کوچک می‌کند. صفحه‌بندی دست نمی‌خورد.
+    /// </summary>
+    private static QueryContract<Product> ApplyCriteria(QueryContract<Product> query, ProductListCriteria criteria)
+    {
+        var filter = query.Filter;
+
+        void AddCondition(Expression<Func<Product, bool>> condition)
+            => filter = filter is null ? condition : filter.And(condition);
+
+        var q = criteria.Q?.Trim();
+        if (!string.IsNullOrEmpty(q))
+            AddCondition(Bind<string>((p, s) => p.Name.Contains(s) || (p.Description != null && p.Description.Contains(s)), q));
+
+        if (criteria.CategoryId is int categoryId)
+            AddCondition(Bind<int>((p, id) => p.Subcategory.CategoryId == id, categoryId));
+
+        if (criteria.SubcategoryId is int subcategoryId)
+            AddCondition(Bind<int>((p, id) => p.SubcategoryId == id, subcategoryId));
+
+        if (criteria.BrandId is int brandId)
+            AddCondition(Bind<int?>((p, id) => p.BrandId == id, brandId));
+
+        if (criteria.InStock is bool inStock)
+            AddCondition(inStock ? InStock : InStock.Not());
+
+        var sorts = criteria.Sort is ProductListSort preset ? PresetSorts(preset) : query.Sorts;
+
+        return new QueryContract<Product>
+        {
+            Filter = filter,
+            Sorts = sorts,
+            Page = query.Page,
+            Size = query.Size,
+            Skip = query.Skip,
+            Take = query.Take
+        };
+    }
+
+    /// <summary>
+    /// محصولی که دست‌کم یک پیشنهاد قابل خرید دارد: واریانت فعال، پیشنهاد فعال، فروشندهٔ تأییدشده و فعال،
+    /// و موجودی فعال بیشتر از صفر (همان قاعدهٔ پیشنهادهای نمایش‌داده‌شده در <see cref="ProductQueryConfig.Projection"/>).
+    /// </summary>
+    private static readonly Expression<Func<Product, bool>> InStock =
+        p => p.Variants.Any(v => v.IsActive && v.Listings.Any(l =>
+            l.Status == SellerProductStatus.Active
+            && l.Seller != null
+            && l.Seller.Status == SellerStatus.Approved
+            && l.Seller.IsActive
+            && l.Inventories.Any(inv => inv.IsActive && inv.Quantity > 0)));
+
+    /// <summary>
+    /// مقدار را به‌صورت ثابت (نه متغیر بسته‌شده) در عبارت می‌گذارد؛ کلید کش از متن عبارت ساخته می‌شود
+    /// و متغیر بسته‌شده مقدارش را در آن متن نشان نمی‌دهد.
+    /// </summary>
+    private static Expression<Func<Product, bool>> Bind<TArg>(Expression<Func<Product, TArg, bool>> template, TArg value)
+    {
+        var body = new ReplaceExpressionVisitor(template.Parameters[1], Expression.Constant(value, typeof(TArg)))
+            .Visit(template.Body)!;
+        return Expression.Lambda<Func<Product, bool>>(body, template.Parameters[0]);
+    }
+
+    private static IReadOnlyList<ISortDefinition<Product>> PresetSorts(ProductListSort preset) => preset switch
+    {
+        ProductListSort.Newest => new ISortDefinition<Product>[]
+        {
+            new PresetSort((Expression<Func<Product, DateTime>>)(p => p.CreatedOn), true),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ProductId), true)
+        },
+        ProductListSort.Rating => new ISortDefinition<Product>[]
+        {
+            new PresetSort((Expression<Func<Product, double>>)(p => p.AverageRating), true),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ReviewCount), true),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ProductId), false)
+        },
+        _ => new ISortDefinition<Product>[]
+        {
+            new PresetSort((Expression<Func<Product, string>>)(p => p.Name), false),
+            new PresetSort((Expression<Func<Product, int>>)(p => p.ProductId), false)
+        }
+    };
+
+    private sealed class PresetSort : ISortDefinition<Product>
+    {
+        public PresetSort(LambdaExpression keySelector, bool descending)
+        {
+            KeySelector = keySelector;
+            Descending = descending;
+        }
+
+        public LambdaExpression KeySelector { get; }
+        public bool Descending { get; }
+    }
+
     #endregion
 
     #region Commands
@@ -168,6 +286,11 @@ public sealed class ProductService : IProductService
         activity?.SetTag("product.subcategory_id", dto.SubcategoryId);
 
         _logger.LogInformation("Creating product with name: {ProductName}", dto.Name);
+
+        // Batch 49 (F-30): پیش از تراکنش، تا 422 در catch عمومی به PRODUCT_CREATE_ERROR تبدیل نشود.
+        if (dto.BrandId.HasValue)
+            await EnsureBrandAssignableAsync(dto.BrandId.Value, cancellationToken);
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
         try
@@ -201,7 +324,7 @@ public sealed class ProductService : IProductService
             activity?.SetStatus(ActivityStatusCode.Ok);
             return _mapper.Map<ProductDto>(entity);
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             // اگر خطای تجاری است، فقط rollback و دوباره پرتاب کن (بدون تغییر پیام)
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
@@ -213,7 +336,7 @@ public sealed class ProductService : IProductService
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw new BusinessException("خطا در ایجاد محصول", "PRODUCT_CREATE_ERROR");
+            throw;
         }
     }
 
@@ -237,8 +360,19 @@ public sealed class ProductService : IProductService
                 var exists = await _unitOfWork.Repository<Product>()
                     .AnyAsync(x => x.Name == dto.Name && x.ProductId != dto.ProductId, cancellationToken);
                 if (exists)
-                    throw new BusinessException("محصولی با این نام قبلاً ثبت شده است", "PRODUCT_NAME_DUPLICATE");
+                    throw new ConflictException("محصولی با این نام قبلاً ثبت شده است", "PRODUCT_NAME_DUPLICATE");
             }
+
+            // Batch 49 (F-30): فقط برند تازه بررسی می‌شود؛ ذخیرهٔ دوبارهٔ محصولی که برندش بعداً
+            // غیرفعال شده، نباید رد شود. null یعنی «بدون تغییر» (ProductProfile).
+            // Batch 49b: اعتبارسنج HTTP همین را 422 می‌کند؛ این بررسی برای فراخوانی مستقیم سرویس است.
+            if (dto.ClearBrand && dto.BrandId.HasValue)
+                throw new UnprocessableEntityException(
+                    BusinessLogic.Validators.Products.UpdateProductDtoValidator.ClearBrandWithBrandIdMessage,
+                    "INVALID_BRAND");
+
+            if (dto.BrandId.HasValue && dto.BrandId != entity.BrandId)
+                await EnsureBrandAssignableAsync(dto.BrandId.Value, cancellationToken);
 
             // Phase 9 (R40): تغییر قیمت باید ردپا داشته باشد.
             // قیمت مهم‌ترین فیلد تجاری است و تا امروز هیچ سابقه‌ای از تغییرش نبود.
@@ -293,11 +427,26 @@ public sealed class ProductService : IProductService
             entity.IsActive = false;
             _unitOfWork.Repository<Product>().Update(entity);
 
+            // Batch 6 (F-15): پیشنهادهای فروشِ واریانت‌های این محصول هم غیرفعال می‌شوند؛
+            // پیش‌تر Active می‌ماندند و محصول حذف‌شده با شناسهٔ Listing قابل خرید بود.
+            var listings = await _unitOfWork.Repository<SellerProduct>()
+                .ListAsync(
+                    new Spec<SellerProduct>()
+                        .Where(l => l.Variant.ProductId == id && l.Status != SellerProductStatus.Inactive)
+                        .AsTracking(),
+                    cancellationToken);
+
+            foreach (var listing in listings)
+            {
+                listing.Status = SellerProductStatus.Inactive;
+                _unitOfWork.Repository<SellerProduct>().Update(listing);
+            }
+
             await _auditService.RecordAsync(
                 "Product.Deleted",
                 nameof(Product),
                 entity.ProductId.ToString(),
-                $"name={entity.Name}",
+                $"name={entity.Name} | deactivatedListings={listings.Count}",
                 cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -312,7 +461,7 @@ public sealed class ProductService : IProductService
             _logger.LogInformation("Product soft deleted successfully: {ProductId}", id);
             return true;
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -345,12 +494,24 @@ public sealed class ProductService : IProductService
         var subcategoryExists = await _unitOfWork.Repository<ProductSubcategory>()
             .AnyAsync(x => x.SubcategoryId == dto.SubcategoryId, cancellationToken);
         if (!subcategoryExists)
-            throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.", "SUBCATEGORY_NOT_FOUND");
+            throw new NotFoundException("زیردسته‌بندی انتخاب‌شده وجود ندارد.", "SUBCATEGORY_NOT_FOUND");
 
         var duplicateName = await _unitOfWork.Repository<Product>()
             .AnyAsync(x => x.Name == dto.Name, cancellationToken);
         if (duplicateName)
-            throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.", "PRODUCT_NAME_DUPLICATE");
+            throw new ConflictException("محصولی با این نام قبلاً ثبت شده است.", "PRODUCT_NAME_DUPLICATE");
+    }
+
+    /// <summary>
+    /// Batch 49 (F-30): برند انتخاب‌شده باید وجود داشته باشد و فعال باشد.
+    /// </summary>
+    private async Task EnsureBrandAssignableAsync(int brandId, CancellationToken cancellationToken)
+    {
+        var assignable = await _unitOfWork.Repository<Brand>()
+            .AnyAsync(b => b.BrandId == brandId && b.IsActive, cancellationToken);
+
+        if (!assignable)
+            throw new UnprocessableEntityException("برند انتخاب‌شده وجود ندارد یا غیرفعال است.", "INVALID_BRAND");
     }
 
     #endregion
@@ -372,7 +533,7 @@ public sealed class ProductService : IProductService
             var duplicateSku = await _unitOfWork.Repository<ProductVariant>()
                 .AnyAsync(v => v.Sku == sku, cancellationToken);
             if (duplicateSku)
-                throw new BusinessException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
+                throw new ConflictException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
         }
 
         // ویژگی‌ها باید متعلق به همین محصول باشند، وگرنه واریانت به ویژگی محصول دیگری وصل می‌شود.
@@ -457,7 +618,7 @@ public sealed class ProductService : IProductService
         var duplicate = await _unitOfWork.Repository<ProductAttribute>()
             .AnyAsync(a => a.ProductId == dto.ProductId && a.Name == name, cancellationToken);
         if (duplicate)
-            throw new BusinessException("این ویژگی برای محصول ثبت شده است.", "ATTRIBUTE_ALREADY_EXISTS");
+            throw new ConflictException("این ویژگی برای محصول ثبت شده است.", "ATTRIBUTE_ALREADY_EXISTS");
 
         var attribute = new ProductAttribute
         {
@@ -519,7 +680,7 @@ public sealed class ProductService : IProductService
                 var duplicateSku = await _unitOfWork.Repository<ProductVariant>()
                     .AnyAsync(v => v.Sku == sku && v.VariantId != variantId, cancellationToken);
                 if (duplicateSku)
-                    throw new BusinessException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
+                    throw new ConflictException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
             }
 
             // Validate attributes belong to the same product
@@ -599,7 +760,7 @@ public sealed class ProductService : IProductService
 
             return await BuildVariantDtoAsync(variant, cancellationToken);
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -608,8 +769,7 @@ public sealed class ProductService : IProductService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error updating variant: {VariantId}", variantId);
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            throw new BusinessException($"خطا در ویرایش واریانت: {msg}", "VARIANT_UPDATE_ERROR");
+            throw;
         }
     }
 
@@ -632,7 +792,7 @@ public sealed class ProductService : IProductService
             {
                 _logger.LogWarning("Cannot delete variant {VariantId} - has active listings", variantId);
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                throw new BusinessException(
+                throw new ConflictException(
                     "این واریانت پیشنهاد فروش فعال دارد و قابل حذف نیست. ابتدا پیشنهادهای فروش را غیرفعال کنید.",
                     "VARIANT_HAS_ACTIVE_LISTINGS");
             }
@@ -652,7 +812,7 @@ public sealed class ProductService : IProductService
                 {
                     _logger.LogWarning("Cannot delete variant {VariantId} - has order items", variantId);
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    throw new BusinessException(
+                    throw new ConflictException(
                         "این واریант دارای سفارش ثبت‌شده است و قابل حذف نیست.",
                         "VARIANT_HAS_ORDERS");
                 }
@@ -676,7 +836,7 @@ public sealed class ProductService : IProductService
 
             return true;
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -685,7 +845,7 @@ public sealed class ProductService : IProductService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error deleting variant: {VariantId}", variantId);
-            throw new BusinessException("خطا در حذف واریانت", "VARIANT_DELETE_ERROR");
+            throw;
         }
     }
 

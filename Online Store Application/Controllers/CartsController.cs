@@ -4,8 +4,10 @@ using Application.Interfaces;
 using BusinessLogic.DTOs.Cart;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.Services.Interfaces;
+using BusinessLogic.Validators.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Online_Store_Application.Controllers;
@@ -20,12 +22,12 @@ namespace Online_Store_Application.Controllers;
 [ApiController]
 [ApiVersion(1.0)]
 [Route("api/v{version:apiVersion}/carts")]
+// F-04: سبد به هدر X-Cart-Session یا توکن وابسته است و هرگز کش نمی‌شود.
+[OutputCache(NoStore = true)]
 public class CartsController : ControllerBase
 {
     /// <summary>هدر شناسهٔ نشست برای سبد مهمان.</summary>
     public const string SessionHeader = "X-Cart-Session";
-
-    private const int MaxSessionIdLength = 64;
 
     private readonly ICartService _cartService;
     private readonly ICurrentUserService _currentUser;
@@ -47,9 +49,10 @@ public class CartsController : ControllerBase
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            if (value.Length > MaxSessionIdLength)
-                throw new BusinessException(
-                    $"شناسهٔ نشست حداکثر {MaxSessionIdLength} کاراکتر است.", "CART_SESSION_INVALID");
+            // Batch 48 (PM-12): the guest session id must be a GUID; arbitrary strings are guessable.
+            if (!CartSessionId.IsValid(value))
+                throw new UnprocessableEntityException(
+                    "شناسهٔ نشست سبد باید یک GUID معتبر باشد.", "CART_SESSION_INVALID");
 
             return value;
         }
@@ -115,7 +118,7 @@ public class CartsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<CartDto>> Merge(CancellationToken cancellationToken)
     {
-        var userId = UserId ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+        var userId = UserId ?? throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
         var sessionId = SessionId;
 
         if (sessionId is null)

@@ -57,7 +57,7 @@ public class ReviewsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var userId = _currentUser.TryGetCurrentUserId()
-            ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            ?? throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         var review = await _reviewService.AddProductReviewAsync(userId, productId, dto, cancellationToken);
         return CreatedAtAction(nameof(GetProductReviews), new { productId }, review);
@@ -134,7 +134,7 @@ public class ReviewsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var userId = _currentUser.TryGetCurrentUserId()
-            ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            ?? throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         var review = await _reviewService.AddSellerReviewAsync(userId, sellerId, dto, cancellationToken);
         return CreatedAtAction(nameof(GetSellerReviews), new { sellerId }, review);

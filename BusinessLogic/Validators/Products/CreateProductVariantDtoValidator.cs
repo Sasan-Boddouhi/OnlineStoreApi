@@ -12,12 +12,18 @@ public class CreateProductVariantDtoValidator : AbstractValidator<CreateProductV
 
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("نام تنوع محصول الزامی است.")
-            .MaximumLength(150).WithMessage("نام تنوع محصول نباید بیش از ۱۵۰ کاراکتر باشد.");
+            .MaximumLength(200).WithMessage("نام تنوع محصول نباید بیش از ۲۰۰ کاراکتر باشد.");
 
         RuleFor(x => x.Sku)
-            .MaximumLength(100).WithMessage("کد SKU نباید بیش از ۱۰۰ کاراکتر باشد.");
+            .MaximumLength(64).WithMessage("کد SKU نباید بیش از ۶۴ کاراکتر باشد.");
 
         RuleFor(x => x.Barcode)
-            .MaximumLength(100).WithMessage("بارکد نباید بیش از ۱۰۰ کاراکتر باشد.");
+            .MaximumLength(20).WithMessage("بارکد نباید بیش از ۲۰ کاراکتر باشد.");
+
+        RuleForEach(x => x.Attributes).ChildRules(a =>
+        {
+            a.RuleFor(v => v.AttributeId).GreaterThan(0).WithMessage("شناسه ویژگی نامعتبر است.");
+            a.RuleFor(v => v.Value).MaximumLength(200).WithMessage("مقدار ویژگی نباید بیش از ۲۰۰ کاراکتر باشد.");
+        });
     }
 }

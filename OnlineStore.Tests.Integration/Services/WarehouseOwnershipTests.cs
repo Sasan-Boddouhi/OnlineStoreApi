@@ -115,14 +115,26 @@ public class WarehouseOwnershipTests : BaseIntegrationTest
             .Should().ThrowAsync<DbUpdateException>();
     }
 
+    /// <summary>
+    /// Batch 44: حداکثر یک انبار پلتفرم مجاز است (UX_Warehouse_SinglePlatform) و راه‌انداز همیشه یکی می‌سازد؛ تست‌هایی که
+    /// خودشان انبار پلتفرم می‌سازند ابتدا انبار پلتفرم موجود را برمی‌دارند.
+    /// </summary>
+    private async Task RemovePlatformWarehousesAsync()
+    {
+        DbContext.Warehouse.RemoveRange(await DbContext.Warehouse.Where(w => w.SellerId == null).ToListAsync());
+        await DbContext.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task PlatformWarehouses_WithSameName_AreRejected()
     {
         var userId = await CreateUserAsync();
+        await RemovePlatformWarehousesAsync(); // Batch 44: پیش‌تر انبار پلتفرم دوم کنار انبار راه‌انداز ساخته می‌شد
 
         await CreateWarehouseAsync("Platform", null, userId);
 
-        // انبار پلتفرم (SellerId = NULL) هنوز باید نام یکتا داشته باشد (ایندکس فیلترشده).
+        // انبار پلتفرم (SellerId = NULL) هنوز باید نام یکتا داشته باشد (ایندکس فیلترشده)؛ از Batch 44 ایندکس
+        // «حداکثر یک انبار پلتفرم» هم همین درج را رد می‌کند.
         await FluentActions
             .Awaiting(() => CreateWarehouseAsync("Platform", null, userId))
             .Should().ThrowAsync<DbUpdateException>();
@@ -133,6 +145,7 @@ public class WarehouseOwnershipTests : BaseIntegrationTest
     {
         var userId = await CreateUserAsync();
         var seller = await CreateSellerAsync(userId, $"ShopD-{Guid.NewGuid():N}");
+        await RemovePlatformWarehousesAsync(); // Batch 44: فقط یک انبار پلتفرم مجاز است
 
         await CreateWarehouseAsync("Shared", seller.SellerId, userId);
         var platform = await CreateWarehouseAsync("Shared", null, userId);

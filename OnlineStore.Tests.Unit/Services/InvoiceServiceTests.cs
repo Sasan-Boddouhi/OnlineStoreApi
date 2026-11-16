@@ -77,16 +77,17 @@ public class InvoiceServiceTests
     {
         _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync((Order?)null);
         Func<Task> act = () => _service.CreateInvoiceAsync(1);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*سفارش*");
+        await act.Should().ThrowAsync<NotFoundException>().WithMessage("*سفارش*");
     }
 
     [Fact]
-    public async Task CreateInvoiceAsync_OrderNotProcessing_ThrowsBusinessException()
+    public async Task CreateInvoiceAsync_OrderNotProcessing_ThrowsConflictException()
     {
         var order = CreateOrder(1, OrderStatus.Pending, 500);
         _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
         Func<Task> act = () => _service.CreateInvoiceAsync(1);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*تایید*");
+        // Batch 7: وضعیت نامناسب سفارش تعارض وضعیت است (409 ConflictException)، نه ورودی نامعتبر (400).
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*تایید*");
     }
 
     [Fact]
@@ -96,6 +97,6 @@ public class InvoiceServiceTests
         var order = CreateOrder(1, OrderStatus.Processing, 500, existingInvoice);
         _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
         Func<Task> act = () => _service.CreateInvoiceAsync(1);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("فاکتور قبلاً ایجاد شده است.");
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("فاکتور قبلاً ایجاد شده است.");
     }
 }

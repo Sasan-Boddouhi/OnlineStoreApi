@@ -1,4 +1,5 @@
-﻿using Application.Entities;
+﻿using Application.Common.Helpers;
+using Application.Entities;
 using DataLayer.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +10,7 @@ namespace Online_Store_Application.Services;
 ///
 /// قواعد امنیتی:
 /// - هیچ هاردکد اعتبارنامه‌ای وجود ندارد (به‌تبعیت از SEC-02).
-/// - منبع هویت فقط env var «BOOTSTRAP_SUPERADMIN_PHONE» است.
+/// - منبع هویت فقط env var «BOOTSTRAP_SUPERADMIN_PHONE» است و فقط کاربری با شمارهٔ تأییدشده (Batch 46) نقش می‌گیرد.
 /// - اگر کاربر پیدا نشد یا متغیر تنظیم نشده بود: فقط LogWarning و عدم crash.
 /// - idempotent: اگر هر کاربری از قبل SuperAdmin باشد، هیچ کاری نمی‌کند.
 /// - BackgroundService است تا راه‌اندازی برنامه به در دسترس بودن دیتابیس گره نخورد.
@@ -59,9 +60,9 @@ public sealed class SuperAdminBootstrapper : BackgroundService
             if (alreadyBootstrapped)
                 return;
 
-            var phone = _configuration[BootstrapPhoneKey];
+            var configuredPhone = _configuration[BootstrapPhoneKey];
 
-            if (string.IsNullOrWhiteSpace(phone))
+            if (string.IsNullOrWhiteSpace(configuredPhone))
             {
                 _logger.LogWarning(
                     "SuperAdmin bootstrap skipped: '{Key}' is not set. No SuperAdmin exists yet.",
@@ -69,13 +70,24 @@ public sealed class SuperAdminBootstrapper : BackgroundService
                 return;
             }
 
+            // directive 2 (Batch 48b): شماره‌ها فقط به شکل استاندارد ذخیره شده‌اند.
+            var phone = IranianPhoneNumber.NormalizeOrNull(configuredPhone);
+            if (phone is null)
+            {
+                _logger.LogWarning("SuperAdmin bootstrap skipped: '{Key}' is not a valid Iranian mobile number.", BootstrapPhoneKey);
+                return;
+            }
+
+            // Batch 44: حساب سیستمی (IsSystem، مثلاً مالک نشانی انبار پلتفرم) هرگز نقش نمی‌گیرد.
+            // Batch 46 (review §9.3 قاعدهٔ ۵): فقط شماره‌ای که مالکش با OTP تأیید کرده (یا پیش از Batch 46 وجود داشت).
             var user = await db.User
-                .FirstOrDefaultAsync(u => u.PhoneNumber == phone, stoppingToken);
+                .FirstOrDefaultAsync(u => u.PhoneNumber == phone && !u.IsSystem && u.PhoneNumberConfirmed, stoppingToken);
 
             if (user is null)
             {
                 _logger.LogWarning(
-                    "SuperAdmin bootstrap skipped: no user found for the configured phone number.");
+                    "SuperAdmin bootstrap skipped: no user with a confirmed phone number matches the configured phone number. " +
+                    "Register that phone with the OTP flow first.");
                 return;
             }
 

@@ -1,5 +1,6 @@
 ﻿using FluentValidation;
 using BusinessLogic.DTOs.Auth;
+using BusinessLogic.Validators.Common;
 
 namespace BusinessLogic.Validators.Auth
 {
@@ -9,7 +10,7 @@ namespace BusinessLogic.Validators.Auth
         {
             RuleFor(x => x.PhoneNumber)
                 .NotEmpty().WithMessage("شماره تماس الزامی است")
-                .Matches(@"^09\d{9}$").WithMessage("شماره موبایل معتبر نیست (مثال: 09123456789)");
+                .MustBeIranianMobile();
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("رمز عبور الزامی است");

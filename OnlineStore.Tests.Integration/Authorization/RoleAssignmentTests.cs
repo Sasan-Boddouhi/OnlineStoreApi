@@ -91,7 +91,7 @@ public class RoleAssignmentTests : ControllerIntegrationTestBase
         };
 
         var response = await client.PutAsJsonAsync($"/api/v1/users/{targetUserId}/roles", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict); // Batch 54 (API-06): removing own SuperAdmin is a state conflict, 409
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public class RoleAssignmentTests : ControllerIntegrationTestBase
         };
 
         var response = await client.PutAsJsonAsync($"/api/v1/users/{targetUserId}/roles", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict); // Batch 54 (API-06): user must keep one role is a state conflict, 409
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public class RoleAssignmentTests : ControllerIntegrationTestBase
         };
 
         var response = await client.PutAsJsonAsync($"/api/v1/users/{targetUserId}/roles", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound); // Batch 54 (API-06): unknown role id is 404
     }
 
     [Fact]

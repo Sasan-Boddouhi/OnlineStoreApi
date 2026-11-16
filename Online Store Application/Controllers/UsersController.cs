@@ -67,15 +67,7 @@ public class UsersController : ControllerBase
 
         if (!parseResult.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query syntax",
-                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query syntax", parseResult.Errors);
         }
 
         var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -83,15 +75,7 @@ public class UsersController : ControllerBase
 
         if (!validation.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query values",
-                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query values", validation.Errors);
         }
 
         var result = await _userService.GetByQueryAsync(validation.Value!);
@@ -121,6 +105,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
     {
@@ -152,9 +137,8 @@ public class UsersController : ControllerBase
 
         if (created is null)
         {
-            throw new BusinessException(
-                "خطا در ایجاد کاربر",
-                "USER_CREATION_FAILED");
+            // Batch 54 (BE-01): کاربر تازه‌ساخته باید خوانده شود؛ نشدنش خطای داخلی است (500) نه 400.
+            throw new InvalidOperationException("کاربر ایجادشده پس از ذخیره قابل بازیابی نبود.");
         }
 
         return CreatedAtAction(
@@ -185,7 +169,7 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/{id}
-    /// <summary>ویرایش مشخصات کاربر توسط ادمین.</summary>
+    /// <summary>ویرایش مشخصات کاربر توسط ادمین. حساب مدیر ارشد را فقط مدیر ارشد ویرایش می‌کند (403 ADMIN_CANNOT_MODIFY_SUPERADMIN)؛ موبایل یا ایمیل تکراری 409.</summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -193,6 +177,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
     {
@@ -212,7 +197,10 @@ public class UsersController : ControllerBase
     }
 
     // PATCH: api/users/{id}
-    /// <summary>تغییر وضعیت فعال بودن کاربر توسط ادمین.</summary>
+    /// <summary>
+    /// تغییر وضعیت فعال بودن کاربر توسط ادمین. غیرفعال‌سازی همهٔ نشست‌های کاربر را باطل می‌کند (Batch 11).
+    /// 409 CANNOT_DEACTIVATE_SELF / LAST_SUPERADMIN؛ 403 ADMIN_CANNOT_MODIFY_SUPERADMIN.
+    /// </summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPatch("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -220,6 +208,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> PatchUserStatus(int id, [FromBody] UpdateUserStatusDto dto)
     {
         if (id != dto.UserId)
@@ -237,13 +226,17 @@ public class UsersController : ControllerBase
     }
 
     // DELETE: api/users/{id}
-    /// <summary>حذف کاربر توسط ادمین.</summary>
+    /// <summary>
+    /// «حذف» کاربر توسط ادمین: از Batch 11 حذف نرم است (غیرفعال‌سازی + باطل کردن همهٔ نشست‌ها)؛
+    /// سفارش‌ها و سوابق کاربر می‌مانند. همان گاردهای غیرفعال‌سازی اعمال می‌شود.
+    /// </summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteUser(int id)
     {
         var deleted = await _userService.DeleteAsync(id);
@@ -252,13 +245,17 @@ public class UsersController : ControllerBase
     }
 
     // PUT: api/users/{id}/roles
-    /// <summary>تخصیص نقش به کاربر توسط ادمین.</summary>
+    /// <summary>
+    /// تخصیص نقش به کاربر توسط ادمین. نقش‌های مدیر ارشد را فقط مدیر ارشد تغییر می‌دهد (403) و
+    /// آخرین مدیر ارشد فعال تنزل نمی‌یابد (409 LAST_SUPERADMIN).
+    /// </summary>
     [Authorize(Policy = "AdminOnly")]
     [HttpPut("{id:int}/roles")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignRoles(int id, [FromBody] AssignRolesDto dto)
     {
         if (!ModelState.IsValid)

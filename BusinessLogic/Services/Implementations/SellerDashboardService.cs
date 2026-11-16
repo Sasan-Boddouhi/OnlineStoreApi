@@ -3,11 +3,13 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Options;
 using BusinessLogic.DTOs.Dashboard;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessLogic.Services.Implementations;
 
@@ -16,7 +18,7 @@ namespace BusinessLogic.Services.Implementations;
 ///
 /// اصول طراحی:
 /// 1) هیچ عددی cache نمی‌شود؛ همه از دادهٔ واقعی سفارش‌ها محاسبه می‌شود تا کهنه نشود.
-/// 2) فقط سفارش‌های لغوشده/مرجوعی از فروش کنار گذاشته می‌شوند.
+/// 2) فقط سفارش‌های پرداخت‌شده در فروش و درآمد حساب می‌شوند (Batch 4، F-33).
 /// 3) دسترسی در سطح سرویس بررسی می‌شود، نه فقط در کنترلر — همان درس فاز ۴ (IDOR).
 /// </summary>
 public sealed class SellerDashboardService : ISellerDashboardService
@@ -27,15 +29,18 @@ public sealed class SellerDashboardService : ISellerDashboardService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<SellerDashboardService> _logger;
+    private readonly PayoutSettings _payoutSettings;
 
     public SellerDashboardService(
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        ILogger<SellerDashboardService> logger)
+        ILogger<SellerDashboardService> logger,
+        IOptions<PayoutSettings>? payoutSettings = null)
     {
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _logger = logger;
+        _payoutSettings = payoutSettings?.Value ?? new PayoutSettings();
     }
 
     public async Task<SellerSalesSummaryDto> GetSalesSummaryAsync(
@@ -56,12 +61,16 @@ public sealed class SellerDashboardService : ISellerDashboardService
         var start = from ?? DateTime.MinValue;
         var end = to ?? DateTime.MaxValue;
 
-        // فقط سفارش‌های زنده در فروش حساب می‌شوند.
+        // Batch 4 (F-33): فقط سفارش‌های پرداخت‌شده در فروش و درآمد حساب می‌شوند؛
+        // همان تعریف OrderFulfilmentGuard: وضعیت Processing/Shipped/Delivered و یک پرداخت موفق.
+        // سفارش Pending، تأییدشدهٔ بی‌پرداخت، لغوشده، مرجوعی یا برگشت‌وجه‌شده پولی برای فروشنده ندارد.
         var groupQuery = _unitOfWork.Repository<OrderSellerGroup>()
             .Query()
             .Where(g => g.SellerId == sellerId
-                     && g.Order.Status != OrderStatus.Cancelled
-                     && g.Order.Status != OrderStatus.Returned);
+                     && (g.Order.Status == OrderStatus.Processing
+                         || g.Order.Status == OrderStatus.Shipped
+                         || g.Order.Status == OrderStatus.Delivered)
+                     && g.Order.Payments.Any(p => p.State == PaymentState.Succeeded));
 
         if (from.HasValue)
             groupQuery = groupQuery.Where(g => g.DeliveredAt.HasValue && g.DeliveredAt.Value >= from.Value);
@@ -88,6 +97,15 @@ public sealed class SellerDashboardService : ISellerDashboardService
             .Select(p => new { p.Status, p.Amount })
             .ToListAsync(cancellationToken);
 
+        // Batch 44 (F-09): بدهی باز از تسویه‌های بعدی کسر می‌شود؛ داشبورد خالص قابل واریز را هم نشان می‌دهد.
+        var openDebts = await _unitOfWork.Repository<SellerDebt>()
+            .Query()
+            .Where(d => d.SellerId == sellerId && !d.IsSettled)
+            .Select(d => d.RemainingAmount)
+            .ToListAsync(cancellationToken);
+        var outstandingDebt = openDebts.Sum();
+        var pendingGross = payoutStats.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount);
+
         var summary = new SellerSalesSummaryDto
         {
             SellerId = sellerId,
@@ -98,7 +116,9 @@ public sealed class SellerDashboardService : ISellerDashboardService
             CommissionPaid = groupStats.Sum(g => g.CommissionAmount),
             NetEarnings = groupStats.Sum(g => g.SellerPayable),
             PaidEarnings = payoutStats.Where(p => p.Status == PayoutStatus.Paid).Sum(p => p.Amount),
-            PendingPayouts = payoutStats.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount)
+            PendingPayouts = pendingGross,
+            PendingPayoutsNet = Math.Max(0m, pendingGross - outstandingDebt),
+            OutstandingDebt = outstandingDebt
         };
 
         _logger.LogInformation(
@@ -274,7 +294,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var userId = _currentUser.TryGetCurrentUserId();
         if (userId is null)
-            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         Seller? seller = null;
         if (!isAdmin)
@@ -342,7 +362,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var userId = _currentUser.TryGetCurrentUserId();
         if (userId is null)
-            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         Seller? seller = null;
         if (!isAdmin)
@@ -367,6 +387,10 @@ public sealed class SellerDashboardService : ISellerDashboardService
         if (group is null)
             throw new NotFoundException("گروه سفارش یافت نشد.", "GROUP_NOT_FOUND");
 
+        // Batch 4 (F-02): فقط بستهٔ سفارش پرداخت‌شده و در حال پردازش ارسال می‌شود.
+        await OrderFulfilmentGuard.EnsureOrderIsPaidAsync(_unitOfWork, group.Order, cancellationToken);
+        OrderFulfilmentGuard.EnsureGroupCanBeShipped(group);
+
         group.MarkShipped(request.CarrierName, request.TrackingNumber, DateTime.UtcNow);
         _unitOfWork.Repository<OrderSellerGroup>().Update(group);
 
@@ -382,7 +406,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
             _unitOfWork.Repository<Order>().Update(order);
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await OrderFulfilmentGuard.SaveAsync(_unitOfWork, Array.Empty<int>(), cancellationToken);
 
         return new SellerOrderDetailsDto
         {
@@ -427,7 +451,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var userId = _currentUser.TryGetCurrentUserId();
         if (userId is null)
-            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         Seller? seller = null;
         if (!isAdmin)
@@ -452,31 +476,24 @@ public sealed class SellerDashboardService : ISellerDashboardService
         if (group is null)
             throw new NotFoundException("گروه سفارش یافت نشد.", "GROUP_NOT_FOUND");
 
+        // Batch 4 (F-02): تحویل و ساخت تسویه فقط برای سفارش پرداخت‌شده‌ای که لغو/مرجوع/برگشت وجه نشده است.
+        await OrderFulfilmentGuard.EnsureOrderIsPaidAsync(_unitOfWork, group.Order, cancellationToken);
+
         if (group.Status == SellerGroupStatus.Delivered)
-            throw new BusinessException("این بسته قبلاً تحویل شده است.", "GROUP_ALREADY_DELIVERED");
+            throw new ConflictException("این بسته قبلاً تحویل شده است.", "GROUP_ALREADY_DELIVERED");
 
         if (group.Status == SellerGroupStatus.Cancelled)
-            throw new BusinessException("بسته لغوشده قابل تحویل نیست.", "GROUP_CANCELLED");
+            throw new ConflictException("بسته لغوشده قابل تحویل نیست.", "GROUP_CANCELLED");
+
+        // تحویل فقط پس از ارسال.
+        OrderFulfilmentGuard.EnsureGroupCanBeDelivered(group);
 
         var now = DateTime.UtcNow;
         group.MarkDelivered(now);
         _unitOfWork.Repository<OrderSellerGroup>().Update(group);
 
-        // Check if SellerPayout already exists for this group
-        var existingPayout = await _unitOfWork.Repository<SellerPayout>()
-            .FirstOrDefaultAsync(new Spec<SellerPayout>().Where(p => p.OrderSellerGroupId == group.OrderSellerGroupId), cancellationToken);
-
-        if (existingPayout == null)
-        {
-            var payout = new SellerPayout(
-                group.SellerId,
-                group.OrderSellerGroupId,
-                group.SellerPayable,
-                group.Order.OrderDate,
-                now);
-
-            await _unitOfWork.Repository<SellerPayout>().AddAsync(payout, cancellationToken);
-        }
+        var payoutAdded = await OrderFulfilmentGuard.AddPayoutIfMissingAsync(
+            _unitOfWork, group, group.Order.OrderDate, now, _payoutSettings.HoldDays, cancellationToken);
 
         var orderSpec = new Spec<Order>()
             .Where(o => o.OrderId == orderId)
@@ -490,7 +507,10 @@ public sealed class SellerDashboardService : ISellerDashboardService
             _unitOfWork.Repository<Order>().Update(order);
         }
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await OrderFulfilmentGuard.SaveAsync(
+            _unitOfWork,
+            payoutAdded ? new[] { group.OrderSellerGroupId } : Array.Empty<int>(),
+            cancellationToken);
 
         return new SellerOrderDetailsDto
         {

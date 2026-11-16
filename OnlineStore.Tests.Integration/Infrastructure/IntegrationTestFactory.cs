@@ -25,6 +25,18 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
     /// <summary>Phase 9: ساعت مشترک تست. از بیرون قابل جلو بردن است.</summary>
     public TestTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
 
+    /// <summary>Batch 5: درگاه پرداخت قابل برنامه‌ریزی؛ پیش‌فرض همان FakePaymentGateway. در هر تست بازنشانی می‌شود.</summary>
+    public ScriptedPaymentGateway PaymentGateway { get; } = new();
+
+    /// <summary>Batch 46: پیامک‌های OTP اینجا ضبط می‌شوند (جای فرستندهٔ لاگ‌کننده).</summary>
+    public CapturingSmsSender Sms { get; } = new();
+
+    /// <summary>تست‌هایی که انتخاب درگاه توسط خودِ برنامه را می‌سنجند، جایگزینی را خاموش می‌کنند.</summary>
+    protected virtual bool UseScriptedPaymentGateway => true;
+
+    /// <summary>Batch 46: تست‌هایی که فرستندهٔ پیامکِ خودِ برنامه (LoggingSmsSender) را می‌سنجند، جایگزینی را خاموش می‌کنند.</summary>
+    protected virtual bool UseCapturingSmsSender => true;
+
     private static SqliteConnection CreateInMemoryConnection()
     {
         var connection = new SqliteConnection("DataSource=:memory:");
@@ -44,12 +56,32 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["Jwt:Key"] = "THIS_IS_A_VERY_SECRET_TEST_KEY_1234567890",
                 ["Jwt:Issuer"] = "OnlineStoreApi",
                 ["Jwt:Audience"] = "OnlineStoreClient",
-                ["Jwt:ExpireMinutes"] = "60",
+                ["Jwt:ExpireMinutes"] = "15",
                 ["Redis:Configuration"] = "localhost:6379",
                 ["Redis:InstanceName"] = "OnlineStore_Test:",
                 ["Swagger:Enabled"] = "true",
                 ["ConnectionStrings:DefaultConnection"] = "Data Source=:memory:",
-                ["PaymentGatewaySettings:WebhookSecret"] = "test-webhook-secret-for-integration-tests"
+                ["PaymentGatewaySettings:WebhookSecret"] = "test-webhook-secret-for-integration-tests",
+                // Batch 48c: میزبان‌های مجاز تصویر خارجی در تست‌ها.
+                ["ProductImages:AllowedExternalHosts:0"] = "cdn.example.test",
+                ["ProductImages:AllowedExternalHosts:1"] = "images.example.test",
+                // F-03: سقف‌های بزرگ تا تست‌های عادی (که همه از یک IP می‌آیند) به محدودیت نرخ نخورند.
+                // سقف‌های واقعی و کوچک در RateLimitingTestFactory سنجیده می‌شوند.
+                ["RateLimiting:Login:PermitLimit"] = "10000",
+                ["RateLimiting:Register:PermitLimit"] = "10000",
+                ["RateLimiting:Refresh:PermitLimit"] = "10000",
+                ["RateLimiting:Checkout:PermitLimit"] = "10000",
+                ["RateLimiting:PaymentInitiate:PermitLimit"] = "10000",
+                ["RateLimiting:PaymentVerify:PermitLimit"] = "10000",
+                ["RateLimiting:OtpSend:PermitLimit"] = "10000",
+                ["RateLimiting:OtpVerify:PermitLimit"] = "10000",
+                // Batch 46: سقف‌های OTP هر شماره برای تست‌های عادی باز است (یک شماره چند بار در یک تست ثبت‌نام می‌کند)؛
+                // سقف‌های واقعی در OtpTestFactory (AuthOtpIntegrationTests) سنجیده می‌شوند.
+                ["Otp:HmacKey"] = "integration-tests-otp-hmac-key-0123456789abcdef",
+                ["Otp:ResendCooldownSeconds"] = "0",
+                ["Otp:MaxSendsPerPhonePerHour"] = "1000",
+                ["Otp:MaxSendsPerPhonePerDay"] = "1000",
+                ["Otp:GlobalDailySendLimit"] = "1000000"
             });
         });
 
@@ -86,12 +118,29 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
 
+            // Batch 5: درگاه پرداخت قابل برنامه‌ریزی (بدون شبکه).
+            if (UseScriptedPaymentGateway)
+            {
+                services.RemoveAll<IPaymentGateway>();
+                services.AddScoped<IPaymentGateway>(_ => PaymentGateway);
+            }
+
+            // Batch 46: پیامک‌ها ضبط می‌شوند تا تست کد را بخواند.
+            if (UseCapturingSmsSender)
+            {
+                services.RemoveAll<ISmsSender>();
+                services.AddSingleton<ISmsSender>(Sms);
+            }
+
             services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
         });
     }
 
     public async Task InitializeDatabaseAsync()
     {
+        PaymentGateway.Reset();
+        Sms.Reset();
+
         var cache = Services.GetService<ICacheService>() as FakeCacheService;
         cache?.Clear();
 

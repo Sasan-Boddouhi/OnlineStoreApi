@@ -29,6 +29,7 @@ public class ProductImageServiceIntegrationTests : BaseIntegrationTest
             GetService<IUnitOfWork>(),
             _storage,
             Options.Create(new StorageSettings()),
+            Options.Create(new ProductImageUrlOptions { AllowedExternalHosts = ["cdn.test"] }),
             NullLogger<ProductImageService>.Instance);
 
     private async Task<Product> CreateProductAsync()
@@ -103,7 +104,26 @@ public class ProductImageServiceIntegrationTests : BaseIntegrationTest
         images[0].ProductImageId.Should().Be(second.ProductImageId);
         images[0].IsPrimary.Should().BeTrue();
 
-        _storage.Deleted.Should().Contain("https://cdn.test/a.png");
+        // Batch 48c: آدرس خارجی هرگز به StorageService (حذف فایل محلی) نمی‌رسد.
+        _storage.Deleted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeletingLocalUploadImage_RemovesFileThroughStorage()
+    {
+        var service = CreateService();
+        var product = await CreateProductAsync();
+        var local = DbContext.ProductImage.Add(new ProductImage
+        {
+            ProductId = product.ProductId,
+            Url = "/uploads/abc123.png",
+            IsPrimary = true
+        });
+        await DbContext.SaveChangesAsync();
+
+        await service.DeleteAsync(product.ProductId, local.Entity.ProductImageId);
+
+        _storage.Deleted.Should().ContainSingle().Which.Should().Be("/uploads/abc123.png");
     }
 
     [Fact]

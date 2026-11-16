@@ -1,3 +1,5 @@
+using Application.Common.Helpers;
+using Application.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -79,14 +81,14 @@ namespace Application.Entities
         public void Confirm()
         {
             if (Status != OrderStatus.Pending)
-                throw new InvalidOperationException("Only pending orders can be confirmed.");
+                throw new BusinessRuleViolationException("Only pending orders can be confirmed.", "ORDER_INVALID_STATE");
             Status = OrderStatus.Processing;
         }
 
         public void MarkShipped()
         {
             if (Status != OrderStatus.Processing)
-                throw new InvalidOperationException("Only processing orders can be marked as shipped.");
+                throw new BusinessRuleViolationException("Only processing orders can be marked as shipped.", "ORDER_INVALID_STATE");
 
             Status = OrderStatus.Shipped;
         }
@@ -95,7 +97,7 @@ namespace Application.Entities
         public void MarkDelivered()
         {
             if (Status != OrderStatus.Processing && Status != OrderStatus.Shipped)
-                throw new InvalidOperationException("Only processing or shipped orders can be delivered.");
+                throw new BusinessRuleViolationException("Only processing or shipped orders can be delivered.", "ORDER_INVALID_STATE");
 
             Status = OrderStatus.Delivered;
         }
@@ -103,7 +105,7 @@ namespace Application.Entities
         public void Cancel()
         {
             if (Status == OrderStatus.Shipped || Status == OrderStatus.Delivered || Status == OrderStatus.Returned)
-                throw new InvalidOperationException("Cannot cancel shipped, delivered, or returned orders.");
+                throw new BusinessRuleViolationException("Cannot cancel shipped, delivered, or returned orders.", "ORDER_INVALID_STATE");
             Status = OrderStatus.Cancelled;
         }
 
@@ -117,13 +119,24 @@ namespace Application.Entities
         public void MarkReturned()
         {
             if (Status != OrderStatus.Delivered)
-                throw new InvalidOperationException("Only delivered orders can be returned.");
+                throw new BusinessRuleViolationException("Only delivered orders can be returned.", "ORDER_INVALID_STATE");
 
             Status = OrderStatus.Returned;
         }
 
+        /// <summary>
+        /// تخفیف و هزینهٔ ارسال محاسبه‌شده توسط <c>IPricingService</c> را روی سفارش ثبت می‌کند.
+        /// Batch 45 (FIN-06/FIN-09): هر دو مبلغ ریال کامل و نامنفی‌اند و تخفیف هرگز از جمع اقلام بیشتر نیست؛
+        /// در غیر این صورت قیمت‌گذاری خطا دارد و سفارش ثبت نمی‌شود (پیش‌تر کسر ریال بی‌صدا ذخیره می‌شد).
+        /// <paramref name="shippingCost"/> جمع هزینهٔ ارسال همهٔ بسته‌هاست (یک هزینه به‌ازای هر فروشنده، تصمیم N4).
+        /// </summary>
         public void ApplyDiscountsAndShipping(decimal discount, decimal shippingCost, int? couponId, int? shippingMethodId)
         {
+            var itemsTotal = ItemsTotal();
+            if (discount < 0 || shippingCost < 0 || discount > itemsTotal
+                || !RialMoney.IsWhole(discount) || !RialMoney.IsWhole(shippingCost))
+                throw new BusinessRuleViolationException("Order discount or shipping is out of range or not whole rials.", "PRICING_INVARIANT_VIOLATED");
+
             DiscountAmount = discount;
             ShippingCost = shippingCost;
             CouponId = couponId;
@@ -133,9 +146,11 @@ namespace Application.Entities
 
         private void RecalculateTotal()
         {
-            var itemsTotal = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
-            TotalAmount = Math.Max(0, itemsTotal - DiscountAmount + ShippingCost);
+            TotalAmount = Math.Max(0, ItemsTotal() - DiscountAmount + ShippingCost);
         }
+
+        /// <summary>Batch 45b: جمع اقلام با همان گرد کردن هر قلم که جمع گروه فروشنده دارد (<see cref="RialMoney.LineTotal"/>).</summary>
+        private decimal ItemsTotal() => OrderItems.Sum(i => RialMoney.LineTotal(i.Quantity, i.UnitPrice));
     }
 
     public enum OrderStatus

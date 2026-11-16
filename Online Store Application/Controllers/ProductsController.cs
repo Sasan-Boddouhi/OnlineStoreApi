@@ -8,6 +8,7 @@ using BusinessLogic.Specifications.Products;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -19,6 +20,7 @@ using Asp.Versioning;
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly IAuthorizationService _authorizationService;
 
     private static readonly QueryParseContext<Product> QueryContext = new()
     {
@@ -27,41 +29,48 @@ public class ProductsController : ControllerBase
         CaseInsensitive = true
     };
 
-    public ProductsController(IProductService productService)
+    public ProductsController(IProductService productService, IAuthorizationService authorizationService)
     {
         _productService = productService;
+        _authorizationService = authorizationService;
     }
 
     // ================= GET ALL =================
     /// <summary>جستجو و دریافت فهرست محصولات با فیلتر، مرتب‌سازی و صفحه‌بندی.</summary>
+    /// <remarks>
+    /// F-04/F-23: کش خروجی ندارد؛ query آزاد است و هر ترکیب تصادفی یک ورودی جدید می‌ساخت.
+    /// کش داده در ProductService با کلید هش‌شده و نسخه‌دار انجام می‌شود.
+    ///
+    /// Batch 6 (F-15): محصولات غیرفعال (حذف‌شده) به‌طور پیش‌فرض برنمی‌گردند.
+    /// <c>includeInactive=true</c> فقط برای دارندهٔ مجوز catalog.products.write اثر دارد
+    /// و برای بقیه بی‌صدا نادیده گرفته می‌شود.
+    ///
+    /// Batch 60 (F-24، API-10): پارامترهای نوع‌دار <c>q</c>، <c>categoryId</c>، <c>subcategoryId</c>، <c>brandId</c>،
+    /// <c>inStock</c> و <c>sort=newest|rating|name</c>. همهٔ شرط‌ها (نوع‌دار، <c>filter</c>، فقط‌فعال) با AND ترکیب می‌شوند.
+    /// <c>filter</c> با توکن اضافه یا ناقص کامل رد می‌شود (400 INVALID_QUERY) و هرگز نیمه‌کاره اعمال نمی‌شود.
+    /// مقدار نامعتبر پارامتر نوع‌دار یا <c>sort</c> ناشناخته ← 422 VALIDATION_ERROR. دستور زبان: <c>docs/api-query-syntax.md</c>.
+    /// </remarks>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(PagedResult<ProductDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetProducts(
-        [FromQuery] string? filter,
-        [FromQuery] string? sort,
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 20)
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> GetProducts([FromQuery] ProductListQueryDto query)
     {
+        // مرتب‌سازی آماده (newest|rating|name) از مسیر نوع‌دار می‌رود؛ هر مقدار دیگر زبان کوچک است
+        // که اعتبارسنج پیش‌تر درستی‌اش را بررسی کرده است.
+        var sortPreset = ProductListCriteria.ParseSortPreset(query.Sort);
+
         var parseResult = StringQueryParser.TryParse<Product>(
-            filter,
-            sort,
+            query.Filter,
+            sortPreset is null ? query.Sort : null,
             QueryContext,
-            page: pageNumber,
-            size: pageSize);
+            page: query.PageNumber,
+            size: query.PageSize);
 
         if (!parseResult.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query syntax",
-                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = parseResult.Errors;
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query syntax", parseResult.Errors);
         }
 
         var normalized = QueryPolicy.Normalize(
@@ -74,18 +83,23 @@ public class ProductsController : ControllerBase
 
         if (!validation.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query values",
-                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = validation.Errors;
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query values", validation.Errors);
         }
 
-        var result = await _productService.GetByQueryAsync(validation.Value!);
+        var canSeeInactive = query.IncludeInactive
+            && (await _authorizationService.AuthorizeAsync(User, "CanManageCatalog")).Succeeded;
+
+        var criteria = new ProductListCriteria
+        {
+            Q = query.Q,
+            CategoryId = query.CategoryId,
+            SubcategoryId = query.SubcategoryId,
+            BrandId = query.BrandId,
+            InStock = query.InStock,
+            Sort = sortPreset
+        };
+
+        var result = await _productService.GetByQueryAsync(validation.Value!, criteria, canSeeInactive);
         return Ok(result);
     }
 
@@ -93,7 +107,7 @@ public class ProductsController : ControllerBase
     /// <summary>دریافت مشخصات کامل یک محصول بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
-    [OutputCache(Duration = 30, VaryByRouteValueNames = new[] { "id" })]
+    [OutputCache(PolicyName = OutputCachePolicies.ProductDetail)]
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductDto>> GetProduct(int id)

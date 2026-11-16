@@ -220,7 +220,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
     }
 
     [Fact]
-    public async Task AddItemToOrderAsync_InsufficientStock_ThrowsBusinessException()
+    public async Task AddItemToOrderAsync_InsufficientStock_ThrowsConflictException()
     {
         var (customer, user) = await CreateCustomerAsync();
         SetCurrentUser(user.UserId);
@@ -241,7 +241,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
 
         await FluentActions
             .Awaiting(() => OrderService.AddItemToOrderAsync(orderDto.OrderId, itemDto))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
             .Awaiting(() => OrderService.AddItemToOrderAsync(
                 orderDto.OrderId,
                 new AddOrderItemDto { ListingId = 999_999, Quantity = 1 }))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.NotFoundException>(); // Batch 54 (API-06): unknown listing is 404
 
         ex.And.Code.Should().Be("LISTING_NOT_FOUND");
     }
@@ -288,7 +288,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
             .Awaiting(() => OrderService.AddItemToOrderAsync(
                 orderDto.OrderId,
                 new AddOrderItemDto { ListingId = listing.ListingId, Quantity = 1 }))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.ConflictException>(); // Batch 6: قابل‌خرید نبودن تعارض وضعیت است ⇒ 409.
 
         ex.And.Code.Should().Be("LISTING_NOT_AVAILABLE");
     }

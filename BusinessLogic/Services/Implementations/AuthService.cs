@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -16,6 +17,8 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 using Application.Diagnostics;
+using Application.Options;
+using Microsoft.Extensions.Options;
 
 public sealed class AuthService : IAuthService
 {
@@ -24,51 +27,79 @@ public sealed class AuthService : IAuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IMapper _mapper;
     private readonly ILogger<AuthService> _logger;
+    private readonly TimeProvider _timeProvider;
+    private readonly UserSessionOptions _sessionOptions;
+    private readonly IOtpService _otpService;
 
     private static readonly ActivitySource ActivitySource = new("OnlineStore.Auth");
 
-    private static readonly TimeSpan AbsoluteExpirationPeriod = TimeSpan.FromDays(30);
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
     private const int DefaultMaxSessions = 5;
+
+    private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
 
     public AuthService(
         IUnitOfWork unitOfWork,
         IJwtTokenService jwtTokenService,
         IPasswordHasher passwordHasher,
         IMapper mapper,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        TimeProvider timeProvider,
+        IOptions<UserSessionOptions> sessionOptions,
+        IOtpService otpService)
     {
         _unitOfWork = unitOfWork;
         _jwtTokenService = jwtTokenService;
         _passwordHasher = passwordHasher;
         _mapper = mapper;
         _logger = logger;
+        _timeProvider = timeProvider;
+        _sessionOptions = sessionOptions.Value;
+        _otpService = otpService;
     }
 
     // ================= REGISTER =================
-    public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken ct = default)
+    public async Task<AuthResultDto> RegisterAsync(RegisterDto dto, ClientRequestInfo client, CancellationToken ct = default)
     {
         using var activity = ActivitySource.StartActivity("RegisterUser", ActivityKind.Internal);
+
+        // Batch 48b: فقط شکل استاندارد 09… جست‌وجو و ذخیره می‌شود؛ +98… و ارقام فارسی همان شماره‌اند.
+        var phone = IranianPhoneNumber.NormalizeOrThrow(dto.PhoneNumber);
 
         await _unitOfWork.BeginTransactionAsync(ct);
 
         try
         {
+            // Batch 46 (N9): ثبت‌نام فقط با کد تأییدشدهٔ همین شماره کامل می‌شود. این بررسی پیش از جست‌وجوی حساب است، پس
+            // بدون دریافت پیامک نمی‌توان فهمید شماره‌ای حساب دارد (ضد شمارش). توکن یک‌بار مصرف است و اگر ثبت‌نام
+            // به هر دلیل شکست بخورد، با rollback تراکنش دوباره قابل استفاده می‌شود.
+            await _otpService.ConsumeVerificationAsync(phone, OtpPurpose.Register, dto.PhoneVerificationToken, ct);
+
             var exists = await _unitOfWork.Repository<User>()
-                .AnyAsync(x => x.PhoneNumber == dto.PhoneNumber, ct);
+                .AnyAsync(x => x.PhoneNumber == phone, ct);
 
             if (exists)
             {
                 activity?.SetStatus(ActivityStatusCode.Error, "Phone already exists");
-                throw new BusinessException("شماره تماس تکراری است.", "USER_PHONE_EXISTS");
+                // Batch 11b: موبایل تکراری مانند ایمیل تکراری تعارض است (409)، نه ورودی نامعتبر.
+                throw new ConflictException("شماره تماس تکراری است.", "USER_PHONE_EXISTS");
+            }
+
+            // Batch 11 (F-41): ایمیل در دیتابیس یکتاست؛ تکرار آن پیش‌تر به خطای ذخیره‌سازی می‌رسید.
+            var email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
+            if (email is not null
+                && await _unitOfWork.Repository<User>().AnyAsync(x => x.Email == email, ct))
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, "Email already exists");
+                throw new ConflictException("این ایمیل قبلاً ثبت شده است.", "USER_EMAIL_EXISTS");
             }
 
             var user = new User
             {
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
-                PhoneNumber = dto.PhoneNumber,
-                Email = dto.Email,
+                PhoneNumber = phone,
+                PhoneNumberConfirmed = true,
+                Email = email,
                 DateOfBirth = !string.IsNullOrWhiteSpace(dto.DateOfBirth)
                     ? PersianDateHelper.ToGregorian(dto.DateOfBirth)
                     : null,
@@ -92,7 +123,7 @@ public sealed class AuthService : IAuthService
 
             // NOTE: do NOT call LimitActiveSessionsAsync here (no active sessions yet)
 
-            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
+            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, client.IpAddress, client.UserAgent));
 
             _logger.LogInformation("User {UserId} registered and creating initial session", user.UserId);
 
@@ -121,7 +152,7 @@ public sealed class AuthService : IAuthService
     }
 
     // ================= LOGIN =================
-    public async Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken ct = default)
+    public async Task<AuthResultDto?> LoginAsync(LoginDto dto, ClientRequestInfo client, CancellationToken ct = default)
     {
         using var activity = ActivitySource.StartActivity("Login", ActivityKind.Internal);
 
@@ -130,15 +161,21 @@ public sealed class AuthService : IAuthService
 
         OnlineStoreMetrics.LoginAttempts.Add(1);
 
-        var user = await _unitOfWork.Repository<User>()
-            .FirstOrDefaultAsync(
-                new Spec<User>()
-                    .Where(u => u.PhoneNumber == dto.PhoneNumber)
-                    .Where(u => u.IsActive)
-                    .Include(u => u.Employee!)
-                    .Include(u => u.Employee!.EmployeeType)
-                    .AsTracking(),
-                ct);
+        // Batch 48b: جست‌وجو فقط با شکل استاندارد 09…؛ شمارهٔ غیرقابل نرمال‌سازی مانند کاربر ناموجود است (همان 401).
+        var phone = IranianPhoneNumber.NormalizeOrNull(dto.PhoneNumber);
+
+        var user = phone is null
+            ? null
+            : await _unitOfWork.Repository<User>()
+                .FirstOrDefaultAsync(
+                    new Spec<User>()
+                        .Where(u => u.PhoneNumber == phone)
+                        // Batch 44: حساب سیستمی (IsSystem) مثل حساب غیرفعال هرگز وارد نمی‌شود (همان 401، بدون نشانهٔ وجود حساب).
+                        .Where(u => u.IsActive && !u.IsSystem)
+                        .Include(u => u.Employee!)
+                        .Include(u => u.Employee!.EmployeeType)
+                        .AsTracking(),
+                    ct);
 
         if (user is null)
         {
@@ -155,7 +192,7 @@ public sealed class AuthService : IAuthService
 
         if (user.LockoutEnd.HasValue)
         {
-            if (user.LockoutEnd.Value > DateTime.UtcNow)
+            if (user.LockoutEnd.Value > UtcNow)
             {
                 OnlineStoreMetrics.LoginFailure.Add(
                     1,
@@ -175,7 +212,7 @@ public sealed class AuthService : IAuthService
             user.FailedLoginAttempts++;
 
             if (user.FailedLoginAttempts >= maxFailed)
-                user.LockoutEnd = DateTime.UtcNow.AddMinutes(lockMinutes);
+                user.LockoutEnd = UtcNow.AddMinutes(lockMinutes);
 
             await _unitOfWork.SaveChangesAsync(ct);
 
@@ -206,7 +243,7 @@ public sealed class AuthService : IAuthService
             // enforce max active sessions per user (revokes oldest sessions and their tokens)
             await LimitActiveSessionsAsync(user.UserId, DefaultMaxSessions, ct);
 
-            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, dto.IpAddress, dto.UserAgent));
+            var session = CreateSession(user.UserId, new SessionMetadataDto(dto.DeviceId, dto.DeviceName, client.IpAddress, client.UserAgent));
 
             _logger.LogInformation("User {UserId} logged in", user.UserId);
 
@@ -257,7 +294,7 @@ public sealed class AuthService : IAuthService
         }
 
         // M7.11: Validate user active status. Deactivated/suspended users must not refresh tokens.
-        if (token.User is null || !token.User.IsActive)
+        if (token.User is null || !token.User.CanSignIn)
         {
             if (token.Session != null)
             {
@@ -267,45 +304,56 @@ public sealed class AuthService : IAuthService
             throw new UnauthorizedException("حساب کاربری غیرفعال است.", "USER_INACTIVE");
         }
 
-        // If expired by expiry date -> revoke and return null
-        if (token.ExpiryDate < DateTime.UtcNow)
-        {
-            token.IsRevoked = true;
-            token.RevokedAtUtc = DateTime.UtcNow;
-            await _unitOfWork.SaveChangesAsync(ct);
-            _logger.LogInformation("Expired refresh token used (UserId={UserId}, SessionId={SessionId})", token.UserId, token.SessionId);
-            activity?.SetTag("user.id", token.UserId);
-            activity?.SetTag("session.id", token.SessionId);
-            activity?.SetStatus(ActivityStatusCode.Error, "Refresh token expired");
-            return null;
-        }
-
         activity?.SetTag("user.id", token.UserId);
         activity?.SetTag("session.id", token.SessionId);
 
-        // Refresh token reuse detection:
+        // Batch 11 (F-19): تشخیص استفادهٔ دوباره پیش از بررسی انقضا می‌آید تا توکن دزدیده‌شده
+        // حتی اگر منقضی هم شده باشد نشست را باطل کند.
         if (token.IsRevoked)
         {
-            if (token.ReplacedByTokenId == null)
+            if (token.Session is null || token.Session.Status != UserSession.SessionStatus.Active)
             {
-                // token already revoked and not rotated -> possible reuse attack
-                OnlineStoreMetrics.RefreshTokenReuse.Add(1);
+                // نشست قبلاً بسته شده (خروج، انقضا، باطل‌سازی)؛ چیزی برای محافظت نمانده است.
+                activity?.SetStatus(ActivityStatusCode.Error, "Session inactive");
+                return null;
+            }
 
-                _logger.LogWarning("Refresh token reuse detected for UserId={UserId}, SessionId={SessionId}", token.UserId, token.SessionId);
-                if (token.Session != null)
-                {
-                    // call without starting a nested transaction (caller may already be in a transaction)
-                    await RevokeSessionAndTokensAsync(token.Session, "Refresh token reuse detected", ct, useTransaction: false);
-                }
-            }
-            else
+            var rotatedAt = token.RevokedAtUtc ?? DateTime.MinValue;
+            var insideGraceWindow = token.ReplacedByTokenId != null
+                && UtcNow - rotatedAt <= _sessionOptions.RefreshReuseGracePeriod;
+
+            if (insideGraceWindow)
             {
-                // Token was revoked due to normal rotation (ReplacedByTokenId != null).
-                _logger.LogInformation("Stale refresh token presented after normal rotation (UserId={UserId}, SessionId={SessionId})", token.UserId, token.SessionId);
+                // دو درخواست هم‌زمان (مثلاً دو تب) با یک توکن: درخواست دوم فقط رد می‌شود و نشست می‌ماند.
+                _logger.LogInformation("Rotated refresh token presented inside the grace window (UserId={UserId}, SessionId={SessionId})", token.UserId, token.SessionId);
+                activity?.SetStatus(ActivityStatusCode.Error, "Stale refresh token (grace window)");
+                return null;
             }
-            activity?.SetStatus(ActivityStatusCode.Error, token.ReplacedByTokenId == null
-                ? "Refresh token reuse detected"
-                : "Stale refresh token");
+
+            // توکن چرخیده پس از بازهٔ تحمل، یا توکن باطل‌شده: نشانهٔ سرقت. کل خانواده (نشست و همهٔ توکن‌هایش) باطل می‌شود.
+            OnlineStoreMetrics.RefreshTokenReuse.Add(1);
+            _logger.LogWarning("Refresh token reuse detected for UserId={UserId}, SessionId={SessionId}", token.UserId, token.SessionId);
+            // call without starting a nested transaction (caller may already be in a transaction)
+            await RevokeSessionAndTokensAsync(token.Session, "Refresh token reuse detected", ct, useTransaction: false);
+
+            activity?.SetStatus(ActivityStatusCode.Error, "Refresh token reuse detected");
+            return null;
+        }
+
+        // If expired by expiry date -> revoke and return null
+        if (token.ExpiryDate < UtcNow)
+        {
+            token.IsRevoked = true;
+            token.RevokedAtUtc = UtcNow;
+
+            // عمر refresh token همان بازهٔ بی‌کاری (با سقف مطلق) است و هر نشست فقط یک توکن زنده دارد؛
+            // پس انقضای توکن یعنی نشست هم دیگر قابل تمدید نیست.
+            if (token.Session is { Status: UserSession.SessionStatus.Active })
+                token.Session.Status = UserSession.SessionStatus.Expired;
+
+            await _unitOfWork.SaveChangesAsync(ct);
+            _logger.LogInformation("Expired refresh token used (UserId={UserId}, SessionId={SessionId})", token.UserId, token.SessionId);
+            activity?.SetStatus(ActivityStatusCode.Error, "Refresh token expired");
             return null;
         }
 
@@ -328,7 +376,8 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
-        if (token.Session.IsIdleExpired(IdleTimeout) || token.Session.IsAbsoluteExpired())
+        // Batch 11 (F-13): بی‌کاری از آخرین ورود یا refresh موفق سنجیده می‌شود، نه از آخرین درخواست.
+        if (token.Session.IsIdleExpired(_sessionOptions.IdleTimeout, UtcNow) || token.Session.IsAbsoluteExpired(UtcNow))
         {
             token.Session.Status = UserSession.SessionStatus.Expired;
             await _unitOfWork.SaveChangesAsync(ct);
@@ -349,8 +398,8 @@ public sealed class AuthService : IAuthService
                 SessionId = token.SessionId,
                 TokenHash = _passwordHasher.Hash(newRefreshPlain),
                 TokenIdentifier = ComputeSha256Hash(newRefreshPlain),
-                CreatedAt = DateTime.UtcNow,
-                ExpiryDate = DateTime.UtcNow.AddDays(7),
+                CreatedAt = UtcNow,
+                ExpiryDate = RefreshTokenExpiry(token.Session),
                 AbsoluteExpiry = token.AbsoluteExpiry,
                 FamilyCreatedAt = token.FamilyCreatedAt, // keep family timestamp
                 IsRevoked = false
@@ -361,10 +410,10 @@ public sealed class AuthService : IAuthService
 
             // Mark old token as rotated (revoked) and point to the replacement
             token.IsRevoked = true;
-            token.RevokedAtUtc = DateTime.UtcNow;
+            token.RevokedAtUtc = UtcNow;
             token.ReplacedByTokenId = newEntity.Id;
 
-            token.Session.LastActivityUtc = DateTime.UtcNow;
+            token.Session.LastActivityUtc = UtcNow;
 
             await _unitOfWork.SaveChangesAsync(ct);
 
@@ -466,11 +515,7 @@ public sealed class AuthService : IAuthService
     {
         var accessToken = await GenerateAccessTokenAsync(user, session.Id, ct);
 
-        var refreshToken = await CreateRefreshTokenAsync(
-            user.UserId,
-            session.Id,
-            session.CreatedAtUtc,
-            ct);
+        var refreshToken = await CreateRefreshTokenAsync(session, ct);
 
         return new AuthResultDto
         {
@@ -490,9 +535,9 @@ public sealed class AuthService : IAuthService
             DeviceName = dto.DeviceName,
             IpAddress = dto.IpAddress,
             UserAgent = dto.UserAgent,
-            CreatedAtUtc = DateTime.UtcNow,
-            LastActivityUtc = DateTime.UtcNow,
-            AbsoluteExpiryUtc = DateTime.UtcNow.Add(AbsoluteExpirationPeriod),
+            CreatedAtUtc = UtcNow,
+            LastActivityUtc = UtcNow,
+            AbsoluteExpiryUtc = UtcNow.Add(_sessionOptions.AbsoluteLifetime),
             Status = UserSession.SessionStatus.Active
         };
     }
@@ -558,20 +603,20 @@ public sealed class AuthService : IAuthService
         _ => 3
     };
 
-    private async Task<string> CreateRefreshTokenAsync(int userId, Guid sessionId, DateTime createdAt, CancellationToken ct)
+    private async Task<string> CreateRefreshTokenAsync(UserSession session, CancellationToken ct)
     {
         var token = _jwtTokenService.GenerateRefreshToken();
 
         var entity = new RefreshTokenEntity
         {
-            UserId = userId,
-            SessionId = sessionId,
+            UserId = session.UserId,
+            SessionId = session.Id,
             TokenHash = _passwordHasher.Hash(token),
             TokenIdentifier = ComputeSha256Hash(token),
-            FamilyCreatedAt = createdAt,
-            AbsoluteExpiry = createdAt.Add(AbsoluteExpirationPeriod),
-            ExpiryDate = DateTime.UtcNow.AddDays(7),
-            CreatedAt = DateTime.UtcNow,
+            FamilyCreatedAt = session.CreatedAtUtc,
+            AbsoluteExpiry = session.AbsoluteExpiryUtc,
+            ExpiryDate = RefreshTokenExpiry(session),
+            CreatedAt = UtcNow,
             IsRevoked = false
         };
 
@@ -579,6 +624,16 @@ public sealed class AuthService : IAuthService
         await _unitOfWork.SaveChangesAsync(ct);
 
         return token;
+    }
+
+    /// <summary>
+    /// Batch 11 (F-13): عمر refresh token برابر بازهٔ بی‌کاری است و از سقف مطلق نشست جلوتر نمی‌رود؛
+    /// پس پس از بی‌کاری یا پایان عمر نشست، توکن هم دیگر پذیرفته نمی‌شود.
+    /// </summary>
+    private DateTime RefreshTokenExpiry(UserSession session)
+    {
+        var idleExpiry = UtcNow.Add(_sessionOptions.IdleTimeout);
+        return idleExpiry < session.AbsoluteExpiryUtc ? idleExpiry : session.AbsoluteExpiryUtc;
     }
 
     private static string ComputeSha256Hash(string raw)
@@ -601,7 +656,7 @@ public sealed class AuthService : IAuthService
         {
             // revoke session
             session.Status = UserSession.SessionStatus.Revoked;
-            session.RevokedAtUtc = DateTime.UtcNow;
+            session.RevokedAtUtc = UtcNow;
 
             // revoke all refresh tokens for this session
             var tokens = await _unitOfWork.Repository<RefreshTokenEntity>()
@@ -616,7 +671,7 @@ public sealed class AuthService : IAuthService
                 if (!t.IsRevoked)
                 {
                     t.IsRevoked = true;
-                    t.RevokedAtUtc = DateTime.UtcNow;
+                    t.RevokedAtUtc = UtcNow;
                 }
             }
 

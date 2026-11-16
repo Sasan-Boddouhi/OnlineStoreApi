@@ -43,7 +43,7 @@ public sealed class ShippingMethodService : IShippingMethodService
             .AnyAsync(new Spec<ShippingMethod>().Where(s => s.Slug == dto.Slug), cancellationToken);
 
         if (exists)
-            throw new BusinessException("روش ارسال با این شناسه (Slug) تکراری است.", "SHIPPING_METHOD_SLUG_DUPLICATE");
+            throw new ConflictException("روش ارسال با این شناسه (Slug) تکراری است.", "SHIPPING_METHOD_SLUG_DUPLICATE");
 
         var entity = _mapper.Map<ShippingMethod>(dto);
         await _unitOfWork.Repository<ShippingMethod>().AddAsync(entity, cancellationToken);

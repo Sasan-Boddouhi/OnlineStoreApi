@@ -6,6 +6,10 @@ namespace BusinessLogic.Specifications.Users;
 
 public static class UserQueryConfig
 {
+    /// <summary>
+    /// فیلدهای مجاز فیلتر و مرتب‌سازی. Batch 60 (F-24): <c>employeetype.typename</c> حذف شد؛
+    /// <see cref="User"/> چنین ناوبری‌ای ندارد (ماژول کارمند هم در Batch 58 حذف می‌شود).
+    /// </summary>
     public static readonly string[] AllowedFields =
     [
         "firstname",
@@ -13,7 +17,8 @@ public static class UserQueryConfig
         "phonenumber",
         "email",
         "isactive",
-        "employeetype.typename"
+        // Batch 44: ادمین می‌تواند حساب‌های سیستمی را جدا یا پنهان کند (isSystem eq false).
+        "issystem"
     ];
 
     public static Expression<Func<User, UserDto>> Projection =>
@@ -25,6 +30,7 @@ public static class UserQueryConfig
             PhoneNumber = u.PhoneNumber,
             Email = u.Email,
             IsActive = u.IsActive,
+            IsSystem = u.IsSystem,
             DateOfBirth = u.DateOfBirth,
             UserType = u.UserType,
 

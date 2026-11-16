@@ -36,6 +36,11 @@ public sealed class WarehouseService : IWarehouseService
         if (address == null)
             throw new NotFoundException("آدرس یافت نشد.", "ADDRESS_NOT_FOUND");
 
+        // Batch 49 (F-29): فروشنده فقط آدرس خودش را به انبار وصل می‌کند؛
+        // وگرنه آدرس کاربر دیگر به انبار او قفل می‌شد (FK از نوع Restrict) و قابل حذف نبود.
+        if (!IsAdmin())
+            EnsureAddressOwnedBy(address, currentUserId);
+
         var entity = _mapper.Map<Warehouse>(dto);
         entity.SellerId = null;
 
@@ -53,6 +58,9 @@ public sealed class WarehouseService : IWarehouseService
             if (seller != null)
                 entity.SellerId = seller.SellerId;
         }
+
+        if (entity.SellerId is null)
+            await EnsureNoOtherPlatformWarehouseAsync(null, cancellationToken);
 
         await _unitOfWork.Repository<Warehouse>().AddAsync(entity, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -107,8 +115,7 @@ public sealed class WarehouseService : IWarehouseService
         if (entity == null)
             return null;
 
-        var role = _currentUserService.GetCurrentUserRole();
-        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+        var isAdmin = IsAdmin();
 
         if (!isAdmin)
         {
@@ -128,6 +135,7 @@ public sealed class WarehouseService : IWarehouseService
             }
             else
             {
+                await EnsureNoOtherPlatformWarehouseAsync(entity.WarehouseId, cancellationToken);
                 entity.SellerId = null;
             }
         }
@@ -135,6 +143,11 @@ public sealed class WarehouseService : IWarehouseService
         var address = await _unitOfWork.Repository<Address>().GetByIdAsync(dto.AddressId, cancellationToken);
         if (address == null)
             throw new NotFoundException("آدرس یافت نشد.", "ADDRESS_NOT_FOUND");
+
+        // Batch 49 (F-29): فقط ارجاع «تازه» بررسی می‌شود؛ آدرسی که مدیر قبلاً برای این انبار
+        // گذاشته، ویرایش نام توسط فروشنده را قفل نمی‌کند.
+        if (!isAdmin && dto.AddressId != entity.AddressId)
+            EnsureAddressOwnedBy(address, userId);
 
         _mapper.Map(dto, entity);
         _unitOfWork.Repository<Warehouse>().Update(entity);
@@ -153,10 +166,7 @@ public sealed class WarehouseService : IWarehouseService
         if (entity == null)
             return false;
 
-        var role = _currentUserService.GetCurrentUserRole();
-        var isAdmin = string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
-
-        if (!isAdmin)
+        if (!IsAdmin())
         {
             var seller = await _unitOfWork.Repository<Seller>()
                 .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == currentUserId), cancellationToken);
@@ -168,7 +178,7 @@ public sealed class WarehouseService : IWarehouseService
             .AnyAsync(i => i.WarehouseId == warehouseId, cancellationToken);
 
         if (hasInventories)
-            throw new BusinessException("این انبار موجودی دارد و قابل حذف نیست.", "WAREHOUSE_HAS_INVENTORIES");
+            throw new ConflictException("این انبار موجودی دارد و قابل حذف نیست.", "WAREHOUSE_HAS_INVENTORIES");
 
         _unitOfWork.Repository<Warehouse>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -176,5 +186,36 @@ public sealed class WarehouseService : IWarehouseService
         _logger.LogInformation("Warehouse {WarehouseId} deleted", warehouseId);
 
         return true;
+    }
+
+    /// <summary>
+    /// Batch 44: حداکثر یک انبار پلتفرم (SellerId = null) مجاز است (ایندکس یکتای UX_Warehouse_SinglePlatform).
+    /// پیش از ذخیره بررسی می‌شود تا پاسخ 409 با کد روشن باشد؛ ایندکس سد نهایی درخواست‌های هم‌زمان است.
+    /// </summary>
+    private async Task EnsureNoOtherPlatformWarehouseAsync(int? exceptWarehouseId, CancellationToken cancellationToken)
+    {
+        var exists = await _unitOfWork.Repository<Warehouse>().AnyAsync(
+            w => w.SellerId == null && (exceptWarehouseId == null || w.WarehouseId != exceptWarehouseId.Value),
+            cancellationToken);
+
+        if (exists)
+            throw new ConflictException(
+                "انبار پلتفرم از قبل وجود دارد؛ فقط یک انبار پلتفرم مجاز است. انبار تازه را به یک فروشنده اختصاص دهید.",
+                ErrorCodes.PlatformWarehouseExists.Code);
+    }
+
+    /// <summary>مدیر یا مدیر ارشد، همان قاعده‌ای که ویرایش و حذف انبار از قبل داشتند.</summary>
+    private bool IsAdmin()
+    {
+        var role = _currentUserService.GetCurrentUserRole();
+        return string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, RoleConstants.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Batch 49 (F-29): آدرس انبار باید متعلق به کاربر فراخواننده باشد.</summary>
+    private static void EnsureAddressOwnedBy(Address address, int userId)
+    {
+        if (address.UserId != userId)
+            throw new ForbiddenException("این آدرس متعلق به شما نیست و نمی‌توان آن را به انبار وصل کرد.", "ADDRESS_FORBIDDEN");
     }
 }

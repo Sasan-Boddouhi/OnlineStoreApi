@@ -61,24 +61,24 @@ public class InventoryServiceTests
     }
 
     [Fact]
-    public async Task ReserveAsync_InsufficientStock_ThrowsBusinessException()
+    public async Task ReserveAsync_InsufficientStock_ThrowsConflictException()
     {
         SetupRows(new Inventory(listingId: 1, warehouseId: 10, initialQuantity: 3));
 
         var act = () => _service.ReserveAsync(1, 5);
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.Which.Code.Should().Be("INSUFFICIENT_STOCK");
     }
 
     [Fact]
-    public async Task ReserveAsync_NoInventoryRows_ThrowsBusinessException()
+    public async Task ReserveAsync_NoInventoryRows_ThrowsConflictException()
     {
         SetupRows();
 
         var act = () => _service.ReserveAsync(1, 1);
 
-        await act.Should().ThrowAsync<BusinessException>();
+        await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class InventoryServiceTests
 
         var act = () => service.ReserveAsync(1, 5);
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.Which.Code.Should().Be("INSUFFICIENT_STOCK");
     }
 
@@ -182,7 +182,7 @@ public class InventoryServiceTests
 
         var act = () => service.ReserveAsync(1, 5);
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.Which.Code.Should().Be("INSUFFICIENT_STOCK");
     }
 }

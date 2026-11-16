@@ -39,7 +39,7 @@ public sealed class RoleService : IRoleService
         var codeExists = await _unitOfWork.Repository<Role>()
             .AnyAsync(r => r.Code == dto.Code, cancellationToken);
         if (codeExists)
-            throw new BusinessException("نقشی با این کد قبلاً وجود دارد.", "ROLE_CODE_DUPLICATE");
+            throw new ConflictException("نقشی با این کد قبلاً وجود دارد.", "ROLE_CODE_DUPLICATE");
 
         var entity = _mapper.Map<Role>(dto);
         entity.IsSystem = false; // Custom roles are never system roles
@@ -128,7 +128,7 @@ public sealed class RoleService : IRoleService
 
         // Prevent updating system roles
         if (entity.IsSystem)
-            throw new BusinessException("نقش‌های سیستمی قابل ویرایش نیستند.", "ROLE_SYSTEM_CANNOT_UPDATE");
+            throw new ConflictException("نقش‌های سیستمی قابل ویرایش نیستند.", "ROLE_SYSTEM_CANNOT_UPDATE");
 
         if (string.IsNullOrWhiteSpace(dto.Code))
             throw new BusinessException("کد نقش الزامی است.", "ROLE_CODE_REQUIRED");
@@ -136,7 +136,7 @@ public sealed class RoleService : IRoleService
         var codeExists = await _unitOfWork.Repository<Role>()
             .AnyAsync(r => r.Code == dto.Code && r.RoleId != roleId, cancellationToken);
         if (codeExists)
-            throw new BusinessException("نقشی با این کد قبلاً وجود دارد.", "ROLE_CODE_DUPLICATE");
+            throw new ConflictException("نقشی با این کد قبلاً وجود دارد.", "ROLE_CODE_DUPLICATE");
 
         // Update properties
         entity.Code = dto.Code;
@@ -185,14 +185,14 @@ public sealed class RoleService : IRoleService
 
         // Prevent deleting system roles
         if (entity.IsSystem)
-            throw new BusinessException("نقش‌های سیستمی قابل حذف نیستند.", "ROLE_SYSTEM_CANNOT_DELETE");
+            throw new ConflictException("نقش‌های سیستمی قابل حذف نیستند.", "ROLE_SYSTEM_CANNOT_DELETE");
 
         // Check if role is assigned to any user
         var hasUsers = await _unitOfWork.Repository<UserRole>()
             .AnyAsync(ur => ur.RoleId == roleId, cancellationToken);
 
         if (hasUsers)
-            throw new BusinessException("این نقش به کاربران تخصیص داده شده و قابل حذف نیست.", "ROLE_HAS_USERS");
+            throw new ConflictException("این نقش به کاربران تخصیص داده شده و قابل حذف نیست.", "ROLE_HAS_USERS");
 
         _unitOfWork.Repository<Role>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

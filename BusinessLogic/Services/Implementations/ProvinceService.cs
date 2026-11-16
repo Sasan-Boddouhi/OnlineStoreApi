@@ -121,13 +121,18 @@ public sealed class ProvinceService : IProvinceService
 
             _logger.LogInformation("Province created with ID: {Id}", entity.ProvinceId);
             return await GetByIdAsync(entity.ProvinceId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی استان ایجاد شده", "PROVINCE_RETRIEVAL_ERROR");
+                   ?? throw new InvalidOperationException("رکورد ایجادشده پس از ذخیره قابل بازیابی نبود.");
+        }
+        catch (AppException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create province: {ProvinceName}", dto.ProvinceName);
-            throw new BusinessException("خطا در ایجاد استان", "PROVINCE_CREATE_ERROR");
+            throw;
         }
     }
 
@@ -153,7 +158,7 @@ public sealed class ProvinceService : IProvinceService
             var exists = await _unitOfWork.Repository<Province>()
                 .AnyAsync(p => p.ProvinceName == dto.ProvinceName && p.ProvinceId != dto.ProvinceId, cancellationToken);
             if (exists)
-                throw new BusinessException("استانی با این نام قبلاً ثبت شده است.", "PROVINCE_NAME_DUPLICATE");
+                throw new ConflictException("استانی با این نام قبلاً ثبت شده است.", "PROVINCE_NAME_DUPLICATE");
         }
 
         _mapper.Map(dto, entity);
@@ -180,7 +185,7 @@ public sealed class ProvinceService : IProvinceService
 
         var cityRepo = _unitOfWork.Repository<City>();
         if (cityRepo != null && await cityRepo.AnyAsync(c => c.ProvinceId == id, cancellationToken))
-            throw new BusinessException("این استان دارای شهر است و قابل حذف نیست.", "PROVINCE_HAS_CITIES");
+            throw new ConflictException("این استان دارای شهر است و قابل حذف نیست.", "PROVINCE_HAS_CITIES");
 
         _unitOfWork.Repository<Province>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -204,7 +209,7 @@ public sealed class ProvinceService : IProvinceService
         var exists = await _unitOfWork.Repository<Province>()
             .AnyAsync(p => p.ProvinceName == dto.ProvinceName, cancellationToken);
         if (exists)
-            throw new BusinessException("استانی با این نام قبلاً ثبت شده است.");
+            throw new ConflictException("استانی با این نام قبلاً ثبت شده است.", "PROVINCE_NAME_DUPLICATE");
     }
 
     #endregion

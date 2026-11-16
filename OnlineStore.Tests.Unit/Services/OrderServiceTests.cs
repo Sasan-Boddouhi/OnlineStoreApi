@@ -51,7 +51,7 @@ public class OrderServiceTests
         _uowMock.Setup(u => u.Repository<SellerProduct>()).Returns(_listingRepoMock.Object);
         _uowMock.Setup(u => u.Repository<Seller>()).Returns(_sellerRepoMock.Object);
 
-        // Phase 8: لغو سفارش، پرداخت‌های موفق را Refunded می‌کند.
+        // Batch 41: لغو سفارش از روال مشترک برگرداندن سفارش می‌گذرد که پرداخت‌های سفارش را می‌خواند (پرداخت موفق ⇒ RefundPending).
         _paymentRepoMock = new Mock<IGenericRepository<Payment>>();
         _paymentRepoMock
             .Setup(r => r.ListAsync(It.IsAny<Spec<Payment>>(), It.IsAny<CancellationToken>()))
@@ -70,7 +70,13 @@ public class OrderServiceTests
             _loggerMock.Object,
             _currentUserMock.Object,
             _inventoryMock.Object,
-            _auditMock.Object,
+            // Batch 41: OrderService دیگر خودش لغو/حسابرسی نمی‌کند؛ همان روال واقعی با همین mockها ساخته می‌شود تا تست لغو، رفتار واقعی را بسنجد.
+            new OrderReversalService(
+                _uowMock.Object,
+                _inventoryMock.Object,
+                _auditMock.Object,
+                TimeProvider.System,
+                Mock.Of<ILogger<OrderReversalService>>()),
             Options.Create(new CommissionSettings { DefaultRate = 10m }));
     }
 
@@ -141,7 +147,7 @@ public class OrderServiceTests
     public async Task CreateEmptyOrderAsync_CustomerNotFound_ThrowsBusinessException()
     {
         _customerRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync((Customer?)null);
-        await Assert.ThrowsAsync<BusinessException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.CreateEmptyOrderAsync(1, "Ali", "Addr", "09121111111"));
     }
 
@@ -151,14 +157,21 @@ public class OrderServiceTests
     {
         var order = CreateValidOrder(1, status: OrderStatus.Pending);
         // Phase 2: قیمت و موجودی از Listing می‌آید، نه از Product.
+        // Batch 6 (F-15): آیتم سفارش فقط با واریانت و محصول فعال پذیرفته می‌شود؛ پس هر دو چیده می‌شوند.
         var listing = new SellerProduct
         {
             ListingId = 20,
             SellerId = 1,
             VariantId = 10,
             Price = 100,
-            Status = SellerProductStatus.Active
+            Status = SellerProductStatus.Active,
+            Variant = new ProductVariant { VariantId = 10, ProductId = 5, IsActive = true }
         };
+
+        var productRepoMock = new Mock<IGenericRepository<Product>>();
+        productRepoMock.Setup(r => r.GetByIdAsync(5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Product { ProductId = 5, Name = "P", Price = 100, SubcategoryId = 1, IsActive = true });
+        _uowMock.Setup(u => u.Repository<Product>()).Returns(productRepoMock.Object);
 
         SetupOwnedCustomer();
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
@@ -218,14 +231,15 @@ public class OrderServiceTests
     }
 
     [Fact]
-    public async Task AddItemToOrderAsync_OrderNotPending_ThrowsBusinessException()
+    public async Task AddItemToOrderAsync_OrderNotPending_ThrowsConflictException()
     {
         var order = CreateValidOrder(1, status: OrderStatus.Cancelled);
         SetupOwnedCustomer();
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
 
-        await Assert.ThrowsAsync<BusinessException>(() =>
+        // Batch 7: ویرایش سفارش غیر Pending تعارض وضعیت است (409 ConflictException)، نه 400.
+        await Assert.ThrowsAsync<ConflictException>(() =>
             _service.AddItemToOrderAsync(1, new AddOrderItemDto()));
     }
 
@@ -257,7 +271,7 @@ public class OrderServiceTests
         SetupOwnedCustomer();
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
-        await Assert.ThrowsAsync<BusinessException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.RemoveItemFromOrderAsync(1, 999));
     }
 

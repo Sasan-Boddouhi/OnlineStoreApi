@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Application.Exceptions;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
@@ -66,7 +67,7 @@ namespace Application.Entities
                 throw new ArgumentException("Decrease amount must be greater than zero.");
 
             if (Quantity < amount)
-                throw new InvalidOperationException("موجودی کافی نیست.");
+                throw new BusinessRuleViolationException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
 
             Quantity -= amount;
         }

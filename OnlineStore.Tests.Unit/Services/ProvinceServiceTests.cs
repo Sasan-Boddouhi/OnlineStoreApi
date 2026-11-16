@@ -91,7 +91,7 @@ public class ProvinceServiceTests
     {
         var dto = CreateCreateDto("");
         Func<Task> act = () => _service.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*خطا در ایجاد استان*");
+        await act.Should().ThrowAsync<BusinessException>().WithMessage("*نام استان الزامی*");
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class ProvinceServiceTests
         var dto = CreateCreateDto("Fars");
         _provinceRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<Province, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         Func<Task> act = () => _service.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*خطا در ایجاد استان*");
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*استانی با این نام*");
     }
 
     [Fact]

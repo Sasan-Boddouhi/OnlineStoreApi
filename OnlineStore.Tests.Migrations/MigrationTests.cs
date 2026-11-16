@@ -218,6 +218,180 @@ SELECT @s, Id, 1, 'c', 0, SYSUTCDATETIME(), SYSUTCDATETIME() FROM @cust WHERE Id
             .Should().Be(2);
     }
 
+    // ==================== Batch 41 / 42 ====================
+
+    private const string Phase14Migration = "20261103131218_Phase14_M713_ProductionDefensibility";
+    private const string Batch41Migration = "20261114051734_Phase15_Batch41_RefundWorkflow";
+    private const string Batch42Migration = "20261114054648_Phase15_Batch42_PaymentReview";
+
+    [Fact]
+    public async Task Batch41_RefundWorkflow_BackfillsRefundedAndVerifyStarted_AndRollbackMapsRefundPendingToSucceeded()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Phase14Migration);
+
+        // State: 1 = Pending، 2 = Succeeded، 5 = Refunded، 6 = RefundPending (فقط از Batch 41).
+        await db.ExecuteAsync(SeedPaymentsSql(
+            ("B41-REFUNDED", 5, "2026-11-02T08:30:00"),
+            ("B41-PENDING-AUDITED", 1, "2026-11-01T09:00:00"),
+            ("B41-PENDING-PLAIN", 1, "2026-11-01T09:00:00"),
+            ("B41-SUCCEEDED", 2, "2026-11-01T09:00:00")));
+
+        // دو رکورد «تأیید آغاز شد» با زمان‌های متفاوت؛ دیرتری عمداً اول درج می‌شود تا MIN سنجیده شود نه ترتیب درج.
+        await db.ExecuteAsync(
+            AuditSql("B41-PENDING-AUDITED", "Payment.VerificationStarted", "2026-11-01T10:05:00", "second") +
+            AuditSql("B41-PENDING-AUDITED", "Payment.VerificationStarted", "2026-11-01T10:00:00", "first") +
+            // پرداخت Succeeded هم رکورد دارد؛ back-fill فقط State = 1 را پر می‌کند.
+            AuditSql("B41-SUCCEEDED", "Payment.VerificationStarted", "2026-11-01T09:30:00", "verified"));
+
+        await db.MigrateToAsync(Batch41Migration);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] = 'B41-REFUNDED' " +
+            "AND [RefundedAtUtc] = [LastStateChangedAtUtc]"))
+            .Should().Be(1, "Refunded موجود: لحظهٔ برگشت = آخرین تغییر وضعیت");
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [RefundedAtUtc] FROM [Payment] WHERE [TransactionId] = 'B41-REFUNDED'"))
+            .Should().Be(new DateTime(2026, 11, 2, 8, 30, 0));
+
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [VerifyStartedAtUtc] FROM [Payment] WHERE [TransactionId] = 'B41-PENDING-AUDITED'"))
+            .Should().Be(new DateTime(2026, 11, 1, 10, 0, 0), "اولین رکورد Payment.VerificationStarted");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] IN ('B41-PENDING-PLAIN','B41-SUCCEEDED','B41-REFUNDED') " +
+            "AND [VerifyStartedAtUtc] IS NULL"))
+            .Should().Be(3, "بدون رکورد ممیزی یا غیر Pending → NULL");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] <> 'B41-REFUNDED' AND [RefundedAtUtc] IS NULL"))
+            .Should().Be(3, "فقط پرداخت Refunded لحظهٔ برگشت می‌گیرد");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [RefundReason] IS NOT NULL OR [RefundReference] IS NOT NULL " +
+            "OR [RefundRequestedAtUtc] IS NOT NULL"))
+            .Should().Be(0);
+
+        // RefundPending فقط در کد جدید وجود دارد.
+        await db.ExecuteAsync("UPDATE [Payment] SET [State] = 6 WHERE [TransactionId] = 'B41-SUCCEEDED'");
+
+        await db.MigrateToAsync(Phase14Migration);
+
+        (await db.ScalarAsync<int>("SELECT [State] FROM [Payment] WHERE [TransactionId] = 'B41-SUCCEEDED'"))
+            .Should().Be(2, "RefundPending در Down به Succeeded برمی‌گردد (پول هنوز برنگشته)، نه Refunded");
+        (await db.ScalarAsync<int>("SELECT [State] FROM [Payment] WHERE [TransactionId] = 'B41-REFUNDED'"))
+            .Should().Be(5);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment] WHERE [State] = 6"))
+            .Should().Be(0);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment]"))
+            .Should().Be(4, "rollback نباید پرداختی را حذف کند");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Payment') AND name IN " +
+            "('RefundReason','RefundReference','RefundRequestedAtUtc','RefundedAtUtc','VerifyStartedAtUtc')"))
+            .Should().Be(0, "Down ستون‌های Batch 41 را برمی‌دارد");
+    }
+
+    [Fact]
+    public async Task Batch42_PaymentReview_BackfillsFromAuditLog_AndRollbackDropsColumns()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch41Migration);
+
+        await db.ExecuteAsync(SeedPaymentsSql(
+            ("B42-REVIEW", 2, "2026-11-03T08:00:00"),
+            ("B42-REVIEW-LONG", 2, "2026-11-03T08:00:00"),
+            ("B42-PLAIN", 2, "2026-11-03T08:00:00")));
+
+        var longDetails = new string('x', 1500);
+
+        await db.ExecuteAsync(
+            // دیرترین شرح اول درج می‌شود: ReviewNote باید «آخرین» بر اساس زمان باشد، نه ترتیب درج.
+            AuditSql("B42-REVIEW", "Payment.ReviewRequired", "2026-11-03T11:00:00", "latest details") +
+            AuditSql("B42-REVIEW", "Payment.ReviewRequired", "2026-11-03T09:00:00", "first details") +
+            AuditSql("B42-REVIEW-LONG", "Payment.ReviewRequired", "2026-11-03T08:15:00", "short old") +
+            AuditSql("B42-REVIEW-LONG", "Payment.ReviewRequired", "2026-11-03T12:00:00", longDetails) +
+            // رکورد ممیزی دیگری برای همان پرداخت؛ نباید در back-fill دیده شود.
+            AuditSql("B42-PLAIN", "Payment.VerificationStarted", "2026-11-03T08:05:00", "not a review"));
+
+        await db.MigrateToAsync(Batch42Migration);
+
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [ReviewRequiredAtUtc] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW'"))
+            .Should().Be(new DateTime(2026, 11, 3, 9, 0, 0), "اولین زمان Payment.ReviewRequired");
+        (await db.ScalarAsync<string>(
+            "SELECT [ReviewNote] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW'"))
+            .Should().Be("latest details", "آخرین شرح Payment.ReviewRequired");
+
+        (await db.ScalarAsync<DateTime>(
+            "SELECT [ReviewRequiredAtUtc] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW-LONG'"))
+            .Should().Be(new DateTime(2026, 11, 3, 8, 15, 0));
+        (await db.ScalarAsync<string>(
+            "SELECT [ReviewNote] FROM [Payment] WHERE [TransactionId] = 'B42-REVIEW-LONG'"))
+            .Should().Be(new string('x', 1000), "شرح بلندتر از ۱۰۰۰ نویسه با LEFT(…, 1000) کوتاه می‌شود");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [TransactionId] = 'B42-PLAIN' " +
+            "AND [ReviewRequiredAtUtc] IS NULL AND [ReviewNote] IS NULL"))
+            .Should().Be(1, "بدون رکورد Payment.ReviewRequired → NULL");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [Payment] WHERE [ReviewResolvedAtUtc] IS NOT NULL OR [ReviewResolvedByUserId] IS NOT NULL"))
+            .Should().Be(0, "بستن مورد بررسی با ادمین است، نه با مایگریشن");
+
+        await db.MigrateToAsync(Batch41Migration);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Payment') AND name IN " +
+            "('ReviewNote','ReviewRequiredAtUtc','ReviewResolvedAtUtc','ReviewResolvedByUserId')"))
+            .Should().Be(0, "Down ستون‌های Batch 42 را برمی‌دارد");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment]"))
+            .Should().Be(3, "rollback نباید پرداختی را حذف کند");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Payment] WHERE [State] = 2"))
+            .Should().Be(3, "Down در Batch 42 وضعیت را تغییر نمی‌دهد");
+    }
+
+    /// <summary>
+    /// زنجیرهٔ User → Customer → Order → Invoice روی اسکیمای Phase14 (یا بعدتر: ستون‌های تازهٔ Payment همه nullable‌اند)
+    /// و برای هر ورودی یک Payment با State و LastStateChangedAtUtc داده‌شده. RowVersion را SQL Server پر می‌کند.
+    /// </summary>
+    private static string SeedPaymentsSql(params (string TransactionId, int State, string LastStateChangedAtUtc)[] payments)
+    {
+        var values = string.Join(",\n",
+            payments.Select(p =>
+                $"(100, SYSUTCDATETIME(), 0, 0, {p.State}, '{p.LastStateChangedAtUtc}', 1, @i, @o, '{p.TransactionId}', SYSUTCDATETIME(), SYSUTCDATETIME())"));
+
+        return $@"
+INSERT INTO [User] ([FirstName],[LastName],[PasswordHash],[UserType],[IsActive],[PhoneNumber],[SecurityStamp],[FailedLoginAttempts],[CreatedOn],[ModifiedOn])
+VALUES ('M','T','h',1,1,'09120004141','s',0,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @u INT = SCOPE_IDENTITY();
+
+INSERT INTO [Customer] ([Points],[LoyaltyLevel],[TotalSpent],[OrderCount],[UserId],[CreatedOn],[ModifiedOn])
+VALUES (0,0,0,0,@u,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @c INT = SCOPE_IDENTITY();
+
+INSERT INTO [Order] ([OrderDate],[TotalAmount],[DiscountAmount],[ShippingCost],[CouponQuotaRefunded],[Status],[ShippingFullName],[ShippingAddress],[ShippingPhoneNumber],[CustomerId],[CreatedOn],[ModifiedOn])
+VALUES (SYSUTCDATETIME(),100,0,0,0,0,'M','Addr','09120004141',@c,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @o INT = SCOPE_IDENTITY();
+
+INSERT INTO [Invoice] ([OrderId],[InvoiceNumber],[InvoiceDate],[SubTotalAmount],[TaxAmount],[DiscountAmount],[TotalAmount],[Status],[CreatedOn],[ModifiedOn])
+VALUES (@o,'INV-{Guid.NewGuid():N}',SYSUTCDATETIME(),100,0,0,100,0,SYSUTCDATETIME(),SYSUTCDATETIME());
+DECLARE @i INT = SCOPE_IDENTITY();
+
+INSERT INTO [Payment] ([Amount],[PaymentDate],[PaymentMethod],[Gateway],[State],[LastStateChangedAtUtc],[IsActive],[InvoiceId],[OrderId],[TransactionId],[CreatedOn],[ModifiedOn])
+VALUES {values};
+";
+    }
+
+    /// <summary>یک رکورد AuditLog برای پرداختِ دارای این TransactionId (EntityId = PaymentId به‌صورت متن، مانند AuditService).</summary>
+    private static string AuditSql(string transactionId, string action, string occurredOnUtc, string details) => $@"
+INSERT INTO [AuditLog] ([Action],[EntityName],[EntityId],[Details],[OccurredOnUtc],[UserId],[IpAddress])
+SELECT N'{action}', N'Payment', CAST([PaymentId] AS nvarchar(20)), N'{details.Replace("'", "''")}', '{occurredOnUtc}', NULL, NULL
+FROM [Payment] WHERE [TransactionId] = '{transactionId}';
+";
+
     // ==================== ابزار ====================
 
     /// <summary>
@@ -251,4 +425,317 @@ INSERT INTO [Payment] ([Amount],[PaymentDate],[PaymentMethod],[Status],[IsActive
 VALUES {values};
 ";
     }
+
+    // ==================== Batch 43 ====================
+
+    /// <summary>
+    /// Batch 43 (FIN-07) — <c>Phase15_Batch43_PaymentGatewayDetails</c>: سه ستون اختیاری روی Payment (کارمزد درگاه،
+    /// پرداخت‌کنندهٔ کارمزد، کارت ماسک‌شده)، بدون back-fill. بالا: ستون‌ها با نوع و nullable درست ساخته می‌شوند؛
+    /// پایین (تا Batch 42): هر سه برداشته می‌شوند؛ دوباره بالا: دوباره ساخته می‌شوند.
+    /// </summary>
+    [Fact]
+    public async Task Phase15_Batch43_PaymentGatewayDetails_AppliesAndRollsBack()
+    {
+        const string batch43 = "20261114134136_Phase15_Batch43_PaymentGatewayDetails";
+        const string batch42 = "20261114054648_Phase15_Batch42_PaymentReview";
+        const string gatewayColumns =
+            "SELECT COUNT(*) FROM sys.columns " +
+            "WHERE name IN ('GatewayFee','GatewayFeeType','CardPanMasked') AND object_id = OBJECT_ID('Payment')";
+
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(batch42);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(0, "پیش از Batch 43 این ستون‌ها وجود ندارند");
+
+        await db.MigrateToAsync(batch43);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(3, "Batch 43 هر سه ستون را می‌سازد");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id " +
+            "WHERE c.object_id = OBJECT_ID('Payment') AND c.name = 'GatewayFee' " +
+            "AND t.name = 'decimal' AND c.precision = 18 AND c.scale = 0 AND c.is_nullable = 1"))
+            .Should().Be(1, "GatewayFee باید decimal(18,0) NULL باشد");
+
+        // nvarchar(20) در sys.columns طول ۴۰ بایت دارد.
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id " +
+            "WHERE c.object_id = OBJECT_ID('Payment') AND c.name IN ('GatewayFeeType','CardPanMasked') " +
+            "AND t.name = 'nvarchar' AND c.max_length = 40 AND c.is_nullable = 1"))
+            .Should().Be(2, "GatewayFeeType و CardPanMasked باید nvarchar(20) NULL باشند");
+
+        await db.MigrateToAsync(batch42);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(0, "rollback باید هر سه ستون را بردارد");
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE name = 'ReviewRequiredAtUtc' AND object_id = OBJECT_ID('Payment')"))
+            .Should().Be(1, "rollback نباید به ستون‌های Batch 42 دست بزند");
+
+        await db.MigrateToAsync(batch43);
+
+        (await db.ScalarAsync<int>(gatewayColumns)).Should().Be(3, "اعمال دوباره پس از rollback باید ممکن باشد");
+    }
+
+    // ==================== Batch 44 ====================
+
+    private const string Batch43Migration = "20261114134136_Phase15_Batch43_PaymentGatewayDetails";
+    private const string Batch44Migration = "20261115133045_Phase15_Batch44_PayoutHoldAndNet";
+
+    /// <summary>
+    /// Batch 44 — <c>Phase15_Batch44_PayoutHoldAndNet</c>. بالا: تسویهٔ بسته از تحویل + ۷ روز و تسویهٔ دستی از PeriodEnd قابل پرداخت؛
+    /// خالص = مبلغ و کسر = ۰؛ Amount بدهی به OriginalAmount تغییر نام می‌دهد و بدهی تسویه‌شده مبلغ تسویه‌شده و زمان می‌گیرد؛
+    /// فقط حساب غیرفعالِ مالک نشانی انبار پلتفرم (بدون نقش و مشتری/کارمند/فروشنده) IsSystem می‌شود؛ انبار دوم پلتفرم رد می‌شود.
+    /// پایین: ستون‌ها برداشته می‌شوند و Amount بدهی تسویه‌نشده دوباره «باقی‌مانده» است. با دو انبار پلتفرم مهاجرت متوقف می‌شود.
+    /// </summary>
+    [Fact]
+    public async Task Batch44_PayoutHoldAndNet_BackfillsAndRollsBack()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch43Migration);
+        await db.ExecuteAsync(Batch44SeedSql);
+
+        await db.MigrateToAsync(Batch44Migration);
+
+        (await db.ScalarAsync<DateTime>("SELECT [AvailableAtUtc] FROM [SellerPayout] WHERE [OrderSellerGroupId] IS NOT NULL"))
+            .Should().Be(new DateTime(2026, 11, 8, 10, 0, 0), "تحویل ۲۰۲۶-۱۱-۰۱ ۱۰:۰۰ + ۷ روز");
+        (await db.ScalarAsync<DateTime>("SELECT [AvailableAtUtc] FROM [SellerPayout] WHERE [OrderSellerGroupId] IS NULL"))
+            .Should().Be(new DateTime(2026, 10, 31), "تسویهٔ دستی بدون تحویل: PeriodEnd");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [SellerPayout] WHERE [NetAmount] = [Amount] AND [DebtOffsetAmount] = 0"))
+            .Should().Be(2);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [SellerDebt] WHERE [Reason] = 'B44-OPEN' AND [OriginalAmount] = 300 AND [SettledAmount] = 0 AND [SettledAtUtc] IS NULL"))
+            .Should().Be(1);
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM [SellerDebt] WHERE [Reason] = 'B44-SETTLED' AND [OriginalAmount] = 200 AND [SettledAmount] = 200 " +
+            "AND [SettledAtUtc] = '2026-11-02T00:00:00'"))
+            .Should().Be(1, "بدهی تسویه‌شده: تسویه‌شده = مبلغ، زمان = ModifiedOn");
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(d.[Reason], ',') FROM [AuditLog] a JOIN [SellerDebt] d ON a.[EntityId] = CAST(d.[SellerDebtId] AS nvarchar(20)) " +
+                "WHERE a.[Action] = 'SellerDebt.MigrationReview' AND a.[EntityName] = 'SellerDebt'"))
+            .Should().Be("B44-PARTLY", "بدهی بازی که پس از ساخت تغییر کرده (کسر جزئی کد قدیمی) برای بررسی دستی ثبت می‌شود");
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [SellerDebt] WHERE [Reason] = 'B44-PARTLY' AND [OriginalAmount] = 150 AND [SettledAmount] = 0"))
+            .Should().Be(1, "مبلغ اصلی قابل بازسازی نیست؛ باقی‌ماندهٔ فعلی نگه داشته می‌شود");
+
+        (await db.ScalarAsync<string>("SELECT STRING_AGG([FirstName], ',') FROM [User] WHERE [IsSystem] = 1"))
+            .Should().Be("System", "فقط حساب غیرفعالِ مالک نشانی انبار پلتفرم");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [Warehouse] WHERE [IsPlatform] = 1 AND [SellerId] IS NULL")).Should().Be(1);
+
+        var secondPlatform = () => db.ExecuteAsync(SecondPlatformWarehouseSql);
+        (await secondPlatform.Should().ThrowAsync<Microsoft.Data.SqlClient.SqlException>())
+            .Which.Number.Should().Be(2601, "UX_Warehouse_SinglePlatform");
+
+        // پس از کسر جزئی، Down باید Amount را «باقی‌مانده» کند (معنای کد قدیمی).
+        await db.ExecuteAsync("UPDATE [SellerDebt] SET [SettledAmount] = 100 WHERE [Reason] = 'B44-OPEN'");
+
+        await db.MigrateToAsync(Batch43Migration);
+
+        (await db.ScalarAsync<decimal>("SELECT [Amount] FROM [SellerDebt] WHERE [Reason] = 'B44-OPEN'")).Should().Be(200m);
+        (await db.ScalarAsync<decimal>("SELECT [Amount] FROM [SellerDebt] WHERE [Reason] = 'B44-SETTLED'")).Should().Be(200m);
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE " +
+            "(object_id = OBJECT_ID('SellerPayout') AND name IN ('AvailableAtUtc','DebtOffsetAmount','NetAmount')) OR " +
+            "(object_id = OBJECT_ID('SellerDebt') AND name IN ('OriginalAmount','SettledAmount','SettledAtUtc')) OR " +
+            "(object_id = OBJECT_ID('User') AND name = 'IsSystem') OR (object_id = OBJECT_ID('Warehouse') AND name = 'IsPlatform')"))
+            .Should().Be(0, "Down همهٔ ستون‌های Batch 44 را برمی‌دارد");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [SellerPayout]")).Should().Be(2, "rollback نباید تسویه‌ای را حذف کند");
+
+        // دو انبار پلتفرم پیش از مهاجرت: مهاجرت با پیام روشن متوقف می‌شود و چیزی تغییر نمی‌کند.
+        await db.ExecuteAsync(SecondPlatformWarehouseSql);
+        var blocked = () => db.MigrateToAsync(Batch44Migration);
+        await blocked.Should().ThrowAsync<Microsoft.Data.SqlClient.SqlException>().WithMessage("*more than one platform warehouse*");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('SellerDebt') AND name = 'Amount'"))
+            .Should().Be(1, "مهاجرت ناموفق در تراکنش برمی‌گردد");
+
+        await db.ExecuteAsync("DELETE FROM [Warehouse] WHERE [Name] = N'B44-Second'");
+        await db.MigrateToAsync(Batch44Migration);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.indexes WHERE name = 'UX_Warehouse_SinglePlatform'")).Should().Be(1);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [AuditLog] WHERE [Action] = 'SellerDebt.MigrationReview'"))
+            .Should().Be(1, "اجرای دوباره رکورد بررسی تکراری نمی‌سازد");
+    }
+
+    private const string SecondPlatformWarehouseSql =
+        "INSERT INTO [Warehouse] ([Name],[AddressId],[SellerId],[CreatedOn],[ModifiedOn]) " +
+        "SELECT N'B44-Second', [AddressId], NULL, SYSUTCDATETIME(), SYSUTCDATETIME() FROM [Warehouse] WHERE [Name] = N'B44-Platform'";
+
+    /// <summary>
+    /// اسکیمای Batch 43: فروشنده، مشتری، حساب سیستمی غیرفعال (مالک نشانی انبار پلتفرم)، کاربر غیرفعال عادی، انبار پلتفرم و انبار
+    /// فروشنده، سفارش با بستهٔ تحویل‌شده (۲۰۲۶-۱۱-۰۱ ۱۰:۰۰) و تسویهٔ Pending آن، تسویهٔ دستی Paid، بدهی باز ۳۰۰، تسویه‌شدهٔ ۲۰۰ و بدهی باز ۱۵۰ که پس از ساخت تغییر کرده (کسر جزئی کد قدیمی).    /// </summary>
+    private const string Batch44SeedSql = @"
+DECLARE @now datetime2 = SYSUTCDATETIME();
+INSERT INTO [User] (FirstName,LastName,PasswordHash,UserType,IsActive,PhoneNumber,SecurityStamp,FailedLoginAttempts,CreatedOn,ModifiedOn) VALUES ('Seller','B44','h',2,1,'09124400001','s',0,@now,@now);
+DECLARE @u1 int = SCOPE_IDENTITY();
+INSERT INTO [User] (FirstName,LastName,PasswordHash,UserType,IsActive,PhoneNumber,SecurityStamp,FailedLoginAttempts,CreatedOn,ModifiedOn) VALUES ('Buyer','B44','h',1,1,'09124400002','s',0,@now,@now);
+DECLARE @u2 int = SCOPE_IDENTITY();
+INSERT INTO [User] (FirstName,LastName,PasswordHash,UserType,IsActive,PhoneNumber,SecurityStamp,FailedLoginAttempts,CreatedOn,ModifiedOn) VALUES ('System','B44','h',2,0,'09124400003','s',0,@now,@now);
+DECLARE @u3 int = SCOPE_IDENTITY();
+INSERT INTO [User] (FirstName,LastName,PasswordHash,UserType,IsActive,PhoneNumber,SecurityStamp,FailedLoginAttempts,CreatedOn,ModifiedOn) VALUES ('Inactive','B44','h',1,0,'09124400004','s',0,@now,@now);
+DECLARE @u4 int = SCOPE_IDENTITY();
+INSERT INTO [Province] (ProvinceName,CreatedOn,ModifiedOn) VALUES (N'B44-P',@now,@now);
+DECLARE @p int = SCOPE_IDENTITY();
+INSERT INTO [City] (CityName,ProvinceId,CreatedOn,ModifiedOn) VALUES (N'B44-C',@p,@now,@now);
+DECLARE @c int = SCOPE_IDENTITY();
+INSERT INTO [Address] (CityId,Plaque,Unit,PostalCode,RecipientFirstName,RecipientLastName,IsDefault,UserId,CreatedOn,ModifiedOn) VALUES (@c,'1','1','1234567890','A','B',0,@u3,@now,@now);
+DECLARE @a1 int = SCOPE_IDENTITY();
+INSERT INTO [Address] (CityId,Plaque,Unit,PostalCode,RecipientFirstName,RecipientLastName,IsDefault,UserId,CreatedOn,ModifiedOn) VALUES (@c,'2','1','1234567890','A','B',0,@u4,@now,@now);
+DECLARE @a2 int = SCOPE_IDENTITY();
+INSERT INTO [Seller] (UserId,StoreName,Status,IsActive,CreatedOn,ModifiedOn) VALUES (@u1,N'B44 Store',1,1,@now,@now);
+DECLARE @s int = SCOPE_IDENTITY();
+INSERT INTO [Customer] (Points,LoyaltyLevel,TotalSpent,OrderCount,UserId,CreatedOn,ModifiedOn) VALUES (0,0,0,0,@u2,@now,@now);
+DECLARE @cu int = SCOPE_IDENTITY();
+INSERT INTO [Customer] (Points,LoyaltyLevel,TotalSpent,OrderCount,UserId,CreatedOn,ModifiedOn) VALUES (0,0,0,0,@u4,@now,@now);
+INSERT INTO [Warehouse] (Name,AddressId,SellerId,CreatedOn,ModifiedOn) VALUES (N'B44-Platform',@a1,NULL,@now,@now);
+INSERT INTO [Warehouse] (Name,AddressId,SellerId,CreatedOn,ModifiedOn) VALUES (N'B44-SellerWh',@a2,@s,@now,@now);
+INSERT INTO [Order] (OrderDate,TotalAmount,Status,ShippingFullName,ShippingAddress,ShippingPhoneNumber,CustomerId,CouponQuotaRefunded,CreatedOn,ModifiedOn) VALUES (@now,1100,3,'B','Addr','09124400002',@cu,0,@now,@now);
+DECLARE @o int = SCOPE_IDENTITY();
+INSERT INTO [OrderSellerGroup] (OrderId,SellerId,SubTotal,CommissionRate,CommissionAmount,SellerPayable,Status,DeliveredAt,CreatedOn,ModifiedOn) VALUES (@o,@s,1100,10,110,1000,3,'2026-11-01T10:00:00',@now,@now);
+DECLARE @g int = SCOPE_IDENTITY();
+INSERT INTO [SellerPayout] (SellerId,OrderSellerGroupId,Amount,Status,PeriodStart,PeriodEnd,CreatedOn,ModifiedOn) VALUES (@s,@g,1000,0,'2026-10-30','2026-11-01T10:00:00',@now,@now);
+INSERT INTO [SellerPayout] (SellerId,OrderSellerGroupId,Amount,Status,PeriodStart,PeriodEnd,Reference,PaidAt,CreatedOn,ModifiedOn) VALUES (@s,NULL,500,1,'2026-10-01','2026-10-31','MANUAL','2026-10-31',@now,@now);
+INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,300,'B44-OPEN','2026-11-01',0,@now,@now);
+INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,200,'B44-SETTLED','2026-10-01',1,@now,'2026-11-02T00:00:00');
+INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,150,'B44-PARTLY','2026-10-01',0,'2026-10-01T00:00:00','2026-10-20T00:00:00');
+";
+
+    // ==================== Batch 45 ====================
+
+    private const string Batch45Migration = "20261116063113_Phase15_Batch45_PricingModel";
+
+    /// <summary>
+    /// Batch 45 — <c>Phase15_Batch45_PricingModel</c>. بالا: کوپن موجود FundedBy = پلتفرم (۰)؛ RemainingAmount بدهی =
+    /// OriginalAmount − SettledAmount و بدهی‌ای که Batch 44 علامت زده بود برای بررسی ثبت می‌شود؛ گروه پرداخت‌نشده سهم کوپن پلتفرم و
+    /// هزینهٔ ارسال بسته را می‌گیرد؛ گروه تحویل‌شده با تسویهٔ Pending SellerPayable ذخیره‌شده‌اش را نگه می‌دارد و اختلاف فقط گزارش می‌شود.
+    /// پایین: ستون‌ها برداشته می‌شوند و داده حذف نمی‌شود. اجرای دوباره رکورد بررسی تکراری نمی‌سازد.
+    /// </summary>
+    [Fact]
+    public async Task Batch45_PricingModel_BackfillsReportsAndRollsBack()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch43Migration);
+        await db.ExecuteAsync(Batch44SeedSql);
+        await db.MigrateToAsync(Batch44Migration);
+        await db.ExecuteAsync(Batch45SeedSql);
+
+        await db.MigrateToAsync(Batch45Migration);
+
+        (await db.ScalarAsync<int>("SELECT [FundedBy] FROM [Coupon] WHERE [Code] = N'B45-COUPON'"))
+            .Should().Be(0, "کوپن‌های موجود پلتفرمی‌اند");
+
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(CONCAT([Reason], '=', CAST([RemainingAmount] AS int)), ',') WITHIN GROUP (ORDER BY [Reason]) FROM [SellerDebt]"))
+            .Should().Be("B44-OPEN=300,B44-PARTLY=150,B44-SETTLED=0,B45-PARTLY=300", "RemainingAmount = OriginalAmount − SettledAmount");
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(d.[Reason], ',') FROM [AuditLog] a JOIN [SellerDebt] d ON a.[EntityId] = CAST(d.[SellerDebtId] AS nvarchar(20)) " +
+                "WHERE a.[Action] = 'SellerDebt.RemainingAmountReview' AND a.[EntityName] = 'SellerDebt'"))
+            .Should().Be("B44-PARTLY", "فقط بدهی‌ای که Batch 44 علامت زده بود برای بررسی دستی ثبت می‌شود");
+
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [OrderSellerGroup] WHERE [Status] = 0 AND [SubTotal] = 1000 " +
+                "AND [PlatformDiscountShare] = 100 AND [ShippingAmount] = 50 AND [SellerPayable] = 850"))
+            .Should().Be(1, "گروه پرداخت‌نشده سهم کوپن پلتفرم و هزینهٔ ارسال بسته را می‌گیرد؛ سهم هنگام پرداخت حساب می‌شود");
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [OrderSellerGroup] WHERE [Status] = 3 AND [SubTotal] = 1100 " +
+                "AND [PlatformDiscountShare] = 0 AND [ShippingAmount] = 0 AND [SellerPayable] = 1000"))
+            .Should().Be(1, "تاریخچه بازمحاسبه نمی‌شود");
+        (await db.ScalarAsync<string>(
+                "SELECT a.[Details] FROM [AuditLog] a JOIN [OrderSellerGroup] g ON a.[EntityId] = CAST(g.[OrderSellerGroupId] AS nvarchar(20)) " +
+                "WHERE a.[Action] = 'OrderSellerGroup.PricingReview' AND g.[Status] = 3"))
+            .Should().Contain("SellerPayable=1000").And.Contain("would be 990").And.Contain("difference -10");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [AuditLog] WHERE [Action] = 'OrderSellerGroup.PricingReview'"))
+            .Should().Be(1, "فقط تسویهٔ Pending با اختلاف گزارش می‌شود");
+
+        await db.MigrateToAsync(Batch44Migration);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE " +
+            "(object_id = OBJECT_ID('Coupon') AND name = 'FundedBy') OR " +
+            "(object_id = OBJECT_ID('OrderSellerGroup') AND name IN ('ShippingAmount','PlatformDiscountShare')) OR " +
+            "(object_id = OBJECT_ID('SellerDebt') AND name = 'RemainingAmount')"))
+            .Should().Be(0, "Down همهٔ ستون‌های Batch 45 را برمی‌دارد");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [SellerDebt]")).Should().Be(4, "rollback نباید بدهی‌ای را حذف کند");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [OrderSellerGroup]")).Should().Be(2);
+
+        await db.MigrateToAsync(Batch45Migration);
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [AuditLog] WHERE [Action] IN ('SellerDebt.RemainingAmountReview','OrderSellerGroup.PricingReview')"))
+            .Should().Be(2, "اجرای دوباره رکورد بررسی تکراری نمی‌سازد");
+        (await db.ScalarAsync<decimal>("SELECT [RemainingAmount] FROM [SellerDebt] WHERE [Reason] = 'B45-PARTLY'")).Should().Be(300m);
+    }
+
+    // ==================== Batch 46 ====================
+
+    private const string Batch46Migration = "20261116071003_Phase15_Batch46_PhoneVerification";
+
+    /// <summary>
+    /// Batch 46 — <c>Phase15_Batch46_PhoneVerification</c>. Up: <c>User.PhoneNumberConfirmed bit NOT NULL DEFAULT 0</c>; every existing
+    /// non-system user is grandfathered as confirmed (N9), the inert system account stays unconfirmed; table <c>OtpCode</c> with its
+    /// indexes. A user inserted after the migration without the column is unconfirmed (default 0). Down: column and table are dropped,
+    /// no user is lost. Up again is clean.
+    /// </summary>
+    [Fact]
+    public async Task Batch46_PhoneVerification_GrandfathersExistingUsers_AndRollsBack()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch43Migration);
+        await db.ExecuteAsync(Batch44SeedSql);
+        await db.MigrateToAsync(Batch44Migration);
+        await db.ExecuteAsync("UPDATE [User] SET [IsSystem] = 1 WHERE [PhoneNumber] = '09124400003'");
+        await db.MigrateToAsync(Batch45Migration);
+
+        await db.MigrateToAsync(Batch46Migration);
+
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(CONCAT([PhoneNumber], '=', CAST([PhoneNumberConfirmed] AS int)), ',') WITHIN GROUP (ORDER BY [PhoneNumber]) FROM [User]"))
+            .Should().Be("09124400001=1,09124400002=1,09124400003=0,09124400004=1",
+                "existing users are grandfathered as confirmed; the system account is not");
+
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name = 'OtpCode'")).Should().Be(1);
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('OtpCode') AND name IN " +
+                "('IX_OtpCode_PhoneNumber_Purpose','IX_OtpCode_PhoneNumber_CreatedAtUtc','IX_OtpCode_CreatedAtUtc','IX_OtpCode_ExpiresAtUtc')"))
+            .Should().Be(4);
+
+        await db.ExecuteAsync(
+            "INSERT INTO [User] (FirstName,LastName,PasswordHash,UserType,IsActive,IsSystem,PhoneNumber,SecurityStamp,FailedLoginAttempts,CreatedOn,ModifiedOn) " +
+            "VALUES ('New','B46','h',1,1,0,'09124600099','s',0,SYSUTCDATETIME(),SYSUTCDATETIME())");
+        (await db.ScalarAsync<bool>("SELECT [PhoneNumberConfirmed] FROM [User] WHERE [PhoneNumber] = '09124600099'"))
+            .Should().BeFalse("new users start unconfirmed; only OTP registration confirms them");
+
+        await db.ExecuteAsync(
+            "INSERT INTO [OtpCode] (PhoneNumber,Purpose,CodeHash,CreatedAtUtc,ExpiresAtUtc,AttemptCount,Version) " +
+            "VALUES ('09124600099',1,REPLICATE('A',64),SYSUTCDATETIME(),DATEADD(minute,2,SYSUTCDATETIME()),0,0)");
+
+        await db.MigrateToAsync(Batch45Migration);
+
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('User') AND name = 'PhoneNumberConfirmed'"))
+            .Should().Be(0, "Down drops the column");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name = 'OtpCode'")).Should().Be(0, "Down drops the table");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [User]")).Should().Be(5, "rollback must not delete users");
+
+        await db.MigrateToAsync(Batch46Migration);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [User] WHERE [PhoneNumberConfirmed] = 1")).Should().Be(4,
+            "re-applying grandfathers every non-system user again");
+    }
+
+    /// <summary>
+    /// اسکیمای Batch 44 (پس از <see cref="Batch44SeedSql"/>): یک کوپن، بدهی ۵۰۰ که ۲۰۰ آن با کد Batch 44 تسویه شده، و سفارش
+    /// پرداخت‌نشده با گروه Pending (اقلام ۱۰۰۰، سهم کوپن ۱۰۰، سهم ارسال ۵۰، سهم قدیمی ۸۵۰).
+    /// </summary>
+    private const string Batch45SeedSql = @"
+DECLARE @now datetime2 = SYSUTCDATETIME();
+DECLARE @s int = (SELECT [SellerId] FROM [Seller] WHERE [StoreName] = N'B44 Store');
+DECLARE @cu int = (SELECT c.[CustomerId] FROM [Customer] c JOIN [User] u ON u.[UserId] = c.[UserId] WHERE u.[PhoneNumber] = '09124400002');
+INSERT INTO [Coupon] (Code,DiscountPercentage,IsActive,UsedCount,CreatedOn,ModifiedOn) VALUES (N'B45-COUPON',10,1,0,@now,@now);
+INSERT INTO [SellerDebt] (SellerId,OriginalAmount,SettledAmount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,500,200,'B45-PARTLY','2026-11-10',0,@now,@now);
+INSERT INTO [Order] (OrderDate,TotalAmount,Status,ShippingCost,DiscountAmount,ShippingFullName,ShippingAddress,ShippingPhoneNumber,CustomerId,CouponQuotaRefunded,CreatedOn,ModifiedOn) VALUES (@now,950,0,50,100,'B','Addr','09124400002',@cu,0,@now,@now);
+DECLARE @o int = SCOPE_IDENTITY();
+INSERT INTO [OrderSellerGroup] (OrderId,SellerId,SubTotal,CommissionRate,CommissionAmount,DiscountAmount,ShippingCostShare,SellerPayable,Status,CreatedOn,ModifiedOn) VALUES (@o,@s,1000,10,0,100,50,850,0,@now,@now);
+";
 }

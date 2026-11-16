@@ -16,6 +16,20 @@ public sealed class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOption
 
     public void Configure(SwaggerGenOptions options)
     {
+        // Batch 67 (API-05): شناسهٔ عملیات پایدار {Controller}_{Action}؛ nullability از روی C# خوانده می‌شود.
+        options.CustomOperationIds(api =>
+            api.ActionDescriptor.RouteValues.TryGetValue("controller", out var c) &&
+            api.ActionDescriptor.RouteValues.TryGetValue("action", out var a)
+                ? $"{c}_{a}"
+                : null);
+        options.SupportNonNullableReferenceTypes();
+        options.SchemaFilter<ProblemSchemaFilter>();
+        options.SchemaFilter<EnumNamesSchemaFilter>();
+        options.SchemaFilter<RequiredNotNullableSchemaFilter>();
+        options.OperationFilter<DefaultErrorResponsesFilter>();
+        options.OperationFilter<HeaderParametersFilter>();
+        options.DocumentFilter<UniqueOperationIdsFilter>();
+
         foreach (var description in _provider.ApiVersionDescriptions)
         {
             options.SwaggerDoc(description.GroupName, new OpenApiInfo

@@ -22,11 +22,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Online_Store_Application.Authorization;
+using Application.Exceptions;
 using Online_Store_Application.Extensions;
 using Online_Store_Application.Middleware;
 using Online_Store_Application.Services;
@@ -35,7 +35,6 @@ using Serilog;
 using Serilog.Enrichers.Span;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.RateLimiting;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -53,12 +52,16 @@ builder.Services.AddControllers(options =>
 
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
 })
+// Batch 40 (SEC-05): فقط JSON؛ formatterهای XML حذف شدند (بدنهٔ XML → 415، Accept: xml → همان JSON).
 .AddNewtonsoftJson(options =>
 {
     options.SerializerSettings.ReferenceLoopHandling =
     Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-})
-.AddXmlDataContractSerializerFormatters();
+    // N14: سقف عمق بدنهٔ JSON صریح (همان پیش‌فرض Newtonsoft 13)؛ تست N14JsonDepthTests آن را قفل می‌کند.
+    options.SerializerSettings.MaxDepth = Online_Store_Application.Middleware.JsonDepthGuardMiddleware.MaxDepth;
+});
+
+builder.Services.AddSingleton<Microsoft.AspNetCore.Mvc.Infrastructure.ProblemDetailsFactory, CodedProblemDetailsFactory>();
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
@@ -74,12 +77,13 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
         var problem = new ValidationProblemDetails(errors)
         {
+            Type = ErrorCodes.TypeUri(ErrorCodes.ValidationError.Code),
             Status = StatusCodes.Status422UnprocessableEntity,
             Title = "Validation failed",
-            Detail = "One or more validation errors occurred.",
+            Detail = ErrorCodes.ValidationError.Message,
             Instance = context.HttpContext.Request.Path
         };
-        problem.Extensions["code"] = "VALIDATION_ERROR";
+        problem.Extensions["code"] = ErrorCodes.ValidationError.Code;
         problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
         return new UnprocessableEntityObjectResult(problem);
@@ -180,44 +184,51 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddHostedService<SuperAdminBootstrapper>();
+// Batch 49b: انبار پلتفرم هنگام راه‌اندازی از PlatformWarehouse:* ساخته می‌شود؛ در Production بدون آن راه‌اندازی متوقف می‌شود.
+builder.Services.AddPlatformWarehouseBootstrap(builder.Configuration);
 
 // تصمیم ناظر: پرچم اجرای موجودی — پیش‌فرض سخت‌گیرانه (true).
 builder.Services.Configure<InventorySettings>(
     builder.Configuration.GetSection(InventorySettings.SectionName));
 builder.Services.Configure<CommissionSettings>(
     builder.Configuration.GetSection(CommissionSettings.SectionName));
+// Batch 44 (FIN-02): تسویه تا HoldDays روز پس از تحویل (پنجرهٔ مرجوعی) قابل پرداخت نیست؛ مقدار نامعتبر راه‌اندازی را متوقف می‌کند.
+builder.Services.AddOptions<PayoutSettings>()
+    .Bind(builder.Configuration.GetSection(PayoutSettings.SectionName))
+    .Validate(s => s.IsValid(), $"PayoutSettings:HoldDays must be between {PayoutSettings.MinHoldDays} and {PayoutSettings.MaxHoldDays}.")
+    .ValidateOnStart();
 
 builder.Services.Configure<StorageSettings>(
     builder.Configuration.GetSection(StorageSettings.SectionName));
+builder.Services.AddProductImageUrlOptions(builder.Configuration);
 
 // LocalStorageService از قرارداد نام‌گذاری XService/IXService پیروی نمی‌کند
 // (IStorageService ≠ ILocalStorageService)، پس ثبت دستی لازم است؛
 // وگرنه IProductImageService در زمان اجرا قابل ساخت نیست.
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
 // ---------------- Phase 8: Payment ----------------
-builder.Services.AddOptions<PaymentGatewaySettings>()
-    .Bind(builder.Configuration.GetSection(PaymentGatewaySettings.SectionName))
-    .Validate(settings =>
-    {
-        if (builder.Environment.IsProduction())
-        {
-            return !string.IsNullOrWhiteSpace(settings.WebhookSecret);
-        }
-        return true;
-    }, "PaymentGatewaySettings:WebhookSecret must be configured in production environment.")
-    .ValidateOnStart();
+// F-01/F-14: در Production (و هر محیط غیر Development/Testing) راه‌اندازی شکست می‌خورد
+// مگر اینکه Provider=Zarinpal، EnableRealGateway=true، MerchantId و WebhookSecret تنظیم شده باشند،
+// و CorsOrigins با دامنهٔ واقعی فرانت‌اند مشخص شده باشد.
+builder.Services.AddProductionSafeConfiguration(builder.Configuration);
+
+// Batch 46 (N9): OTP و پیامک؛ در Production بدون کلید HMAC و فرستندهٔ واقعی پیامک راه‌اندازی متوقف می‌شود.
+builder.Services.AddPhoneVerification(builder.Configuration);
 
 builder.Services.AddHttpClient();
 
-// انتخاب درگاه در زمان اجرا از روی تنظیمات؛ هیچ درگاه واقعی به‌صورت پیش‌فرض فعال نیست.
+// انتخاب درگاه در زمان اجرا از روی تنظیمات؛ FakePaymentGateway فقط در Development/Testing
+// ساخته می‌شود و در بقیهٔ محیط‌ها حل آن استثنا می‌دهد.
 builder.Services.AddScoped<IPaymentGateway>(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<PaymentGatewaySettings>>().Value;
+    var environment = sp.GetRequiredService<IHostEnvironment>();
 
-    if (string.Equals(settings.Provider, "Zarinpal", StringComparison.OrdinalIgnoreCase))
-        return ActivatorUtilities.CreateInstance<ZarinpalPaymentGateway>(sp);
-
-    return ActivatorUtilities.CreateInstance<FakePaymentGateway>(sp);
+    return ProductionConfigurationExtensions.ResolveGatewayKind(settings.Provider, environment.EnvironmentName) switch
+    {
+        PaymentGatewayKind.Zarinpal => ActivatorUtilities.CreateInstance<ZarinpalPaymentGateway>(sp),
+        _ => ActivatorUtilities.CreateInstance<FakePaymentGateway>(sp)
+    };
 });
 
 // بدون ثبت صریح، اعتبارسنجی امضا وجود نداشت و همهٔ webhookها رد می‌شدند.
@@ -245,10 +256,8 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IQueryMetricsService, QueryMetricsService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
 
-builder.Services.AddOptions<Application.Options.JwtOptions>()
-    .Bind(builder.Configuration.GetSection(Application.Options.JwtOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+// Batch 11 (F-13): JwtOptions و سیاست نشست (Session) با قید «بی‌کاری > عمر access token» هنگام راه‌اندازی سنجیده می‌شوند.
+builder.Services.AddUserSessionOptions(builder.Configuration);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -278,6 +287,16 @@ builder.Services.AddAuthentication(options =>
 
     options.Events = new JwtBearerEvents
     {
+        // Batch 53 (API-04): 401 و 403 خط لولهٔ JWT بدنهٔ ProblemDetails با کد پایدار دارند (TOKEN_EXPIRED، TOKEN_INVALID، SESSION_REVOKED، FORBIDDEN).
+        OnChallenge = async context =>
+        {
+            context.HandleResponse();
+            context.Response.Headers.WWWAuthenticate = context.AuthenticateFailure is null
+                ? "Bearer"
+                : "Bearer error=\"invalid_token\"";
+            await ProblemDetailsWriter.WriteAsync(context.HttpContext, ProblemDetailsWriter.ClassifyJwtFailure(context.AuthenticateFailure));
+        },
+        OnForbidden = context => ProblemDetailsWriter.WriteAsync(context.HttpContext, ErrorCodes.Forbidden),
         OnTokenValidated = async context =>
         {
             var unitOfWork = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
@@ -288,7 +307,7 @@ builder.Services.AddAuthentication(options =>
             if (!int.TryParse(userId, out var uid) ||
                 !Guid.TryParse(sessionId, out var sid))
             {
-                context.Fail("Invalid token claims");
+                context.Fail(new JwtFailure(ErrorCodes.TokenInvalid));
                 return;
             }
 
@@ -300,7 +319,7 @@ builder.Services.AddAuthentication(options =>
 
             if (!isActive)
             {
-                context.Fail("Session revoked");
+                context.Fail(new JwtFailure(ErrorCodes.SessionRevoked));
                 return;
             }
 
@@ -310,7 +329,7 @@ builder.Services.AddAuthentication(options =>
 
             if (dbUser == null || stamp == null || dbUser.SecurityStamp != stamp)
             {
-                context.Fail("Security stamp invalid");
+                context.Fail(new JwtFailure(ErrorCodes.SessionRevoked));
                 return;
             }
         }
@@ -323,6 +342,12 @@ builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
+    // Batch 40 (SEC-01): هر endpoint بدون ویژگی مجوز، به‌طور پیش‌فرض احراز هویت می‌خواهد.
+    // endpointهای عمومی صریحاً [AllowAnonymous] / AllowAnonymous() دارند (فهرست در EndpointAuthorizationInventoryTests).
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .AddRequirements(new AuthenticatedByDefaultRequirement())
+        .Build();
+
     options.AddPolicy("AdminOnly", policy =>
         policy.AddRequirements(new PermissionRequirement(Permissions.AdminFull)));
 
@@ -353,115 +378,34 @@ builder.Services.AddCors(options =>
                 // پس preflight برای آن پاسخ می‌گیرد. اگر روزی این سیاست محدود شد،
                 // این هدر باید صریحاً در WithHeaders باقی بماند.
                 .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
+                .AllowAnyMethod();
+            // Batch 40 (SEC-16): AllowCredentials حذف شد؛ API کوکی ندارد و توکن در هدر Authorization می‌آید.
         });
 });
 
-builder.Services.AddRateLimiter(options =>
+// F-20: فقط X-Forwarded-For/Proto پروکسی‌های صریحاً تنظیم‌شده پذیرفته می‌شود (ForwardedHeaders:*).
+builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
+
+// F-03: محدودیت نرخ به‌ازای هر کلاینت (IP یا شناسهٔ کاربر)؛ سقف‌ها از RateLimiting:* خوانده می‌شوند.
+builder.Services.AddPartitionedRateLimiting(builder.Configuration);
+
+// F-04: کش خروجی opt-in است؛ سیاست پایه ندارد و فقط endpointهای دارای سیاست نام‌دار کش می‌شوند
+// (OutputCachePolicies). سبد، موجودی، احراز هویت و health صراحتاً NoStore هستند.
+var outputCacheEnabled = OutputCacheExtensions.IsOutputCacheEnabled(builder.Configuration, builder.Environment);
+
+if (outputCacheEnabled)
 {
-    if (builder.Environment.IsEnvironment("Testing"))
-    {
-        options.AddFixedWindowLimiter(
-            "LoginLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter(
-            "RefreshLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter(
-            "PaymentInitiateLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter(
-            "CheckoutLimiter",
-            config =>
-        {
-            config.PermitLimit = 10000;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-        });
-    }
-    else
-    {
-        options.AddFixedWindowLimiter(
-            "LoginLimiter",
-            config =>
-        {
-            config.PermitLimit = 5;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-
-        options.AddFixedWindowLimiter(
-            "RefreshLimiter",
-            config =>
-        {
-            config.PermitLimit = 20;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-
-        options.AddFixedWindowLimiter(
-            "PaymentInitiateLimiter",
-            config =>
-        {
-            config.PermitLimit = 10;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-
-        options.AddFixedWindowLimiter(
-            "CheckoutLimiter",
-            config =>
-        {
-            config.PermitLimit = 5;
-            config.Window = TimeSpan.FromMinutes(1);
-            config.QueueLimit = 0;
-            config.QueueProcessingOrder =
-                QueueProcessingOrder.OldestFirst;
-        });
-    }
-});
-
-// Register OutputCache only outside Testing
-if (!builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddOutputCache(options =>
-    {
-        options.AddBasePolicy(builder => builder.Cache());
-    });
-
-    builder.Services.AddStackExchangeRedisOutputCache(options =>
-    {
-        options.Configuration = redisOptions.Configuration;
-        options.InstanceName = redisOptions.InstanceName;
-    });
+    builder.Services.AddApplicationOutputCache(builder.Environment, redisOptions);
 }
 
 var app = builder.Build();
+
+// Batch 40 (SEC-06): AllowedHosts از پیکربندی خوانده می‌شود (HostFiltering)؛ «*» در Production فقط هشدار است.
+foreach (var warning in ProductionConfigurationRules.AllowedHostsWarnings(
+             app.Configuration["AllowedHosts"], app.Environment.EnvironmentName))
+{
+    app.Logger.LogWarning("{AllowedHostsWarning}", warning);
+}
 
 // Staging: مایگریشن قبل از سرو کردن اولین درخواست.
 // اگر شکست بخورد، استثنا بالا می‌رود و کانتینر healthy نمی‌شود —
@@ -470,7 +414,27 @@ await app.Services.ApplyMigrationsAsync(
     app.Configuration,
     app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AutoMigrate"));
 
+// F-20: اولین middleware، تا محدودیت نرخ، احراز هویت، لاگ‌ها و نشست‌ها IP واقعی کلاینت را ببینند.
+app.UseTrustedForwardedHeaders();
+
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<JsonDepthGuardMiddleware>();
+
+// Batch 53 (API-04): پاسخ‌های بدون بدنه (مسیر ناموجود، متد یا نوع محتوای ناپشتیبانی‌شده) بدنهٔ ProblemDetails با code می‌گیرند.
+app.UseStatusCodePages(async statusContext =>
+{
+    var http = statusContext.HttpContext;
+    var info = http.Response.StatusCode switch
+    {
+        StatusCodes.Status404NotFound => http.GetEndpoint() is null ? ErrorCodes.RouteNotFound : ErrorCodes.NotFound,
+        StatusCodes.Status405MethodNotAllowed => ErrorCodes.MethodNotAllowed,
+        StatusCodes.Status415UnsupportedMediaType => ErrorCodes.UnsupportedMediaType,
+        _ => null
+    };
+
+    if (info is not null)
+        await ProblemDetailsWriter.WriteAsync(http, info);
+});
 
 // pipeline
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
@@ -500,6 +464,9 @@ app.Use(async (context, next) =>
     context.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
     context.Response.Headers.TryAdd("X-Frame-Options", "DENY");
     context.Response.Headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+    // Batch 40 (SEC-06): پاسخ‌های API و فایل‌های آپلودشده هرگز به‌عنوان صفحه اجرا نمی‌شوند.
+    // Swagger UI پیش از این middleware پاسخ می‌دهد و این هدر را نمی‌گیرد.
+    context.Response.Headers.TryAdd("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
     await next();
 });
 
@@ -507,6 +474,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+// Batch 52 (OPS-07): خروجی تفصیلی بیرون از Development فقط برای مدیر؛ live/ready عمومی می‌مانند.
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     Predicate = check => !check.Tags.Contains("ready"),
@@ -530,32 +498,34 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 
         await context.Response.WriteAsJsonAsync(result);
     }
-});
+}).RequireDetailedHealthAccess(app.Environment).CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false
-});
+}).AllowAnonymous().ExcludeFromDescription().CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-});
-
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    app.UseOutputCache();
-}
+}).AllowAnonymous().ExcludeFromDescription().CacheOutput(policy => policy.NoCache());
 
 app.UseCors("ReactFrontend");
-
-app.UseRateLimiter();
 
 app.UseMiddleware<QueryMetricsMiddleware>();
 
 app.UseAuthentication();
 
+// F-03: پس از احراز هویت، تا سیاست‌های checkout و پرداخت بر اساس شناسهٔ کاربر کلید بخورند.
+app.UseRateLimiter();
+
 app.UseAuthorization();
+
+// F-04: پس از CORS و احراز هویت، تا پاسخ کش‌شده از کنار این دو عبور نکند.
+if (outputCacheEnabled)
+{
+    app.UseOutputCache();
+}
 
 app.MapControllers();
 
@@ -565,7 +535,7 @@ app.MapGet("/version", () => new
     version = "v2",
     commit = Environment.GetEnvironmentVariable("GIT_COMMIT") ?? "unknown",
     deployedAt = DateTime.UtcNow
-}).CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().ExcludeFromDescription().CacheOutput(policy => policy.NoCache());
 
 
 Log.Information("Online Store API started successfully");

@@ -59,6 +59,9 @@ public sealed class InventoryService : IInventoryService
         if (quantity <= 0)
             throw new BusinessException("مقدار درخواستی باید بزرگ‌تر از صفر باشد.", "INVALID_QUANTITY");
 
+        // Batch 45c: همان قاعدهٔ مقدار سبد و سفارش (کالای عددی فقط عدد صحیح، بقیه حداکثر دو رقم اعشار).
+        await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listingId, quantity, cancellationToken);
+
         var rows = await GetActiveRowsAsync(listingId, cancellationToken);
 
         // تصمیم ناظر (گزینهٔ C): در بازهٔ مهاجرت، محصول بدون هیچ ردیف موجودی «نامحدود» تلقی می‌شود.
@@ -77,7 +80,8 @@ public sealed class InventoryService : IInventoryService
             _logger.LogWarning(
                 "Insufficient stock for listing {ListingId}. Requested={Requested}, Available={Available}",
                 listingId, quantity, available);
-            throw new BusinessException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
+            // Batch 7b: کمبود موجودی تعارض وضعیت است (409)، هم‌سو با Inventory.Reserve در دامنه.
+            throw new ConflictException("موجودی کافی نیست.", "INSUFFICIENT_STOCK");
         }
 
         var remaining = quantity;
@@ -100,6 +104,8 @@ public sealed class InventoryService : IInventoryService
         if (quantity <= 0)
             return;
 
+        // Batch 43c: قاعدهٔ مقدار (Batch 45c) فقط برای رزرو است. آزادسازی همان مقداری را برمی‌گرداند که قبلاً رزرو شده
+        // (شاید پیش از 45c، مثلاً ۰٫۵ کالای عددی) و هرگز نباید جلوی لغو یا برگرداندن سفارش را بگیرد.
         var rows = await GetActiveRowsAsync(listingId, cancellationToken);
 
         if (rows.Count == 0)
@@ -129,6 +135,8 @@ public sealed class InventoryService : IInventoryService
     ///    اعمال می‌شود.
     /// 2) انبار اختیاری: فروشندهٔ تازه هیچ انباری ندارد و ساخت انبار خودش
     ///    یک فرآیند چندمرحله‌ای است. بدون پیش‌فرض، R49 دوباره ساخته می‌شد.
+    ///    (Batch 49: پیش‌فرض، انبار پلتفرمِ موجود است و دیگر ساخته نمی‌شود؛
+    ///    انبار صریح باید مال فروشندهٔ Listing یا انبار پلتفرم باشد.)
     /// 3) حالت سخت‌گیرانه: موجودی باید مثبت باشد؛ «افزودن صفر» بی‌معناست
     ///    و «افزودن منفی» باید از مسیر موجودی‌سنجی رد شود، نه اینجا.
     /// </summary>
@@ -152,6 +160,8 @@ public sealed class InventoryService : IInventoryService
         var warehouse = await _unitOfWork.Repository<Warehouse>()
             .GetByIdAsync(targetWarehouseId, cancellationToken)
             ?? throw new NotFoundException("انبار یافت نشد.", "WAREHOUSE_NOT_FOUND");
+
+        EnsureWarehouseUsableForListing(warehouse, listing);
 
         var row = await _unitOfWork.Repository<Inventory>()
             .FirstOrDefaultAsync(
@@ -226,6 +236,8 @@ public sealed class InventoryService : IInventoryService
             .GetByIdAsync(warehouseId, cancellationToken)
             ?? throw new NotFoundException("انبار یافت نشد.", "WAREHOUSE_NOT_FOUND");
 
+        EnsureWarehouseUsableForListing(warehouse, listing);
+
         var row = await _unitOfWork.Repository<Inventory>()
             .FirstOrDefaultAsync(
                 new Spec<Inventory>()
@@ -234,7 +246,7 @@ public sealed class InventoryService : IInventoryService
                 cancellationToken);
 
         if (row is not null)
-            throw new BusinessException("موجودی برای این Listing در این انبار از قبل وجود دارد.", "INVENTORY_ALREADY_EXISTS");
+            throw new ConflictException("موجودی برای این Listing در این انبار از قبل وجود دارد.", "INVENTORY_ALREADY_EXISTS");
 
         var newRow = new Inventory(listingId, warehouseId, initialQuantity);
         await _unitOfWork.Repository<Inventory>().AddAsync(newRow, cancellationToken);
@@ -265,7 +277,7 @@ public sealed class InventoryService : IInventoryService
     private async Task EnsureCanManageListingAsync(SellerProduct listing, CancellationToken cancellationToken)
     {
         var userId = _currentUser.TryGetCurrentUserId()
-            ?? throw new ForbiddenException("برای ثبت موجودی باید وارد شوید.", "UNAUTHENTICATED");
+            ?? throw new UnauthorizedException("برای ثبت موجودی باید وارد شوید.", "UNAUTHENTICATED");
 
         var seller = await _unitOfWork.Repository<Seller>()
             .FirstOrDefaultAsync(
@@ -295,11 +307,24 @@ public sealed class InventoryService : IInventoryService
     }
 
     /// <summary>
-    /// انبار پیش‌فرض پلتفرم (SellerId == null). اگر وجود نداشته باشد ساخته می‌شود.
+    /// Batch 49 (F-29): موجودی یک Listing فقط در انبار فروشندهٔ همان Listing یا در انبار
+    /// پلتفرم (SellerId == null) ثبت می‌شود — برای مدیر هم. موجودیِ نشسته در انبار
+    /// فروشندهٔ دیگر، کالایی است که فروشندهٔ Listing اصلاً در اختیار ندارد.
+    /// </summary>
+    private static void EnsureWarehouseUsableForListing(Warehouse warehouse, SellerProduct listing)
+    {
+        if (warehouse.SellerId is not null && warehouse.SellerId != listing.SellerId)
+            throw new ForbiddenException(
+                "این انبار متعلق به فروشندهٔ این پیشنهاد فروش نیست.", "WAREHOUSE_FORBIDDEN");
+    }
+
+    /// <summary>
+    /// انبار پیش‌فرض پلتفرم (SellerId == null)، از داده‌ای که از قبل وجود دارد.
     ///
-    /// ساختن خودکار عمدی است: بدون آن، اولین فروشندهٔ یک نصب تازه هرگز
-    /// نمی‌تواند موجودی بگذارد و R49 فقط ظاهراً حل می‌شود. لاگ هشدار
-    /// می‌دهد تا این «ساختن ضمنی» در تاریکی نماند.
+    /// Batch 49 (F-29): پیش‌تر اگر انبار پلتفرم نبود، استان/شهر/آدرس «Platform» به‌صورت ضمنی
+    /// ساخته می‌شد و در فهرست عمومی استان‌ها و شهرها پیدا می‌شد. Batch 49b: انبار پلتفرم هنگام راه‌اندازی
+    /// از پیکربندی PlatformWarehouse:* ساخته می‌شود (PlatformWarehouseBootstrapper، docs/deployment.md §8)؛
+    /// پاسخ 409 فقط تور ایمنی است و در کارکرد عادی نباید دیده شود.
     /// </summary>
     private async Task<int> ResolveDefaultWarehouseIdAsync(CancellationToken cancellationToken)
     {
@@ -314,54 +339,13 @@ public sealed class InventoryService : IInventoryService
             return warehouse.WarehouseId;
 
         _logger.LogWarning(
-            "No platform warehouse found; provisioning one so that stock can be recorded.");
+            "No platform warehouse is configured; stock without an explicit warehouse cannot be recorded.");
 
-        // شناسه‌ها identity هستند، پس بعد از هر Add باید SaveChanges بزنیم؛
-        // وگرنه ProvinceId/CityId همچنان صفر می‌ماند و FK می‌شکند.
-        var now = DateTime.UtcNow;
-
-        var province = new Province { ProvinceName = "Platform", CreatedOn = now, ModifiedOn = now };
-        await _unitOfWork.Repository<Province>().AddAsync(province, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var city = new City
-        {
-            CityName = "Platform",
-            ProvinceId = province.ProvinceId,
-            CreatedOn = now,
-            ModifiedOn = now
-        };
-        await _unitOfWork.Repository<City>().AddAsync(city, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var address = new Address
-        {
-            CityId = city.CityId,
-            Plaque = "1",
-            Unit = "1",
-            PostalCode = "0000000000",
-            RecipientFirstName = "Platform",
-            RecipientLastName = "Warehouse",
-            UserId = _currentUser.GetCurrentUserId(),
-            CreatedOn = now,
-            ModifiedOn = now
-        };
-        await _unitOfWork.Repository<Address>().AddAsync(address, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var created = new Warehouse
-        {
-            Name = "Platform Warehouse",
-            AddressId = address.AddressId,
-            SellerId = null,
-            CreatedOn = now,
-            ModifiedOn = now
-        };
-        await _unitOfWork.Repository<Warehouse>().AddAsync(created, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return created.WarehouseId;
+        throw new ConflictException(
+            "انبار پیش‌فرض پلتفرم تعریف نشده است. انبار مقصد را مشخص کنید یا از مدیر بخواهید انبار پلتفرم را ثبت کند.",
+            "PLATFORM_WAREHOUSE_NOT_CONFIGURED");
     }
+
     private async Task<IReadOnlyList<Inventory>> GetActiveRowsAsync(int listingId, CancellationToken cancellationToken)
     {
         var spec = new Spec<Inventory>()

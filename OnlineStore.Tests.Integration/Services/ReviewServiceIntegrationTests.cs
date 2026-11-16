@@ -142,7 +142,10 @@ public class ReviewServiceIntegrationTests : BaseIntegrationTest
         var order = await OrderService.CreateEmptyOrderAsync(customer.CustomerId, "Buyer", "Tehran", "09120000000");
         await OrderService.AddItemToOrderAsync(
             order.OrderId, new AddOrderItemDto { ListingId = listing.ListingId, Quantity = 1 });
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
         return (buyer, customer, seller, product);
@@ -212,7 +215,7 @@ public class ReviewServiceIntegrationTests : BaseIntegrationTest
         var act = () => ReviewService.AddProductReviewAsync(
             buyer.UserId, product.ProductId, new CreateProductReviewDto { Rating = 1 });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 54 (API-06): second review is 409
         ex.And.Code.Should().Be("REVIEW_ALREADY_EXISTS");
     }
 
@@ -291,7 +294,7 @@ public class ReviewServiceIntegrationTests : BaseIntegrationTest
         var act = () => ReviewService.AddSellerReviewAsync(
             buyer.UserId, seller.SellerId, new CreateSellerReviewDto { Rating = 2 });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 54 (API-06): second review is 409
         ex.And.Code.Should().Be("REVIEW_ALREADY_EXISTS");
     }
 

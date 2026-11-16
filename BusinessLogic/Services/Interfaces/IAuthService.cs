@@ -10,8 +10,9 @@ namespace BusinessLogic.Services.Interfaces
 {
     public interface IAuthService
     {
-        Task<AuthResultDto> RegisterAsync(RegisterDto dto, CancellationToken cancellationToken = default);
-        Task<AuthResultDto?> LoginAsync(LoginDto dto, CancellationToken cancellationToken = default);
+        // F-20: client همان IP و User-Agent خوانده‌شده از خود درخواست HTTP است، نه از بدنه.
+        Task<AuthResultDto> RegisterAsync(RegisterDto dto, ClientRequestInfo client, CancellationToken cancellationToken = default);
+        Task<AuthResultDto?> LoginAsync(LoginDto dto, ClientRequestInfo client, CancellationToken cancellationToken = default);
         Task<AuthResultDto?> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
         Task LogoutSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
         Task LogoutAllAsync(int userId, CancellationToken cancellationToken = default);

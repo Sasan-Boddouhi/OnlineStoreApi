@@ -15,7 +15,8 @@ namespace BusinessLogic.Extensions
         {
             services.AddHttpContextAccessor();
 
-            services.AddAutoMapper(cfg => { }, typeof(ServiceCollectionExtensions).Assembly);
+            // Batch 40 (ARC-05): سقف عمق برای نگاشت‌های خودارجاع؛ روی پیکربندی سراسری و همهٔ Profileها اعمال می‌شود.
+            services.AddAutoMapper(AutoMapperDepthGuard.Apply, typeof(ServiceCollectionExtensions).Assembly);
 
             var serviceTypes = Assembly.GetExecutingAssembly()
                 .GetTypes()

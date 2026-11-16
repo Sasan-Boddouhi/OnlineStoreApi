@@ -2,6 +2,7 @@ using BusinessLogic.DTOs.Listing;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace Online_Store_Application.Controllers;
 
@@ -11,6 +12,8 @@ using Asp.Versioning;
 [ApiVersion(1.0)]
 [Route("api/v{version:apiVersion}/[controller]")]
 [Authorize(Policy = "AdminOnly")]
+// F-04: موجودی زنده است؛ پاسخ کهنه باعث افزودن کالای ناموجود به سبد می‌شد.
+[OutputCache(NoStore = true)]
 public class InventoryController : ControllerBase
 {
     private readonly IInventoryService _inventoryService;

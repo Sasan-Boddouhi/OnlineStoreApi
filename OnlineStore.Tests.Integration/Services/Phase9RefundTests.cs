@@ -42,14 +42,18 @@ public class Phase9RefundTests : BaseIntegrationTest
     // ==================== اثر ۱ و ۲: پرداخت و سفارش ====================
 
     [Fact]
-    public async Task Refund_DeliveredOrder_MarksPaymentRefundedAndOrderReturned()
+    public async Task Refund_DeliveredOrder_RequestThenConfirm_MarksPaymentRefundedAndOrderReturned()
     {
         var (payment, orderId) = await CreateSucceededPaymentForDeliveredOrderAsync();
 
         SetCurrentUser(1, "Admin");
         var dto = await PaymentService.RefundPaymentAsync(payment.PaymentId, "customer complaint");
 
-        dto.State.Should().Be(PaymentState.Refunded);
+        // Batch 42 (FIN-12): «refund» فقط درخواست است؛ Refunded پس از تأیید برگشت واقعی پول با شمارهٔ پیگیری بانکی.
+        dto.State.Should().Be(PaymentState.RefundPending);
+        var confirmed = await PaymentService.ConfirmRefundAsync(
+            payment.PaymentId, new BusinessLogic.DTOs.Payment.ConfirmRefundRequest { BankReference = "BANK-P9-1" });
+        confirmed.State.Should().Be(PaymentState.Refunded);
 
         var order = await DbContext.Order.AsNoTracking().FirstAsync(o => o.OrderId == orderId);
         order.Status.Should().Be(OrderStatus.Returned);
@@ -105,13 +109,24 @@ public class Phase9RefundTests : BaseIntegrationTest
         SetCurrentUser(1, "Admin");
         await PaymentService.RefundPaymentAsync(payment.PaymentId, "bank transfer backfired");
 
+        // Batch 42 (FIN-12): درخواست با دلیل ثبت می‌شود و می‌گوید پول هنوز برنگشته است؛ «MONEY_MOVED_MANUALLY» فقط
+        // پس از تأیید برگشت واقعی پول (با شمارهٔ پیگیری) در Payment.Refunded نوشته می‌شود.
+        var request = await DbContext.AuditLog.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Action == "Payment.AdminRefundRequested"
+                                   && a.EntityId == payment.PaymentId.ToString());
+        request.Should().NotBeNull();
+        request!.Details.Should().Contain("bank transfer backfired").And.Contain("MONEY_NOT_RETURNED_YET=true");
+
+        await PaymentService.ConfirmRefundAsync(
+            payment.PaymentId, new BusinessLogic.DTOs.Payment.ConfirmRefundRequest { BankReference = "BANK-P9-2" });
+
         var log = await DbContext.AuditLog.AsNoTracking()
             .FirstOrDefaultAsync(a => a.Action == "Payment.Refunded"
                                    && a.EntityId == payment.PaymentId.ToString());
 
         log.Should().NotBeNull();
         log!.Details.Should().Contain("MONEY_MOVED_MANUALLY=true");
-        log.Details.Should().Contain("bank transfer backfired");
+        log.Details.Should().Contain("bankReference=BANK-P9-2");
     }
 
     // ==================== حالت‌های نامعتبر ====================
@@ -153,7 +168,8 @@ public class Phase9RefundTests : BaseIntegrationTest
 
         var act = async () => await PaymentService.RefundPaymentAsync(payment.PaymentId);
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        // Batch 7: رد برگشت وجهِ پرداخت غیرموفق تعارض وضعیت است: 409 ConflictException، نه 400 BusinessException.
+        var ex = await act.Should().ThrowAsync<ConflictException>();
         ex.Which.Code.Should().Be("PAYMENT_NOT_REFUNDABLE");
     }
 
@@ -174,11 +190,13 @@ public class Phase9RefundTests : BaseIntegrationTest
     {
         var (orderId, _) = await CreateOrderAsync();
 
-        await OrderService.ConfirmOrderAsync(orderId);
-        await OrderService.MarkDeliveredAsync(orderId);
-
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و ارسال‌شده؛ پرداخت پیش از تحویل ثبت و بسته ارسال می‌شود.
         var invoiceId = await CreateInvoiceAsync(orderId);
         var payment = await AddSucceededPaymentAsync(orderId, invoiceId);
+
+        await OrderService.ConfirmOrderAsync(orderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, orderId);
+        await OrderService.MarkDeliveredAsync(orderId);
 
         return (payment, orderId);
     }

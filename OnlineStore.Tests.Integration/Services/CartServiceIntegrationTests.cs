@@ -192,8 +192,9 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
         var act = () => CartService.AddItemAsync(
             null, sessionId, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 1 });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
-        ex.And.Code.Should().Be("LISTING_NOT_ACTIVE");
+        // Batch 6: گارد قابل‌خرید بودن تعارض وضعیت است ⇒ ConflictException (409) به‌جای BusinessException (400).
+        var ex = await act.Should().ThrowAsync<ConflictException>();
+        ex.And.Code.Should().Be("LISTING_NOT_AVAILABLE");
     }
 
     [Fact]
@@ -207,7 +208,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
         var act = () => CartService.AddItemAsync(
             null, sessionId, new AddCartItemDto { ListingId = listing.ListingId, Quantity = 3 });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.And.Code.Should().Be("INSUFFICIENT_STOCK");
     }
 
@@ -373,7 +374,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<UnauthorizedException>(); // Batch 54 (API-06): checkout without login is 401
         ex.And.Code.Should().Be("CHECKOUT_REQUIRES_LOGIN");
     }
 
@@ -401,7 +402,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 7b: کمبود موجودی اکنون 409 است، نه 400.
         ex.And.Code.Should().Be("INSUFFICIENT_STOCK");
 
         // هیچ سفارش نیمه‌کاری ساخته نشده است.
@@ -448,8 +449,10 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
         payouts.Should().BeEmpty();
 
         // تحویل سفارش لغوشده ممکن نیست.
+        // Batch 4 (F-02): سفارش لغوشده اکنون با 409 و کد ORDER_CANCELLED رد می‌شود (پیش‌تر 400 ORDER_NOT_DELIVERABLE).
         var act = () => OrderService.MarkDeliveredAsync(order.OrderId);
-        await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>();
+        ex.And.Code.Should().Be("ORDER_CANCELLED");
     }
 
     // ==================== R9 — تراکنش Checkout ====================

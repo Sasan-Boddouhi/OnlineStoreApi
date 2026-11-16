@@ -17,7 +17,7 @@ namespace DataLayer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.4")
+                .HasAnnotation("ProductVersion", "8.0.34")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -331,6 +331,9 @@ namespace DataLayer.Migrations
 
                     b.Property<DateTime?>("ExpiresAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("FundedBy")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -870,6 +873,9 @@ namespace DataLayer.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("PlatformDiscountShare")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -884,6 +890,9 @@ namespace DataLayer.Migrations
 
                     b.Property<DateTime?>("ShippedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ShippingAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("ShippingCostShare")
                         .HasColumnType("decimal(18,2)");
@@ -908,6 +917,76 @@ namespace DataLayer.Migrations
                     b.ToTable("OrderSellerGroup");
                 });
 
+            modelBuilder.Entity("Application.Entities.OtpCode", b =>
+                {
+                    b.Property<long>("OtpCodeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("OtpCodeId"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("ConsumedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(11)");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<DateTime?>("VerificationExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VerificationTokenHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("VerificationUsedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("VerifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("OtpCodeId");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("PhoneNumber", "CreatedAtUtc");
+
+                    b.HasIndex("PhoneNumber", "Purpose");
+
+                    b.ToTable("OtpCode");
+                });
+
             modelBuilder.Entity("Application.Entities.Payment", b =>
                 {
                     b.Property<int>("PaymentId")
@@ -919,6 +998,10 @@ namespace DataLayer.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CardPanMasked")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");
 
@@ -927,6 +1010,13 @@ namespace DataLayer.Migrations
 
                     b.Property<int>("Gateway")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("GatewayFee")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("GatewayFeeType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("GatewayReference")
                         .HasMaxLength(100)
@@ -964,6 +1054,33 @@ namespace DataLayer.Migrations
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("int");
 
+                    b.Property<string>("RefundReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RefundReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("RefundRequestedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RefundedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReviewRequiredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ReviewResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReviewResolvedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -976,6 +1093,9 @@ namespace DataLayer.Migrations
                     b.Property<string>("TransactionId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("VerifyStartedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("PaymentId");
 
@@ -1668,9 +1788,6 @@ namespace DataLayer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SellerDebtId"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1689,10 +1806,16 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("ModifiedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("OriginalAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("RemainingAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -1702,6 +1825,12 @@ namespace DataLayer.Migrations
 
                     b.Property<int>("SellerId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("SettledAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("SettledAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("SellerDebtId");
 
@@ -1721,17 +1850,26 @@ namespace DataLayer.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime>("AvailableAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("DebtOffsetAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("ModifiedOn")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("OrderSellerGroupId")
                         .HasColumnType("int");
@@ -1958,6 +2096,9 @@ namespace DataLayer.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1980,6 +2121,9 @@ namespace DataLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
@@ -2035,6 +2179,11 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsPlatform")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bit")
+                        .HasComputedColumnSql("CASE WHEN [SellerId] IS NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", true);
+
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
 
@@ -2052,6 +2201,11 @@ namespace DataLayer.Migrations
                     b.HasKey("WarehouseId");
 
                     b.HasIndex("AddressId");
+
+                    b.HasIndex("IsPlatform")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Warehouse_SinglePlatform")
+                        .HasFilter("[SellerId] IS NULL");
 
                     b.HasIndex("Name")
                         .IsUnique()

@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Helper;
@@ -42,23 +43,37 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
             "Creating new user with phone: {PhoneNumber}",
             request.PhoneNumber);
 
+        // Batch 48b: بررسی تکرار و ذخیره فقط با شکل استاندارد 09…؛ +98… و ارقام فارسی همان شماره‌اند.
+        var phone = IranianPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
         try
         {
             var exists = await _unitOfWork.Repository<User>()
                 .AnyAsync(
-                    x => x.PhoneNumber == request.PhoneNumber,
+                    x => x.PhoneNumber == phone,
                     cancellationToken);
 
             if (exists)
             {
-                throw new BusinessException(
+                // Batch 11b: موبایل تکراری مانند ایمیل تکراری 409 است.
+                throw new ConflictException(
                     "شماره موبایل قبلاً ثبت شده است.",
                     "USER_PHONE_EXISTS");
             }
 
+            // Batch 11 (F-41): ایمیل در دیتابیس یکتاست؛ تکرار آن پیش‌تر به خطای ذخیره‌سازی می‌رسید.
+            if (!string.IsNullOrWhiteSpace(request.Email)
+                && await _unitOfWork.Repository<User>().AnyAsync(x => x.Email == request.Email, cancellationToken))
+            {
+                throw new ConflictException(
+                    "این ایمیل قبلاً ثبت شده است.",
+                    "USER_EMAIL_EXISTS");
+            }
+
             var user = _mapper.Map<User>(request);
+            user.PhoneNumber = phone;
             user.PasswordHash = _passwordHasher.Hash(request.Password);
             user.SecurityStamp = Guid.NewGuid().ToString();
             user.IsActive = true;
@@ -115,7 +130,7 @@ public sealed class CreateUserCommandHandler : IRequestHandler<CreateUserCommand
 
             return user.UserId;
         }
-        catch (Exception ex) when (ex is not BusinessException)
+        catch (Exception ex) when (ex is not AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
 

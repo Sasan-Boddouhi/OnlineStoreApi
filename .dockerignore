@@ -32,3 +32,18 @@ Thumbs.db
 
 # Documentation
 README.md
+
+# Batch 40 (SEC-07): secrets and local-only files never enter the build context
+.env
+.env.*
+**/appsettings.Production.json
+**/*.user
+*_REPORT.md
+*_PLAN.md
+*_REVIEW.md
+*_RESEARCH.md
+register.json
+.claude/
+
+# Test projects are not part of the published image
+OnlineStore.Tests.*/

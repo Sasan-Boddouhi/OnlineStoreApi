@@ -142,12 +142,14 @@ public class M712CriticalFixesTests : BaseIntegrationTest
 
     // 1. Coupon Financial Distribution to SellerGroups
     [Fact]
-    public async Task Coupon_DiscountIsDistributedProportionally_ToSellerGroups_AndDeductedFromSellerPayable()
+    public async Task Coupon_DiscountIsDistributedProportionally_ToSellerGroups_AndFundedByThePlatform()
     {
-        var (sellerA, _, _, listingA) = await SetupListingWithStockAsync(price: 600m, stock: 10m);
-        var (sellerB, _, _, listingB) = await SetupListingWithStockAsync(price: 400m, stock: 10m);
+        // Batch 45: renamed from "...AndDeductedFromSellerPayable". A platform coupon is the platform's cost and is
+        // no longer deducted from the seller (FIN-04, N5). Amounts ×1000 because of the N7 gateway minimum (10,000 IRR).
+        var (sellerA, _, _, listingA) = await SetupListingWithStockAsync(price: 600_000m, stock: 10m);
+        var (sellerB, _, _, listingB) = await SetupListingWithStockAsync(price: 400_000m, stock: 10m);
 
-        // 10% coupon: total 1000 => 100 discount (60 to A, 40 to B)
+        // 10% coupon: total 1,000,000 => 100,000 discount (60,000 to A, 40,000 to B)
         var coupon = await CouponService.CreateAsync(new CreateCouponDto
         {
             Code = $"OFF-{Guid.NewGuid():N}",
@@ -180,8 +182,8 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             CouponCode = coupon.Code
         });
 
-        order.TotalAmount.Should().Be(900m);
-        order.DiscountAmount.Should().Be(100m);
+        order.TotalAmount.Should().Be(900_000m);
+        order.DiscountAmount.Should().Be(100_000m);
 
         var groups = await DbContext.OrderSellerGroup
             .Where(g => g.OrderId == order.OrderId)
@@ -191,11 +193,14 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         var groupA = groups.First(g => g.SellerId == sellerA.SellerId);
         var groupB = groups.First(g => g.SellerId == sellerB.SellerId);
 
-        groupA.DiscountAmount.Should().Be(60m);
-        groupB.DiscountAmount.Should().Be(40m);
+        groupA.DiscountAmount.Should().Be(60_000m);
+        groupB.DiscountAmount.Should().Be(40_000m);
+        groupA.PlatformDiscountShare.Should().Be(60_000m);
+        groupB.PlatformDiscountShare.Should().Be(40_000m);
 
-        // SellerPayable before commission snapshot reflects discount deduction
-        groupA.SellerPayable.Should().BeLessThan(groupA.SubTotal);
+        // Batch 45: seller payable = items − 10% commission on the price before the coupon; the coupon is not deducted.
+        groupA.SellerPayable.Should().Be(540_000m);
+        groupB.SellerPayable.Should().Be(360_000m);
     }
 
     // 2. Coupon Usage Limits (Global & Per-User)
@@ -264,7 +269,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             CouponCode = coupon.Code
         });
 
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<UnprocessableEntityException>() // Batch 54 (API-06): coupon refusal is 422, not 400
             .WithMessage("*ظرفیت استفاده*");
     }
 
@@ -328,8 +333,12 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
+        // Batch 4 (F-02): تحویل فقط برای سفارش پرداخت‌شده و بسته‌های ارسال‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
+
         SetCurrentUser(buyer.UserId, "Customer");
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
 
         // Deliver order
         SetCurrentUser(1, "Admin");
@@ -337,7 +346,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
 
         // Mark payout as Paid
         var payout = await DbContext.SellerPayout.FirstAsync(p => p.SellerId == seller.SellerId);
-        payout.MarkPaid("BANK-REF-123");
+        payout.MarkPaid("BANK-REF-123", 0m, payout.AvailableAtUtc); // Batch 44: پس از دورهٔ نگه‌داشت
         await DbContext.SaveChangesAsync();
 
         // Now Admin marks order as Returned
@@ -348,7 +357,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             .FirstOrDefaultAsync(d => d.SellerId == seller.SellerId);
 
         debt.Should().NotBeNull();
-        debt!.Amount.Should().Be(payout.Amount);
+        debt!.OriginalAmount.Should().Be(payout.Amount); // Batch 44: ستون Amount به OriginalAmount تغییر نام داد
         debt.IsSettled.Should().BeFalse();
         debt.Reason.Should().Contain("Clawback");
     }
@@ -378,7 +387,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
 
     // 6. User Deletion with Sessions & RefreshTokens
     [Fact]
-    public async Task UserService_DeleteAsync_DeletesUserWithTokens_WithoutFKCrash()
+    public async Task UserService_DeleteAsync_DeactivatesUserAndRevokesTokens_WithoutFKCrash()
     {
         var user = new User
         {
@@ -423,9 +432,10 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         var deleted = await UserService.DeleteAsync(user.UserId);
         deleted.Should().BeTrue();
 
-        (await DbContext.User.AnyAsync(u => u.UserId == user.UserId)).Should().BeFalse();
-        (await DbContext.UserSession.AnyAsync(s => s.UserId == user.UserId)).Should().BeFalse();
-        (await DbContext.RefreshToken.AnyAsync(r => r.UserId == user.UserId)).Should().BeFalse();
+        // Batch 11: حذف کاربر حذف نرم است؛ ردیف‌ها می‌مانند ولی کاربر غیرفعال و نشست و توکن‌هایش باطل می‌شوند.
+        (await DbContext.User.AsNoTracking().SingleAsync(u => u.UserId == user.UserId)).IsActive.Should().BeFalse();
+        (await DbContext.UserSession.AsNoTracking().SingleAsync(s => s.UserId == user.UserId)).Status.Should().Be(UserSession.SessionStatus.Revoked);
+        (await DbContext.RefreshToken.AsNoTracking().SingleAsync(r => r.UserId == user.UserId)).IsRevoked.Should().BeTrue();
     }
 
     // 7. UnitOfWork Rollback clears ChangeTracker
@@ -502,7 +512,8 @@ public class M712CriticalFixesTests : BaseIntegrationTest
     [Fact]
     public async Task Checkout_RestoresCouponQuota_WhenOrderCancelled()
     {
-        var (_, _, _, listing) = await SetupListingWithStockAsync(price: 100m, stock: 10m);
+        // Batch 45 (N7): price ×1000; a 15% coupon on 100 IRR would now be capped to 0 by the 10,000 IRR gateway minimum.
+        var (_, _, _, listing) = await SetupListingWithStockAsync(price: 100_000m, stock: 10m);
 
         var coupon = await CouponService.CreateAsync(new CreateCouponDto
         {
@@ -559,7 +570,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         });
 
         order2.Should().NotBeNull();
-        order2.DiscountAmount.Should().Be(15m);
+        order2.DiscountAmount.Should().Be(15_000m);
     }
 
     // 10. WebP 8..11 Magic Byte Signature Verification
@@ -596,21 +607,33 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         var debt = new SellerDebt
         {
             SellerId = seller.SellerId,
-            Amount = 300m,
-            Reason = "Clawback test",
-            IsSettled = false
+            OriginalAmount = 300m, // Batch 44: Amount → OriginalAmount؛ IsSettled فقط با ApplySettlement تغییر می‌کند
+            Reason = "Clawback test"
         };
         DbContext.SellerDebt.Add(debt);
         await DbContext.SaveChangesAsync();
 
-        var payout = new SellerPayout(seller.SellerId, null, 800m, DateTime.UtcNow.AddDays(-2), DateTime.UtcNow);
+        // Batch 44 (FIN-02): تسویه از AvailableAtUtc (برای تسویهٔ دستی = PeriodEnd) قابل پرداخت است و سرویس ساعت تست را
+        // می‌خواند؛ پس دوره باید پیش از «اکنون»ِ ساعت تست بسته شده باشد (DateTime.UtcNow از ساعت ثابت تست جلوتر است).
+        var clockNow = Factory.Clock.GetUtcNow().UtcDateTime;
+        var payout = new SellerPayout(seller.SellerId, null, 800m, clockNow.AddDays(-3), clockNow.AddDays(-1));
         DbContext.SellerPayout.Add(payout);
         await DbContext.SaveChangesAsync();
 
         var payoutService = GetService<ISellerPayoutService>();
         await payoutService.MarkAsPaidAsync(payout.SellerPayoutId, "BANK-SETTLE-001");
 
+        DbContext.ChangeTracker.Clear();
         var reloadedDebt = await DbContext.SellerDebt.FirstAsync(d => d.SellerDebtId == debt.SellerDebtId);
         reloadedDebt.IsSettled.Should().BeTrue();
+
+        // Batch 44 (F-09): مبلغ اصلی بدهی حفظ می‌شود و کسر روی خودِ تسویه ثبت می‌شود (پیش‌تر فقط IsSettled سنجیده می‌شد
+        // و ادمین ۸۰۰ را واریز می‌کرد در حالی که ۳۰۰ بدهی «تسویه‌شده» علامت می‌خورد).
+        reloadedDebt.OriginalAmount.Should().Be(300m);
+        reloadedDebt.SettledAmount.Should().Be(300m);
+        reloadedDebt.SettledAtUtc.Should().NotBeNull();
+        var reloadedPayout = await DbContext.SellerPayout.AsNoTracking().FirstAsync(p => p.SellerPayoutId == payout.SellerPayoutId);
+        reloadedPayout.DebtOffsetAmount.Should().Be(300m);
+        reloadedPayout.NetAmount.Should().Be(500m);
     }
 }

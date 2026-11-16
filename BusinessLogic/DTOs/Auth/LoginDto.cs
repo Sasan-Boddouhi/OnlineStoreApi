@@ -13,7 +13,8 @@ namespace BusinessLogic.DTOs.Auth
         public string Password { get; set; } = null!;
         public string? DeviceId { get; set; }
         public string? DeviceName { get; set; }
-        public string? IpAddress { get; set; }
-        public string? UserAgent { get; set; }
+
+        // F-20: IpAddress و UserAgent دیگر از بدنه خوانده نمی‌شوند؛ اگر کلاینت بفرستد نادیده گرفته می‌شوند
+        // و مقدار واقعی از خود درخواست HTTP می‌آید (ClientRequestInfo).
     }
 }

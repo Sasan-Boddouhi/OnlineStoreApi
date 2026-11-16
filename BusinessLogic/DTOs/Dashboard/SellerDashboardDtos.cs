@@ -24,6 +24,14 @@ namespace BusinessLogic.DTOs.Dashboard
 
         /// <summary>Phase 8 (R37): مبلغی که تسویه‌اش ثبت شده ولی هنوز پرداخت نشده.</summary>
         public decimal PendingPayouts { get; set; }
+
+        /// <summary>
+        /// Batch 44 (F-09): خالص قابل واریزِ تسویه‌های در انتظار = PendingPayouts − بدهی باز (نه کمتر از صفر).
+        /// </summary>
+        public decimal PendingPayoutsNet { get; set; }
+
+        /// <summary>Batch 44 (F-09): بدهی بازِ فروشنده (بازپس‌گیری مرجوعی‌ها) که از تسویه‌های بعدی کسر می‌شود.</summary>
+        public decimal OutstandingDebt { get; set; }
     }
 
     /// <summary>Phase 7 — پرفروش‌ترین واریانت‌های یک فروشنده.</summary>

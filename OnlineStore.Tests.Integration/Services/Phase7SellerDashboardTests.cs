@@ -455,7 +455,10 @@ public class Phase7SellerDashboardTests : BaseIntegrationTest
             Quantity = quantity
         });
 
+        // Batch 4 (F-02/F-33): تحویل و شمارش در داشبورد فقط برای سفارش پرداخت‌شده؛ پرداخت و ارسال پیش‌شرط است.
+        await FulfilmentTestHelper.AddSucceededPaymentAsync(DbContext, order.OrderId);
         await OrderService.ConfirmOrderAsync(order.OrderId);
+        await FulfilmentTestHelper.ShipAllGroupsAsync(DbContext, order.OrderId);
         await OrderService.MarkDeliveredAsync(order.OrderId);
 
         var reviewId = 0;

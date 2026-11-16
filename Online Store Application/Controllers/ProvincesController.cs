@@ -7,6 +7,8 @@ using BusinessLogic.Services.Interfaces;
 using BusinessLogic.Specifications.Provinces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
+using Online_Store_Application.Extensions;
 
 namespace Online_Store_Application.Controllers;
 
@@ -46,15 +48,7 @@ public class ProvincesController : ControllerBase
 
         if (!parseResult.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query syntax",
-                Detail = string.Join("; ", parseResult.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = parseResult.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query syntax", parseResult.Errors);
         }
 
         var normalized = QueryPolicy.Normalize(parseResult.Value!, QueryContext);
@@ -62,15 +56,7 @@ public class ProvincesController : ControllerBase
 
         if (!validation.Success)
         {
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid query values",
-                Detail = string.Join("; ", validation.Errors.Select(e => e.Message)),
-                Instance = HttpContext.Request.Path
-            };
-            problem.Extensions["errors"] = validation.Errors.Select(e => new { e.Code, e.Message, e.Target });
-            return BadRequest(problem);
+            return QueryProblem.Create(HttpContext, "Invalid query values", validation.Errors);
         }
 
         var result = await _provinceService.GetByQueryAsync(validation.Value!, cancellationToken);
@@ -80,6 +66,7 @@ public class ProvincesController : ControllerBase
     /// <summary>دریافت مشخصات استان بر اساس شناسه.</summary>
     [HttpGet("{id:int}")]
     [AllowAnonymous]
+    [OutputCache(PolicyName = OutputCachePolicies.ReferenceData)]
     [ProducesResponseType(typeof(ProvinceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
