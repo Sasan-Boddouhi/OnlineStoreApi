@@ -94,7 +94,7 @@ namespace BusinessLogic.Services.Implementations
                 // M7.13 / Batch 44: بدهی‌های باز فروشنده (قدیمی‌ترین اول) از همین تسویه کسر می‌شود.
                 var unsettledDebts = await _unitOfWork.Repository<SellerDebt>()
                     .ListAsync(new Spec<SellerDebt>()
-                        .Where(d => d.SellerId == payout.SellerId && !d.IsSettled)
+                        .Where(d => d.SellerId == payout.SellerId && !d.IsSettled && d.RemainingAmount > 0)
                         .OrderBy(d => d.CreatedAtUtc)
                         .ThenBy(d => d.SellerDebtId)
                         .AsTracking(),
@@ -221,12 +221,13 @@ namespace BusinessLogic.Services.Implementations
                 .Query()
                 .AsNoTracking()
                 .Where(d => sellerIds.Contains(d.SellerId) && !d.IsSettled)
-                .Select(d => new { d.SellerId, d.OriginalAmount, d.SettledAmount })
+                .Select(d => new { d.SellerId, d.RemainingAmount })
                 .ToListAsync(cancellationToken);
 
+            // Batch 45: ستون صریح RemainingAmount (اصلاحیهٔ مالک ۲).
             var debtBySeller = openDebts
                 .GroupBy(d => d.SellerId)
-                .ToDictionary(g => g.Key, g => g.Sum(d => d.OriginalAmount - d.SettledAmount));
+                .ToDictionary(g => g.Key, g => g.Sum(d => d.RemainingAmount));
 
             foreach (var group in pending.GroupBy(d => d.SellerId))
             {

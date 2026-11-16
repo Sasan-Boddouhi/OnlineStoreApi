@@ -1,3 +1,4 @@
+using Application.Common.Helpers;
 using Application.Exceptions;
 using System;
 using System.Collections.Generic;
@@ -123,8 +124,19 @@ namespace Application.Entities
             Status = OrderStatus.Returned;
         }
 
+        /// <summary>
+        /// تخفیف و هزینهٔ ارسال محاسبه‌شده توسط <c>IPricingService</c> را روی سفارش ثبت می‌کند.
+        /// Batch 45 (FIN-06/FIN-09): هر دو مبلغ ریال کامل و نامنفی‌اند و تخفیف هرگز از جمع اقلام بیشتر نیست؛
+        /// در غیر این صورت قیمت‌گذاری خطا دارد و سفارش ثبت نمی‌شود (پیش‌تر کسر ریال بی‌صدا ذخیره می‌شد).
+        /// <paramref name="shippingCost"/> جمع هزینهٔ ارسال همهٔ بسته‌هاست (یک هزینه به‌ازای هر فروشنده، تصمیم N4).
+        /// </summary>
         public void ApplyDiscountsAndShipping(decimal discount, decimal shippingCost, int? couponId, int? shippingMethodId)
         {
+            var itemsTotal = OrderItems.Sum(i => i.Quantity * i.UnitPrice);
+            if (discount < 0 || shippingCost < 0 || discount > itemsTotal
+                || !RialMoney.IsWhole(discount) || !RialMoney.IsWhole(shippingCost))
+                throw new BusinessRuleViolationException("Order discount or shipping is out of range or not whole rials.", "PRICING_INVARIANT_VIOLATED");
+
             DiscountAmount = discount;
             ShippingCost = shippingCost;
             CouponId = couponId;

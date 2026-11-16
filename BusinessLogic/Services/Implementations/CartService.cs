@@ -3,13 +3,16 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Options;
 using AutoMapper;
 using BusinessLogic.DTOs.Cart;
 using BusinessLogic.DTOs.Order;
 using BusinessLogic.DTOs.OrderItem;
+using BusinessLogic.DTOs.Pricing;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessLogic.Services.Implementations
 {
@@ -26,19 +29,25 @@ namespace BusinessLogic.Services.Implementations
         private readonly IInventoryService _inventoryService;
         private readonly IOrderService _orderService;
         private readonly IMapper _mapper;
+        private readonly IPricingService _pricingService;
+        private readonly PaymentGatewaySettings _gatewaySettings;
 
         public CartService(
             IUnitOfWork unitOfWork,
             ILogger<CartService> logger,
             IInventoryService inventoryService,
             IOrderService orderService,
-            IMapper mapper)
+            IMapper mapper,
+            IPricingService pricingService,
+            IOptions<PaymentGatewaySettings> gatewaySettings)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _inventoryService = inventoryService;
             _orderService = orderService;
             _mapper = mapper;
+            _pricingService = pricingService;
+            _gatewaySettings = gatewaySettings.Value;
         }
 
         public CartService(
@@ -46,7 +55,8 @@ namespace BusinessLogic.Services.Implementations
             ILogger<CartService> logger,
             IInventoryService inventoryService,
             IOrderService orderService)
-            : this(unitOfWork, logger, inventoryService, orderService, null!)
+            : this(unitOfWork, logger, inventoryService, orderService, null!,
+                new PricingService(), Options.Create(new PaymentGatewaySettings()))
         {
         }
 
@@ -548,7 +558,8 @@ namespace BusinessLogic.Services.Implementations
             // ---- محاسبه روش ارسال و تخفیف کوپن (M7.11 & M7.12) ----
             // Batch 6 (F-11): هزینهٔ ارسال فقط از روش ارسال روی سرور خوانده می‌شود. اگر دست‌کم یک
             // روش فعال وجود دارد، نفرستادن روش ارسال رد می‌شود؛ پیش‌تر همین حذف یک فیلد ارسال را رایگان می‌کرد.
-            decimal shippingCost = 0;
+            // Batch 45 (N4): BaseCost هزینهٔ هر بسته است؛ هر گروه فروشنده یک بسته (جمع در PricingService).
+            decimal shippingFeePerParcel = 0;
             if (dto.ShippingMethodId.HasValue)
             {
                 var shippingMethod = await _unitOfWork.Repository<ShippingMethod>()
@@ -556,16 +567,16 @@ namespace BusinessLogic.Services.Implementations
                 if (shippingMethod is null || !shippingMethod.IsActive)
                     throw new UnprocessableEntityException("روش ارسال نامعتبر یا غیرفعال است.", "INVALID_SHIPPING_METHOD");
 
-                shippingCost = shippingMethod.BaseCost;
+                shippingFeePerParcel = shippingMethod.BaseCost;
             }
             else if (await _unitOfWork.Repository<ShippingMethod>().AnyAsync(m => m.IsActive, cancellationToken))
             {
                 throw new UnprocessableEntityException("انتخاب روش ارسال برای ثبت سفارش الزامی است.", "SHIPPING_METHOD_REQUIRED");
             }
 
-            decimal discountAmount = 0;
             int? couponId = null;
             Coupon? couponEntity = null;
+            PricingCoupon? pricingCoupon = null;
             if (!string.IsNullOrWhiteSpace(dto.CouponCode))
             {
                 var normalizedCode = dto.CouponCode.Trim().ToUpperInvariant();
@@ -601,10 +612,9 @@ namespace BusinessLogic.Services.Implementations
                 if (couponEntity.MinOrderAmount.HasValue && itemsTotal < couponEntity.MinOrderAmount.Value)
                     throw new UnprocessableEntityException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {couponEntity.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
 
-                discountAmount = Math.Round(itemsTotal * (couponEntity.DiscountPercentage / 100m), 2);
-                if (couponEntity.MaxDiscountAmount.HasValue && discountAmount > couponEntity.MaxDiscountAmount.Value)
-                    discountAmount = couponEntity.MaxDiscountAmount.Value;
-
+                // Batch 45 (FIN-06/FIN-09): مبلغ تخفیف فقط در PricingService حساب می‌شود (ریال کامل، سقف N7).
+                pricingCoupon = new PricingCoupon(
+                    couponEntity.DiscountPercentage, couponEntity.MaxDiscountAmount, couponEntity.FundedBy);
                 couponId = couponEntity.CouponId;
             }
 
@@ -634,43 +644,37 @@ namespace BusinessLogic.Services.Implementations
 
                 result = await _orderService.AddItemsToOrderAsync(orderId, itemsDto, cancellationToken);
 
-                // اعمال تخفیف و هزینه ارسال به سفارش و تسهیم بین گروه‌های فروشنده (M7.12)
+                // Batch 45 (FIN-04/06/09/10/14): تخفیف، ارسال هر بسته و سهم هر گروه فقط از PricingService می‌آید.
                 var orderEntity = await _unitOfWork.Repository<Order>()
-                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.OrderId == orderId).Include(o => o.SellerGroups).AsTracking(), cancellationToken);
+                    .FirstOrDefaultAsync(new Spec<Order>().Where(o => o.OrderId == orderId)
+                        .Include(o => o.SellerGroups).Include(o => o.OrderItems).AsTracking(), cancellationToken);
 
                 if (orderEntity != null)
                 {
-                    orderEntity.ApplyDiscountsAndShipping(discountAmount, shippingCost, couponId, dto.ShippingMethodId);
+                    var groupsBySeller = orderEntity.SellerGroups.ToDictionary(g => g.SellerId);
+                    var pricing = _pricingService.Calculate(new PricingRequest(
+                        groupsBySeller.Values.Select(g => new PricingGroupInput(g.SellerId, g.SubTotal, g.CommissionRate)).ToList(),
+                        shippingFeePerParcel,
+                        pricingCoupon,
+                        _gatewaySettings.MinimumAmountRial));
 
-                    var totalItemsSubTotal = orderEntity.SellerGroups.Sum(g => g.SubTotal);
-                    var groupCount = orderEntity.SellerGroups.Count;
+                    if (pricing.DiscountCappedByMinimumPayable)
+                        _logger.LogInformation(
+                            "Coupon {CouponId} discount on order {OrderId} capped to {Discount} IRR to keep the payable at the gateway minimum",
+                            couponId, orderId, pricing.DiscountAmount);
 
-                    decimal allocatedDiscount = 0;
-                    decimal allocatedShipping = 0;
-                    var groupsList = orderEntity.SellerGroups.ToList();
+                    orderEntity.ApplyDiscountsAndShipping(pricing.DiscountAmount, pricing.ShippingTotal, couponId, dto.ShippingMethodId);
+                    if (orderEntity.TotalAmount != pricing.PayableTotal)
+                        throw new InvalidOperationException(
+                            $"Order {orderId} total {orderEntity.TotalAmount} differs from the priced total {pricing.PayableTotal}.");
 
-                    for (int i = 0; i < groupsList.Count; i++)
+                    foreach (var priced in pricing.Groups)
                     {
-                        var group = groupsList[i];
-                        decimal groupDiscount;
-                        decimal groupShipping;
-
-                        if (i == groupsList.Count - 1)
-                        {
-                            groupDiscount = Math.Max(0, discountAmount - allocatedDiscount);
-                            groupShipping = Math.Max(0, shippingCost - allocatedShipping);
-                        }
-                        else
-                        {
-                            decimal ratio = totalItemsSubTotal > 0 ? group.SubTotal / totalItemsSubTotal : (1m / groupCount);
-                            groupDiscount = Math.Round(discountAmount * ratio, 2, MidpointRounding.AwayFromZero);
-                            groupShipping = Math.Round(shippingCost / groupCount, 2, MidpointRounding.AwayFromZero);
-
-                            allocatedDiscount += groupDiscount;
-                            allocatedShipping += groupShipping;
-                        }
-
-                        group.SetDiscountAndShippingShare(groupDiscount, groupShipping);
+                        var group = groupsBySeller[priced.SellerId];
+                        group.ApplyPricing(priced.DiscountAmount, priced.PlatformDiscountShare, priced.ShippingAmount);
+                        if (group.CommissionAmount != priced.CommissionAmount || group.SellerPayable != priced.SellerPayable)
+                            throw new InvalidOperationException(
+                                $"Seller group {priced.SellerId} of order {orderId} does not match the priced settlement.");
                         _unitOfWork.Repository<OrderSellerGroup>().Update(group);
                     }
 

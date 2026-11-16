@@ -142,12 +142,14 @@ public class M712CriticalFixesTests : BaseIntegrationTest
 
     // 1. Coupon Financial Distribution to SellerGroups
     [Fact]
-    public async Task Coupon_DiscountIsDistributedProportionally_ToSellerGroups_AndDeductedFromSellerPayable()
+    public async Task Coupon_DiscountIsDistributedProportionally_ToSellerGroups_AndFundedByThePlatform()
     {
-        var (sellerA, _, _, listingA) = await SetupListingWithStockAsync(price: 600m, stock: 10m);
-        var (sellerB, _, _, listingB) = await SetupListingWithStockAsync(price: 400m, stock: 10m);
+        // Batch 45: renamed from "...AndDeductedFromSellerPayable". A platform coupon is the platform's cost and is
+        // no longer deducted from the seller (FIN-04, N5). Amounts ×1000 because of the N7 gateway minimum (10,000 IRR).
+        var (sellerA, _, _, listingA) = await SetupListingWithStockAsync(price: 600_000m, stock: 10m);
+        var (sellerB, _, _, listingB) = await SetupListingWithStockAsync(price: 400_000m, stock: 10m);
 
-        // 10% coupon: total 1000 => 100 discount (60 to A, 40 to B)
+        // 10% coupon: total 1,000,000 => 100,000 discount (60,000 to A, 40,000 to B)
         var coupon = await CouponService.CreateAsync(new CreateCouponDto
         {
             Code = $"OFF-{Guid.NewGuid():N}",
@@ -180,8 +182,8 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             CouponCode = coupon.Code
         });
 
-        order.TotalAmount.Should().Be(900m);
-        order.DiscountAmount.Should().Be(100m);
+        order.TotalAmount.Should().Be(900_000m);
+        order.DiscountAmount.Should().Be(100_000m);
 
         var groups = await DbContext.OrderSellerGroup
             .Where(g => g.OrderId == order.OrderId)
@@ -191,11 +193,14 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         var groupA = groups.First(g => g.SellerId == sellerA.SellerId);
         var groupB = groups.First(g => g.SellerId == sellerB.SellerId);
 
-        groupA.DiscountAmount.Should().Be(60m);
-        groupB.DiscountAmount.Should().Be(40m);
+        groupA.DiscountAmount.Should().Be(60_000m);
+        groupB.DiscountAmount.Should().Be(40_000m);
+        groupA.PlatformDiscountShare.Should().Be(60_000m);
+        groupB.PlatformDiscountShare.Should().Be(40_000m);
 
-        // SellerPayable before commission snapshot reflects discount deduction
-        groupA.SellerPayable.Should().BeLessThan(groupA.SubTotal);
+        // Batch 45: seller payable = items − 10% commission on the price before the coupon; the coupon is not deducted.
+        groupA.SellerPayable.Should().Be(540_000m);
+        groupB.SellerPayable.Should().Be(360_000m);
     }
 
     // 2. Coupon Usage Limits (Global & Per-User)
@@ -507,7 +512,8 @@ public class M712CriticalFixesTests : BaseIntegrationTest
     [Fact]
     public async Task Checkout_RestoresCouponQuota_WhenOrderCancelled()
     {
-        var (_, _, _, listing) = await SetupListingWithStockAsync(price: 100m, stock: 10m);
+        // Batch 45 (N7): price ×1000; a 15% coupon on 100 IRR would now be capped to 0 by the 10,000 IRR gateway minimum.
+        var (_, _, _, listing) = await SetupListingWithStockAsync(price: 100_000m, stock: 10m);
 
         var coupon = await CouponService.CreateAsync(new CreateCouponDto
         {
@@ -564,7 +570,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         });
 
         order2.Should().NotBeNull();
-        order2.DiscountAmount.Should().Be(15m);
+        order2.DiscountAmount.Should().Be(15_000m);
     }
 
     // 10. WebP 8..11 Magic Byte Signature Verification

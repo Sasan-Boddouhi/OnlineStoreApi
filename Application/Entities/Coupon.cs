@@ -34,7 +34,24 @@ namespace Application.Entities
 
         public int UsedCount { get; set; } = 0;
 
+        /// <summary>
+        /// Batch 45 (تصمیم N5): چه کسی هزینهٔ تخفیف را می‌دهد. پیش‌فرض پلتفرم: تخفیف از سهم فروشنده کم نمی‌شود
+        /// و کمیسیون روی جمع اقلام پیش از تخفیف حساب می‌شود. کوپن فروشنده: سهم تخفیف هر گروه از سهم همان فروشنده
+        /// کم می‌شود و کمیسیون روی مبلغ پس از تخفیف است.
+        /// </summary>
+        public CouponFundingSource FundedBy { get; set; } = CouponFundingSource.Platform;
+
         [Timestamp]
         public byte[] RowVersion { get; set; } = new byte[8];
+    }
+
+    /// <summary>Batch 45: تأمین‌کنندهٔ هزینهٔ کوپن. در دیتابیس عدد ذخیره می‌شود (Platform = 0).</summary>
+    public enum CouponFundingSource
+    {
+        /// <summary>پلتفرم هزینهٔ تخفیف را می‌دهد (پیش‌فرض همهٔ کوپن‌های موجود).</summary>
+        Platform = 0,
+
+        /// <summary>فروشندهٔ هر گروه سهم تخفیف گروه خودش را می‌دهد.</summary>
+        Seller = 1
     }
 }

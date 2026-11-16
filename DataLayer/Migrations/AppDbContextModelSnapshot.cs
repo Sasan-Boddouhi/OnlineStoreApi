@@ -332,6 +332,9 @@ namespace DataLayer.Migrations
                     b.Property<DateTime?>("ExpiresAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("FundedBy")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -870,6 +873,9 @@ namespace DataLayer.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("PlatformDiscountShare")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -884,6 +890,9 @@ namespace DataLayer.Migrations
 
                     b.Property<DateTime?>("ShippedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ShippingAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("ShippingCostShare")
                         .HasColumnType("decimal(18,2)");
@@ -1734,6 +1743,9 @@ namespace DataLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("RemainingAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()

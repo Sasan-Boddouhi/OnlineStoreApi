@@ -101,9 +101,9 @@ public sealed class SellerDashboardService : ISellerDashboardService
         var openDebts = await _unitOfWork.Repository<SellerDebt>()
             .Query()
             .Where(d => d.SellerId == sellerId && !d.IsSettled)
-            .Select(d => new { d.OriginalAmount, d.SettledAmount })
+            .Select(d => d.RemainingAmount)
             .ToListAsync(cancellationToken);
-        var outstandingDebt = openDebts.Sum(d => d.OriginalAmount - d.SettledAmount);
+        var outstandingDebt = openDebts.Sum();
         var pendingGross = payoutStats.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount);
 
         var summary = new SellerSalesSummaryDto

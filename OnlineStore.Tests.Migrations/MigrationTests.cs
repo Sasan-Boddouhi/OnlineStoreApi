@@ -600,4 +600,85 @@ INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedO
 INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,200,'B44-SETTLED','2026-10-01',1,@now,'2026-11-02T00:00:00');
 INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,150,'B44-PARTLY','2026-10-01',0,'2026-10-01T00:00:00','2026-10-20T00:00:00');
 ";
+
+    // ==================== Batch 45 ====================
+
+    private const string Batch45Migration = "20261116063113_Phase15_Batch45_PricingModel";
+
+    /// <summary>
+    /// Batch 45 — <c>Phase15_Batch45_PricingModel</c>. بالا: کوپن موجود FundedBy = پلتفرم (۰)؛ RemainingAmount بدهی =
+    /// OriginalAmount − SettledAmount و بدهی‌ای که Batch 44 علامت زده بود برای بررسی ثبت می‌شود؛ گروه پرداخت‌نشده سهم کوپن پلتفرم و
+    /// هزینهٔ ارسال بسته را می‌گیرد؛ گروه تحویل‌شده با تسویهٔ Pending SellerPayable ذخیره‌شده‌اش را نگه می‌دارد و اختلاف فقط گزارش می‌شود.
+    /// پایین: ستون‌ها برداشته می‌شوند و داده حذف نمی‌شود. اجرای دوباره رکورد بررسی تکراری نمی‌سازد.
+    /// </summary>
+    [Fact]
+    public async Task Batch45_PricingModel_BackfillsReportsAndRollsBack()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch43Migration);
+        await db.ExecuteAsync(Batch44SeedSql);
+        await db.MigrateToAsync(Batch44Migration);
+        await db.ExecuteAsync(Batch45SeedSql);
+
+        await db.MigrateToAsync(Batch45Migration);
+
+        (await db.ScalarAsync<int>("SELECT [FundedBy] FROM [Coupon] WHERE [Code] = N'B45-COUPON'"))
+            .Should().Be(0, "کوپن‌های موجود پلتفرمی‌اند");
+
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(CONCAT([Reason], '=', CAST([RemainingAmount] AS int)), ',') WITHIN GROUP (ORDER BY [Reason]) FROM [SellerDebt]"))
+            .Should().Be("B44-OPEN=300,B44-PARTLY=150,B44-SETTLED=0,B45-PARTLY=300", "RemainingAmount = OriginalAmount − SettledAmount");
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(d.[Reason], ',') FROM [AuditLog] a JOIN [SellerDebt] d ON a.[EntityId] = CAST(d.[SellerDebtId] AS nvarchar(20)) " +
+                "WHERE a.[Action] = 'SellerDebt.RemainingAmountReview' AND a.[EntityName] = 'SellerDebt'"))
+            .Should().Be("B44-PARTLY", "فقط بدهی‌ای که Batch 44 علامت زده بود برای بررسی دستی ثبت می‌شود");
+
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [OrderSellerGroup] WHERE [Status] = 0 AND [SubTotal] = 1000 " +
+                "AND [PlatformDiscountShare] = 100 AND [ShippingAmount] = 50 AND [SellerPayable] = 850"))
+            .Should().Be(1, "گروه پرداخت‌نشده سهم کوپن پلتفرم و هزینهٔ ارسال بسته را می‌گیرد؛ سهم هنگام پرداخت حساب می‌شود");
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [OrderSellerGroup] WHERE [Status] = 3 AND [SubTotal] = 1100 " +
+                "AND [PlatformDiscountShare] = 0 AND [ShippingAmount] = 0 AND [SellerPayable] = 1000"))
+            .Should().Be(1, "تاریخچه بازمحاسبه نمی‌شود");
+        (await db.ScalarAsync<string>(
+                "SELECT a.[Details] FROM [AuditLog] a JOIN [OrderSellerGroup] g ON a.[EntityId] = CAST(g.[OrderSellerGroupId] AS nvarchar(20)) " +
+                "WHERE a.[Action] = 'OrderSellerGroup.PricingReview' AND g.[Status] = 3"))
+            .Should().Contain("SellerPayable=1000").And.Contain("would be 990").And.Contain("difference -10");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [AuditLog] WHERE [Action] = 'OrderSellerGroup.PricingReview'"))
+            .Should().Be(1, "فقط تسویهٔ Pending با اختلاف گزارش می‌شود");
+
+        await db.MigrateToAsync(Batch44Migration);
+
+        (await db.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.columns WHERE " +
+            "(object_id = OBJECT_ID('Coupon') AND name = 'FundedBy') OR " +
+            "(object_id = OBJECT_ID('OrderSellerGroup') AND name IN ('ShippingAmount','PlatformDiscountShare')) OR " +
+            "(object_id = OBJECT_ID('SellerDebt') AND name = 'RemainingAmount')"))
+            .Should().Be(0, "Down همهٔ ستون‌های Batch 45 را برمی‌دارد");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [SellerDebt]")).Should().Be(4, "rollback نباید بدهی‌ای را حذف کند");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [OrderSellerGroup]")).Should().Be(2);
+
+        await db.MigrateToAsync(Batch45Migration);
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM [AuditLog] WHERE [Action] IN ('SellerDebt.RemainingAmountReview','OrderSellerGroup.PricingReview')"))
+            .Should().Be(2, "اجرای دوباره رکورد بررسی تکراری نمی‌سازد");
+        (await db.ScalarAsync<decimal>("SELECT [RemainingAmount] FROM [SellerDebt] WHERE [Reason] = 'B45-PARTLY'")).Should().Be(300m);
+    }
+
+    /// <summary>
+    /// اسکیمای Batch 44 (پس از <see cref="Batch44SeedSql"/>): یک کوپن، بدهی ۵۰۰ که ۲۰۰ آن با کد Batch 44 تسویه شده، و سفارش
+    /// پرداخت‌نشده با گروه Pending (اقلام ۱۰۰۰، سهم کوپن ۱۰۰، سهم ارسال ۵۰، سهم قدیمی ۸۵۰).
+    /// </summary>
+    private const string Batch45SeedSql = @"
+DECLARE @now datetime2 = SYSUTCDATETIME();
+DECLARE @s int = (SELECT [SellerId] FROM [Seller] WHERE [StoreName] = N'B44 Store');
+DECLARE @cu int = (SELECT c.[CustomerId] FROM [Customer] c JOIN [User] u ON u.[UserId] = c.[UserId] WHERE u.[PhoneNumber] = '09124400002');
+INSERT INTO [Coupon] (Code,DiscountPercentage,IsActive,UsedCount,CreatedOn,ModifiedOn) VALUES (N'B45-COUPON',10,1,0,@now,@now);
+INSERT INTO [SellerDebt] (SellerId,OriginalAmount,SettledAmount,Reason,CreatedAtUtc,IsSettled,CreatedOn,ModifiedOn) VALUES (@s,500,200,'B45-PARTLY','2026-11-10',0,@now,@now);
+INSERT INTO [Order] (OrderDate,TotalAmount,Status,ShippingCost,DiscountAmount,ShippingFullName,ShippingAddress,ShippingPhoneNumber,CustomerId,CouponQuotaRefunded,CreatedOn,ModifiedOn) VALUES (@now,950,0,50,100,'B','Addr','09124400002',@cu,0,@now,@now);
+DECLARE @o int = SCOPE_IDENTITY();
+INSERT INTO [OrderSellerGroup] (OrderId,SellerId,SubTotal,CommissionRate,CommissionAmount,DiscountAmount,ShippingCostShare,SellerPayable,Status,CreatedOn,ModifiedOn) VALUES (@o,@s,1000,10,0,100,50,850,0,@now,@now);
+";
 }

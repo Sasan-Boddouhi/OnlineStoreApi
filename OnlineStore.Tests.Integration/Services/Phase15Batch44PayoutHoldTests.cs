@@ -229,7 +229,9 @@ public class Phase15Batch44PayoutHoldTests : ControllerIntegrationTestBase
 
     /// <summary>
     /// سفارش دو فروشنده با کوپن ۱۰٪، ارسال ۵۰٬۰۰۰ و کمیسیون ۱۰٪، و بدهی ۱۰۰٬۰۰۰ فروشندهٔ A از مرجوعی قبلی.
-    /// قاعدهٔ فعلی سهم فروشنده (پیش از Batch 45): SubTotal − سهم کوپن − سهم ارسال − کمیسیون.
+    /// Batch 45 (N4/N5، اصلاحیهٔ مالک): ارسال برای هر بسته (۲ × ۵۰٬۰۰۰) و به سهم فروشنده افزوده می‌شود؛ کوپن پلتفرم
+    /// از فروشنده کم نمی‌شود. سهم = SubTotal − کمیسیون (روی قیمت پیش از کوپن) + ارسال بسته.
+    /// مقادیر پیش از Batch 45: ارسال ۵۰٬۰۰۰ برای کل سفارش، جمع ۹۵۰٬۰۰۰، سهم‌ها ۴۵۵٬۰۰۰ / ۲۹۵٬۰۰۰.
     /// </summary>
     [Fact]
     public async Task TwoSellerOrder_RialByRial_HoldThenNetOfDebt()
@@ -246,8 +248,8 @@ public class Phase15Batch44PayoutHoldTests : ControllerIntegrationTestBase
 
         var order = await DbContext.Order.AsNoTracking().SingleAsync(o => o.OrderId == seeded.OrderId);
         order.DiscountAmount.Should().Be(100_000m);
-        order.ShippingCost.Should().Be(50_000m);
-        order.TotalAmount.Should().Be(950_000m, "۱٬۰۰۰٬۰۰۰ − ۱۰۰٬۰۰۰ کوپن + ۵۰٬۰۰۰ ارسال");
+        order.ShippingCost.Should().Be(100_000m, "Batch 45 (N4): ۲ بسته × ۵۰٬۰۰۰");
+        order.TotalAmount.Should().Be(1_000_000m, "۱٬۰۰۰٬۰۰۰ − ۱۰۰٬۰۰۰ کوپن + ۱۰۰٬۰۰۰ ارسال");
 
         await AddDebtAsync(sellerA.SellerId, 100_000m);
         await PayShipDeliverAllAsync(seeded);
@@ -255,10 +257,11 @@ public class Phase15Batch44PayoutHoldTests : ControllerIntegrationTestBase
         var groups = await DbContext.OrderSellerGroup.AsNoTracking().Where(g => g.OrderId == seeded.OrderId).ToListAsync();
         var groupA = groups.Single(g => g.SellerId == sellerA.SellerId);
         var groupB = groups.Single(g => g.SellerId == sellerB.SellerId);
-        (groupA.SubTotal, groupA.DiscountAmount, groupA.ShippingCostShare, groupA.CommissionAmount, groupA.SellerPayable)
-            .Should().Be((600_000m, 60_000m, 25_000m, 60_000m, 455_000m));
-        (groupB.SubTotal, groupB.DiscountAmount, groupB.ShippingCostShare, groupB.CommissionAmount, groupB.SellerPayable)
-            .Should().Be((400_000m, 40_000m, 25_000m, 40_000m, 295_000m));
+        (groupA.SubTotal, groupA.DiscountAmount, groupA.ShippingAmount, groupA.CommissionAmount, groupA.SellerPayable)
+            .Should().Be((600_000m, 60_000m, 50_000m, 60_000m, 590_000m));
+        (groupB.SubTotal, groupB.DiscountAmount, groupB.ShippingAmount, groupB.CommissionAmount, groupB.SellerPayable)
+            .Should().Be((400_000m, 40_000m, 50_000m, 40_000m, 410_000m));
+        (groupA.ShippingCostShare, groupB.ShippingCostShare).Should().Be((0m, 0m), "Batch 45: ارسال دیگر از فروشنده کسر نمی‌شود");
 
         var payoutA = await SinglePayoutAsync(seeded, 0);
         var payoutB = await SinglePayoutAsync(seeded, 1);
@@ -273,20 +276,19 @@ public class Phase15Batch44PayoutHoldTests : ControllerIntegrationTestBase
         Factory.Clock.Advance(TimeSpan.FromDays(7));
         var listed = (await PayoutService.GetAllPayoutsAsync()).ToDictionary(p => p.SellerPayoutId);
         (listed[payoutA.SellerPayoutId].Amount, listed[payoutA.SellerPayoutId].DebtOffsetAmount, listed[payoutA.SellerPayoutId].NetAmount)
-            .Should().Be((455_000m, 100_000m, 355_000m));
+            .Should().Be((590_000m, 100_000m, 490_000m));
         (listed[payoutB.SellerPayoutId].Amount, listed[payoutB.SellerPayoutId].DebtOffsetAmount, listed[payoutB.SellerPayoutId].NetAmount)
-            .Should().Be((295_000m, 0m, 295_000m));
+            .Should().Be((410_000m, 0m, 410_000m));
 
-        var paidA = await PayoutService.MarkAsPaidAsync(payoutA.SellerPayoutId, "BANK-A", expectedNetAmount: 355_000m);
-        var paidB = await PayoutService.MarkAsPaidAsync(payoutB.SellerPayoutId, "BANK-B", expectedNetAmount: 295_000m);
+        var paidA = await PayoutService.MarkAsPaidAsync(payoutA.SellerPayoutId, "BANK-A", expectedNetAmount: 490_000m);
+        var paidB = await PayoutService.MarkAsPaidAsync(payoutB.SellerPayoutId, "BANK-B", expectedNetAmount: 410_000m);
 
-        paidA.NetAmount.Should().Be(355_000m);
-        paidB.NetAmount.Should().Be(295_000m);
-        // ۹۵۰٬۰۰۰ پرداختی مشتری = واریز به فروشندگان (۶۵۰٬۰۰۰) + بدهی وصول‌شده (۱۰۰٬۰۰۰) + کمیسیون (۱۰۰٬۰۰۰)
-        // + ارسالی که مشتری پرداخت (۵۰٬۰۰۰) + سهم ارسالی که از فروشندگان هم کسر شد (۵۰٬۰۰۰؛ FIN-04، Batch 45).
+        paidA.NetAmount.Should().Be(490_000m);
+        paidB.NetAmount.Should().Be(410_000m);
+        // ۱٬۰۰۰٬۰۰۰ پرداختی مشتری = واریز به فروشندگان (۹۰۰٬۰۰۰) + بدهی وصول‌شده (۱۰۰٬۰۰۰) + کمیسیون (۱۰۰٬۰۰۰)
+        // − هزینهٔ کوپن پلتفرم (۱۰۰٬۰۰۰). ارسال داخل سهم فروشندگان است (Batch 45).
         (paidA.NetAmount + paidB.NetAmount + paidA.DebtOffsetAmount + paidB.DebtOffsetAmount
-            + groupA.CommissionAmount + groupB.CommissionAmount
-            + order.ShippingCost + groupA.ShippingCostShare + groupB.ShippingCostShare)
+            + groupA.CommissionAmount + groupB.CommissionAmount - order.DiscountAmount)
             .Should().Be(order.TotalAmount);
     }
 

@@ -24,9 +24,22 @@ namespace Application.Entities
         [ForeignKey(nameof(SellerId))]
         public virtual Seller Seller { get; set; } = null!;
 
-        /// <summary>Batch 44: مبلغ اصلی بدهی هنگام ثبت (پیش‌تر ستون Amount). تغییر نمی‌کند.</summary>
+        private decimal _originalAmount;
+
+        /// <summary>
+        /// Batch 44: مبلغ اصلی بدهی هنگام ثبت (پیش‌تر ستون Amount). تغییر نمی‌کند.
+        /// Batch 45: مقداردهی آن باقی‌مانده را هم (= مبلغ اصلی − تسویه‌شده) تنظیم می‌کند؛ EF از فیلد پشتیبان می‌خواند.
+        /// </summary>
         [Column(TypeName = "decimal(18,2)")]
-        public decimal OriginalAmount { get; set; }
+        public decimal OriginalAmount
+        {
+            get => _originalAmount;
+            set
+            {
+                _originalAmount = value;
+                RemainingAmount = value - SettledAmount;
+            }
+        }
 
         /// <summary>Batch 44: جمع مبالغی که تاکنون از تسویه‌های فروشنده بابت این بدهی کسر شده است.</summary>
         [Column(TypeName = "decimal(18,2)")]
@@ -35,9 +48,12 @@ namespace Application.Entities
         /// <summary>Batch 44: لحظهٔ تسویهٔ کامل بدهی (تا آن زمان null).</summary>
         public DateTime? SettledAtUtc { get; private set; }
 
-        /// <summary>باقی‌ماندهٔ بدهی = مبلغ اصلی − تسویه‌شده.</summary>
-        [NotMapped]
-        public decimal RemainingAmount => OriginalAmount - SettledAmount;
+        /// <summary>
+        /// Batch 45 (اصلاحیهٔ مالک ۲): باقی‌ماندهٔ بدهی به‌صورت ستون صریح؛ همیشه = مبلغ اصلی − تسویه‌شده.
+        /// کسر بدهی از تسویه از روی همین ستون است (نه حدس «تغییر بعد از ساخت» در مهاجرت Batch 44).
+        /// </summary>
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal RemainingAmount { get; private set; }
 
         [Required, MaxLength(500)]
         public string Reason { get; set; } = null!;
@@ -62,6 +78,7 @@ namespace Application.Entities
                 throw new ArgumentOutOfRangeException(nameof(amount), "Settlement must be positive and not exceed the remaining debt.");
 
             SettledAmount += amount;
+            RemainingAmount -= amount;
 
             if (RemainingAmount == 0)
             {

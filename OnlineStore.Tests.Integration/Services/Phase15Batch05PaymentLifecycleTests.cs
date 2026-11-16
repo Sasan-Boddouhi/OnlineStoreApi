@@ -326,21 +326,19 @@ public class Phase15Batch05PaymentLifecycleTests : ControllerIntegrationTestBase
     }
 
     [Fact]
-    public async Task FractionalRialTotal_StoredPaymentAmountEqualsTheWholeRialAmountSentToGateway()
+    public async Task FractionalRialTotal_IsRefused_AndNothingIsSentToTheGateway()
     {
-        // تخفیف درصدی تا دو رقم اعشار گرد می‌شود، پس جمع سفارش می‌تواند کسر ریال داشته باشد (مدل پول: Batch 10).
+        // Batch 45 (FIN-06، N6): پیش‌تر (نام قبلی: FractionalRialTotal_StoredPaymentAmountEqualsTheWholeRialAmountSentToGateway)
+        // کسر ریال بی‌صدا حذف و ۱٬۸۵۱ ریال برداشت می‌شد. اکنون PricingService همهٔ مبالغ را ریال کامل می‌سازد و
+        // جمع کسری فقط از دادهٔ خراب می‌آید؛ کف گرفتن به یک assertion تبدیل شده و پرداخت شروع نمی‌شود.
         var seeded = await CreateOrderAsync(sellers: 1);
         await ForceOrderTotalAsync(seeded.OrderId, 1851.75m);
 
-        var initiation = await PaymentService.InitiateAsync(seeded.OrderId, null);
-        await PaymentService.VerifyAsync(initiation.Authority!);
+        var act = () => PaymentService.InitiateAsync(seeded.OrderId, null);
 
-        var sent = Gateway.InitiateCalls.Should().ContainSingle().Which.Amount;
-        sent.Should().Be(decimal.Truncate(sent), "the gateway takes a whole number of rials");
-        sent.Should().Be(1851m);
-        Gateway.VerifyCalls.Should().ContainSingle().Which.Amount.Should().Be(sent);
-        (await DbContext.Payment.AsNoTracking().SingleAsync(p => p.PaymentId == initiation.PaymentId)).Amount
-            .Should().Be(sent, "the stored payment amount is exactly what the payer was charged");
+        (await act.Should().ThrowAsync<BusinessRuleViolationException>()).Which.Code.Should().Be("AMOUNT_NOT_WHOLE_RIAL");
+        Gateway.InitiateCalls.Should().BeEmpty();
+        (await DbContext.Payment.AsNoTracking().AnyAsync(p => p.OrderId == seeded.OrderId)).Should().BeFalse();
     }
 
     // ==================== F-06 / F-28: پرداخت باز و replay ====================

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AutoMapper;
 using Application.Common.Constants;
+using Application.Common.Helpers;
 using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
@@ -121,7 +122,7 @@ public sealed class PaymentService : IPaymentService
         if (refusal is not null)
             throw new ConflictException(refusal.Value.Message, refusal.Value.Code);
 
-        var amount = ToWholeRial(order.TotalAmount, orderId);
+        var amount = EnsureWholeRial(order.TotalAmount, orderId);
 
         if (amount <= 0)
             throw new BusinessException("مبلغ سفارش نامعتبر است.", "INVALID_PAYMENT_AMOUNT");
@@ -260,18 +261,22 @@ public sealed class PaymentService : IPaymentService
     }
 
     /// <summary>
-    /// Batch 5 (F-27): مبالغ به ریال‌اند و درگاه فقط عدد صحیح می‌گیرد. اگر جمع سفارش کسر ریال داشته باشد
-    /// (مثلاً تخفیف درصدی که تا دو رقم اعشار گرد می‌شود — مدل پول در Batch 10)، کسر حذف می‌شود؛ همان رفتار
-    /// قبلیِ (long) در درگاه، با این تفاوت که اکنون مبلغ ذخیره‌شدهٔ Payment با مبلغ برداشت‌شده یکی است.
+    /// Batch 45 (FIN-06): همهٔ مبالغ سفارش در PricingService ریال کامل‌اند، پس جمع سفارش هرگز کسر ریال ندارد.
+    /// اگر داشته باشد (دادهٔ خراب یا سفارش پیش از Batch 45) پرداخت شروع نمی‌شود؛ پیش‌تر کسر بی‌صدا حذف می‌شد
+    /// (کف) و مبلغ دریافتی تا ۰٫۹۹ ریال از جمع سفارش کمتر بود.
     /// </summary>
-    private decimal ToWholeRial(decimal orderTotal, int orderId)
+    private decimal EnsureWholeRial(decimal orderTotal, int orderId)
     {
-        var whole = decimal.Floor(orderTotal);
-        if (whole != orderTotal)
-            _logger.LogWarning(
-                "Order {OrderId} total {Total} has a fraction of a rial; payment amount is {Whole} IRR",
-                orderId, orderTotal, whole);
-        return whole;
+        if (!RialMoney.IsWhole(orderTotal))
+        {
+            _logger.LogError(
+                "Order {OrderId} total {Total} has a fraction of a rial; payment refused (pricing invariant)",
+                orderId, orderTotal);
+            throw new BusinessRuleViolationException(
+                "مبلغ این سفارش ریال کامل نیست و قابل پرداخت نیست؛ با پشتیبانی تماس بگیرید.", RialMoney.NotWholeErrorCode);
+        }
+
+        return orderTotal;
     }
 
     // ==================== Verify ====================

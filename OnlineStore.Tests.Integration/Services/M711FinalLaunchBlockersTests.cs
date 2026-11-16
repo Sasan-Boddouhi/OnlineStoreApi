@@ -425,24 +425,26 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
     [Fact]
     public async Task Checkout_WithCouponAndShippingMethod_AppliesDiscountAndShippingCost()
     {
-        var (seller, _, _, listing) = await SetupListingWithStockAsync(price: 1000m, stock: 10m);
+        // Batch 45 (N7): amounts ×1000. The coupon may not push the payable below the gateway minimum
+        // (PaymentGateway:MinimumAmountRial = 10,000 IRR), so the old 1,000-rial order now gets no discount at all.
+        var (seller, _, _, listing) = await SetupListingWithStockAsync(price: 1_000_000m, stock: 10m);
 
-        // Create active coupon (10% off, max 200, min order 500)
+        // Create active coupon (10% off, max 200,000, min order 500,000)
         var coupon = await CouponService.CreateAsync(new CreateCouponDto
         {
             Code = $"OFF10-{Guid.NewGuid():N}",
             DiscountPercentage = 10m,
-            MinOrderAmount = 500m,
-            MaxDiscountAmount = 200m,
+            MinOrderAmount = 500_000m,
+            MaxDiscountAmount = 200_000m,
             IsActive = true
         });
 
-        // Create active shipping method (BaseCost = 50)
+        // Create active shipping method (BaseCost = 50,000 per parcel; one seller = one parcel)
         var shipping = await ShippingMethodService.CreateAsync(new CreateShippingMethodDto
         {
             Name = "Express Delivery",
             Slug = $"express-{Guid.NewGuid():N}",
-            BaseCost = 50m,
+            BaseCost = 50_000m,
             CostPerKg = 0m,
             EstimatedDays = 2,
             IsActive = true
@@ -478,18 +480,18 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
             ShippingMethodId = shipping.ShippingMethodId
         });
 
-        // Items total = 1000. Discount = 10% of 1000 = 100. Shipping = 50. Total = 1000 - 100 + 50 = 950.
+        // Items total = 1,000,000. Discount = 10% = 100,000. Shipping = 50,000. Total = 950,000.
         order.Should().NotBeNull();
-        order.DiscountAmount.Should().Be(100m);
-        order.ShippingCost.Should().Be(50m);
-        order.TotalAmount.Should().Be(950m);
+        order.DiscountAmount.Should().Be(100_000m);
+        order.ShippingCost.Should().Be(50_000m);
+        order.TotalAmount.Should().Be(950_000m);
 
         var savedOrder = await DbContext.Order.FirstAsync(o => o.OrderId == order.OrderId);
         savedOrder.CouponId.Should().Be(coupon.CouponId);
         savedOrder.ShippingMethodId.Should().Be(shipping.ShippingMethodId);
-        savedOrder.DiscountAmount.Should().Be(100m);
-        savedOrder.ShippingCost.Should().Be(50m);
-        savedOrder.TotalAmount.Should().Be(950m);
+        savedOrder.DiscountAmount.Should().Be(100_000m);
+        savedOrder.ShippingCost.Should().Be(50_000m);
+        savedOrder.TotalAmount.Should().Be(950_000m);
     }
 
     // 9. Cities by Province Endpoint

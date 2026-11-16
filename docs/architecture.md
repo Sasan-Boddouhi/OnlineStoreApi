@@ -378,6 +378,30 @@ Idempotency is enforced at three levels: a filtered unique index on
 `IdempotencyKey`, a service-level replay check, and a race handler that re-reads
 the winner after `DbUpdateException`.
 
+#### Money model (Batch 45)
+
+`IPricingService` (`PricingService`, pure, no database) is the only place that
+prices an order; checkout calls it and writes the result to `Order` and each
+`OrderSellerGroup`. All amounts are whole Rial (`RialMoney`: half away from
+zero; the remainder of a split goes to the last group by seller id).
+
+- Shipping is per parcel: each seller group pays the method's `BaseCost`
+  (`OrderSellerGroup.ShippingAmount`) and that amount is **credited** to the
+  seller who ships it.
+- A platform-funded coupon (`Coupon.FundedBy = Platform`, the default) is the
+  platform's cost (`PlatformDiscountShare`); it is never deducted from the
+  seller, and commission is taken on the item price before the coupon.
+- The coupon is capped so the payable total stays at or above
+  `PaymentGatewaySettings:MinimumAmountRial`.
+- Seller payable = sub-total − seller-funded discount − commission + shipping.
+- Invariant: `Σ seller payable + Σ commission − platform coupon cost = amount paid`.
+
+`PaymentService` refuses (409 `AMOUNT_NOT_WHOLE_RIAL`) an order total with a
+fraction of a Rial instead of flooring it. Seller debts keep an explicit
+`RemainingAmount`; payout netting reads it. Groups priced before Batch 45 keep
+their stored `SellerPayable`. Parcel- or item-level reversal and partial refunds
+are not part of this model yet (Batch 64).
+
 ### 12.4 Denormalized rating cache
 
 `Product` and `Seller` carry `AverageRating` and `ReviewCount`. They are **cache,
