@@ -187,7 +187,7 @@ public sealed class OrderService : IOrderService
 
         var customer = await _unitOfWork.Repository<Customer>().GetByIdAsync(customerId, cancellationToken);
         if (customer == null)
-            throw new BusinessException("مشتری یافت نشد.", "CUSTOMER_NOT_FOUND");
+            throw new NotFoundException("مشتری یافت نشد.", "CUSTOMER_NOT_FOUND");
 
         var order = new Order
         {
@@ -233,7 +233,7 @@ public sealed class OrderService : IOrderService
                 cancellationToken);
 
         if (listing == null)
-            throw new BusinessException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
+            throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
         var product = listing.Variant != null && listing.Variant.ProductId > 0
             ? await _unitOfWork.Repository<Product>().GetByIdAsync(listing.Variant.ProductId, cancellationToken)
@@ -336,7 +336,7 @@ public sealed class OrderService : IOrderService
         foreach (var itemDto in itemsList)
         {
             if (!listings.TryGetValue(itemDto.ListingId, out var listing))
-                throw new BusinessException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
+                throw new NotFoundException("پیشنهاد فروش یافت نشد.", "LISTING_NOT_FOUND");
 
             var product = (listing.Variant != null && listing.Variant.ProductId > 0 && products.TryGetValue(listing.Variant.ProductId, out var prod))
                 ? prod
@@ -425,7 +425,7 @@ public sealed class OrderService : IOrderService
 
         var item = order.OrderItems.FirstOrDefault(i => i.OrderItemId == orderItemId);
         if (item == null)
-            throw new BusinessException("آیتم مورد نظر در سفارش یافت نشد.", "ORDER_ITEM_NOT_FOUND");
+            throw new NotFoundException("آیتم مورد نظر در سفارش یافت نشد.", "ORDER_ITEM_NOT_FOUND");
 
         await _inventoryService.ReleaseAsync(item.ListingId, item.Quantity, cancellationToken);
 

@@ -42,6 +42,24 @@
     "type": "urn:onlinestore:error:not-found"
   },
   {
+    "code": "PAYOUT_NET_CHANGED",
+    "status": 409,
+    "message": "مبلغ خالص تسویه تغییر کرده است؛ فهرست را تازه کنید.",
+    "type": "urn:onlinestore:error:payout-net-changed"
+  },
+  {
+    "code": "PAYOUT_ON_HOLD",
+    "status": 409,
+    "message": "این تسویه هنوز در دورهٔ نگه‌داشت است و قابل پرداخت نیست.",
+    "type": "urn:onlinestore:error:payout-on-hold"
+  },
+  {
+    "code": "PLATFORM_WAREHOUSE_EXISTS",
+    "status": 409,
+    "message": "انبار پلتفرم از قبل وجود دارد.",
+    "type": "urn:onlinestore:error:platform-warehouse-exists"
+  },
+  {
     "code": "RATE_LIMIT_EXCEEDED",
     "status": 429,
     "message": "تعداد درخواست‌های شما بیش از حد مجاز است.",
@@ -82,6 +100,12 @@
     "status": 415,
     "message": "نوع محتوای درخواست پشتیبانی نمی‌شود.",
     "type": "urn:onlinestore:error:unsupported-media-type"
+  },
+  {
+    "code": "USER_IS_SYSTEM",
+    "status": 409,
+    "message": "این حساب سیستمی است و قابل تغییر نیست.",
+    "type": "urn:onlinestore:error:user-is-system"
   },
   {
     "code": "VALIDATION_ERROR",

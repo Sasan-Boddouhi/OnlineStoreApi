@@ -241,7 +241,7 @@ public sealed class InventoryService : IInventoryService
                 cancellationToken);
 
         if (row is not null)
-            throw new BusinessException("موجودی برای این Listing در این انبار از قبل وجود دارد.", "INVENTORY_ALREADY_EXISTS");
+            throw new ConflictException("موجودی برای این Listing در این انبار از قبل وجود دارد.", "INVENTORY_ALREADY_EXISTS");
 
         var newRow = new Inventory(listingId, warehouseId, initialQuantity);
         await _unitOfWork.Repository<Inventory>().AddAsync(newRow, cancellationToken);
@@ -272,7 +272,7 @@ public sealed class InventoryService : IInventoryService
     private async Task EnsureCanManageListingAsync(SellerProduct listing, CancellationToken cancellationToken)
     {
         var userId = _currentUser.TryGetCurrentUserId()
-            ?? throw new ForbiddenException("برای ثبت موجودی باید وارد شوید.", "UNAUTHENTICATED");
+            ?? throw new UnauthorizedException("برای ثبت موجودی باید وارد شوید.", "UNAUTHENTICATED");
 
         var seller = await _unitOfWork.Repository<Seller>()
             .FirstOrDefaultAsync(

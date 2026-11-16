@@ -264,7 +264,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             CouponCode = coupon.Code
         });
 
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<UnprocessableEntityException>() // Batch 54 (API-06): coupon refusal is 422, not 400
             .WithMessage("*ظرفیت استفاده*");
     }
 

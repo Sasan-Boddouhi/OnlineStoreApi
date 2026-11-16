@@ -46,7 +46,7 @@ public sealed class ProductCategoryService : IProductCategoryService
             var exists = await _unitOfWork.Repository<ProductCategory>()
                 .AnyAsync(pc => pc.CategoryName == dto.Name, cancellationToken);
             if (exists)
-                throw new BusinessException("دسته‌بندی با این نام قبلاً وجود دارد.", "CATEGORY_NAME_DUPLICATE");
+                throw new ConflictException("دسته‌بندی با این نام قبلاً وجود دارد.", "CATEGORY_NAME_DUPLICATE");
 
             var entity = _mapper.Map<ProductCategory>(dto);
             await _unitOfWork.Repository<ProductCategory>().AddAsync(entity, cancellationToken);
@@ -89,7 +89,7 @@ public sealed class ProductCategoryService : IProductCategoryService
 
             var subcategoryRepo = _unitOfWork.Repository<ProductSubcategory>();
             if (subcategoryRepo != null && await subcategoryRepo.AnyAsync(sc => sc.CategoryId == id, cancellationToken))
-                throw new BusinessException("این دسته‌بندی دارای زیردسته‌بندی است و قابل حذف نیست.", "CATEGORY_HAS_SUBCATEGORIES");
+                throw new ConflictException("این دسته‌بندی دارای زیردسته‌بندی است و قابل حذف نیست.", "CATEGORY_HAS_SUBCATEGORIES");
 
             _unitOfWork.Repository<ProductCategory>().Delete(entity);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -263,7 +263,7 @@ public sealed class ProductCategoryService : IProductCategoryService
             var exists = await _unitOfWork.Repository<ProductCategory>()
                 .AnyAsync(pc => pc.CategoryName == dto.Name && pc.CategoryId != dto.ProductCategoryId, cancellationToken);
             if (exists)
-                throw new BusinessException("دسته‌بندی با این نام قبلاً وجود دارد.", "CATEGORY_NAME_DUPLICATE");
+                throw new ConflictException("دسته‌بندی با این نام قبلاً وجود دارد.", "CATEGORY_NAME_DUPLICATE");
 
             var entity = await _unitOfWork.Repository<ProductCategory>().GetByIdAsync(dto.ProductCategoryId, cancellationToken);
             if (entity == null || !entity.IsActive)

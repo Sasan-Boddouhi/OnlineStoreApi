@@ -152,7 +152,7 @@ public class Phase15Batch06CheckoutGuardTests : ControllerIntegrationTestBase
 
         var response = await PostAddToCartAsync(token, seeded.ListingId, 1);
 
-        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_ACTIVE");
+        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_AVAILABLE");
         (await CartItemCountAsync(userId)).Should().Be(0);
     }
 
@@ -165,7 +165,7 @@ public class Phase15Batch06CheckoutGuardTests : ControllerIntegrationTestBase
 
         var response = await PostAddToCartAsync(token, seeded.ListingId, 1);
 
-        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_ACTIVE");
+        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_AVAILABLE");
         (await CartItemCountAsync(userId)).Should().Be(0);
     }
 
@@ -181,7 +181,7 @@ public class Phase15Batch06CheckoutGuardTests : ControllerIntegrationTestBase
 
         var response = await CheckoutAsync(token, new { ShippingFullName = "B6 Buyer", ShippingAddress = "Tehran", ShippingPhoneNumber = "09120000000" });
 
-        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_ACTIVE");
+        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_AVAILABLE");
         (await OrderCountAsync(userId)).Should().Be(0);
     }
 
@@ -196,7 +196,7 @@ public class Phase15Batch06CheckoutGuardTests : ControllerIntegrationTestBase
 
         var response = await CheckoutAsync(token, new { ShippingFullName = "B6 Buyer", ShippingAddress = "Tehran", ShippingPhoneNumber = "09120000000" });
 
-        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_ACTIVE");
+        await AssertProblemAsync(response, HttpStatusCode.Conflict, "LISTING_NOT_AVAILABLE");
         (await OrderCountAsync(userId)).Should().Be(0);
     }
 

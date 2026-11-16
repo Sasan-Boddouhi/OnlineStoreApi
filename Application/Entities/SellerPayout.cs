@@ -117,7 +117,7 @@ namespace Application.Entities
                 throw new BusinessRuleViolationException("Only pending payouts can be marked as paid.", "PAYOUT_INVALID_STATE");
 
             if (IsOnHold(paidAtUtc))
-                throw new BusinessRuleViolationException("The payout is still inside its hold period.", "PAYOUT_ON_HOLD");
+                throw new BusinessRuleViolationException("The payout is still inside its hold period.", ErrorCodes.PayoutOnHold.Code);
 
             if (debtOffsetAmount < 0 || debtOffsetAmount > Amount)
                 throw new ArgumentOutOfRangeException(nameof(debtOffsetAmount), "Debt offset must be between zero and the payout amount.");

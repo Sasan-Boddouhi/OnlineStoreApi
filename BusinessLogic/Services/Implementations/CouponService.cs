@@ -51,7 +51,7 @@ public sealed class CouponService : ICouponService
             .AnyAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode), cancellationToken);
 
         if (exists)
-            throw new BusinessException("کد تخفیف تکراری است.", "COUPON_CODE_DUPLICATE");
+            throw new ConflictException("کد تخفیف تکراری است.", "COUPON_CODE_DUPLICATE");
 
         var entity = _mapper.Map<Coupon>(dto);
         entity.Code = normalizedCode;
@@ -72,7 +72,7 @@ public sealed class CouponService : ICouponService
             .AnyAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode && c.CouponId != id), cancellationToken);
 
         if (exists)
-            throw new BusinessException("کد تخفیف تکراری است.", "COUPON_CODE_DUPLICATE");
+            throw new ConflictException("کد تخفیف تکراری است.", "COUPON_CODE_DUPLICATE");
 
         _mapper.Map(dto, entity);
         entity.Code = normalizedCode;

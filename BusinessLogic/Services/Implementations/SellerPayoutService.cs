@@ -89,7 +89,7 @@ namespace BusinessLogic.Services.Implementations
                 if (payout.IsOnHold(now))
                     throw new ConflictException(
                         $"این تسویه هنوز در دورهٔ نگه‌داشت (پنجرهٔ مرجوعی) است و از {payout.AvailableAtUtc:yyyy-MM-dd HH:mm} (UTC) قابل پرداخت می‌شود.",
-                        "PAYOUT_ON_HOLD");
+                        ErrorCodes.PayoutOnHold.Code);
 
                 // M7.13 / Batch 44: بدهی‌های باز فروشنده (قدیمی‌ترین اول) از همین تسویه کسر می‌شود.
                 var unsettledDebts = await _unitOfWork.Repository<SellerDebt>()
@@ -120,7 +120,7 @@ namespace BusinessLogic.Services.Implementations
                 if (expectedNetAmount.HasValue && expectedNetAmount.Value != net)
                     throw new ConflictException(
                         $"مبلغ خالص این تسویه {net} است، نه {expectedNetAmount.Value}؛ بدهی‌های فروشنده تغییر کرده است. فهرست را تازه کنید.",
-                        "PAYOUT_NET_CHANGED");
+                        ErrorCodes.PayoutNetChanged.Code);
 
                 foreach (var (debt, amount) in settlements)
                 {

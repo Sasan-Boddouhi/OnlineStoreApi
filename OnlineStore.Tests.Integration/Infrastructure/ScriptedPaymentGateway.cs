@@ -25,6 +25,9 @@ public sealed class ScriptedPaymentGateway : IPaymentGateway
     private readonly List<PaymentInitiationRequest> _initiateCalls = new();
 
     /// <summary>پیش از برگرداندن نتیجهٔ Verify اجرا می‌شود (مثلاً یک Verify رقیب).</summary>
+    /// <summary>Batch 54: پاسخ شکست اجباری برای فراخوانی بعدی InitiateAsync (یک‌بار مصرف).</summary>
+    public PaymentInitiationResult? NextInitiateFailure { get; set; }
+
     public Func<string, Task>? BeforeVerifyReturns { get; set; }
 
     /// <summary>Batch 43: پیش از برگرداندن نتیجهٔ استعلام اجرا می‌شود (مثلاً تغییر هم‌زمان پرداخت).</summary>
@@ -72,6 +75,7 @@ public sealed class ScriptedPaymentGateway : IPaymentGateway
             _inquiryCalls.Clear();
             _initiateCalls.Clear();
             BeforeVerifyReturns = null;
+            NextInitiateFailure = null;
             BeforeInquiryReturns = null;
             InquiryTurnedOff = false;
         }
@@ -80,6 +84,9 @@ public sealed class ScriptedPaymentGateway : IPaymentGateway
     public Task<PaymentInitiationResult> InitiateAsync(PaymentInitiationRequest request, CancellationToken cancellationToken = default)
     {
         lock (_sync) _initiateCalls.Add(request);
+        PaymentInitiationResult? forced;
+        lock (_sync) { forced = NextInitiateFailure; NextInitiateFailure = null; }
+        if (forced is not null) return Task.FromResult(forced);
         return _inner.InitiateAsync(request, cancellationToken);
     }
 
@@ -95,6 +102,7 @@ public sealed class ScriptedPaymentGateway : IPaymentGateway
         if (hook is not null)
         {
             BeforeVerifyReturns = null;
+            NextInitiateFailure = null;
             await hook(authority);
         }
 

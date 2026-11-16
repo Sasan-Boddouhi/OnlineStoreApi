@@ -196,7 +196,7 @@ namespace BusinessLogic.Services.Implementations
                     cancellationToken);
 
             if (!purchasable)
-                throw new ConflictException(message, "LISTING_NOT_ACTIVE");
+                throw new ConflictException(message, "LISTING_NOT_AVAILABLE");
         }
 
         private async Task EnsureStockAsync(int listingId, decimal quantity, CancellationToken cancellationToken)
@@ -209,7 +209,7 @@ namespace BusinessLogic.Services.Implementations
                     cancellationToken);
 
             if (listing is null)
-                throw new ConflictException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_ACTIVE");
+                throw new ConflictException("این پیشنهاد فروش در حال حاضر فعال نیست.", "LISTING_NOT_AVAILABLE");
 
             await EnsureListingPurchasableAsync(listing, "این پیشنهاد فروش در حال حاضر فعال نیست.", cancellationToken);
 
@@ -473,7 +473,7 @@ namespace BusinessLogic.Services.Implementations
             CancellationToken cancellationToken = default)
         {
             if (!userId.HasValue)
-                throw new BusinessException(
+                throw new UnauthorizedException(
                     "برای نهایی‌کردن سفارش باید وارد حساب کاربری شوید.", "CHECKOUT_REQUIRES_LOGIN");
 
             if (string.IsNullOrWhiteSpace(dto.ShippingFullName)
@@ -534,7 +534,7 @@ namespace BusinessLogic.Services.Implementations
             foreach (var item in cart.Items.OrderBy(i => i.CartItemId))
             {
                 if (!listings.TryGetValue(item.ListingId, out var listing))
-                    throw new BusinessException(
+                    throw new NotFoundException(
                         $"پیشنهاد فروش {item.ListingId} دیگر موجود نیست.", "LISTING_NOT_FOUND");
 
                 await EnsureListingPurchasableAsync(
@@ -573,14 +573,14 @@ namespace BusinessLogic.Services.Implementations
                     .FirstOrDefaultAsync(new Spec<Coupon>().Where(c => c.Code == normalizedCode && c.IsActive).AsTracking(), cancellationToken);
 
                 if (couponEntity is null)
-                    throw new BusinessException("کد تخفیف معتبر نیست.", "INVALID_COUPON");
+                    throw new UnprocessableEntityException("کد تخفیف معتبر نیست.", "INVALID_COUPON");
 
                 if (couponEntity.ExpiresAtUtc.HasValue && couponEntity.ExpiresAtUtc.Value < DateTime.UtcNow)
-                    throw new BusinessException("کد تخفیف منقضی شده است.", "COUPON_EXPIRED");
+                    throw new UnprocessableEntityException("کد تخفیف منقضی شده است.", "COUPON_EXPIRED");
 
                 // بررسی سقف استفاده کلی کوپن (M7.12)
                 if (couponEntity.UsageLimit.HasValue && couponEntity.UsedCount >= couponEntity.UsageLimit.Value)
-                    throw new BusinessException("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.", "COUPON_LIMIT_REACHED");
+                    throw new UnprocessableEntityException("ظرفیت استفاده از این کد تخفیف به پایان رسیده است.", "COUPON_LIMIT_REACHED");
 
                 // بررسی سقف استفاده به ازای هر کاربر — به استثنای سفارش‌های لغوشده (M7.13)
                 if (couponEntity.UsageLimitPerUser.HasValue)
@@ -589,7 +589,7 @@ namespace BusinessLogic.Services.Implementations
                         .CountAsync(new Spec<Order>().Where(o => o.CustomerId == customer.CustomerId && o.CouponId == couponEntity.CouponId && o.Status != OrderStatus.Cancelled), cancellationToken);
 
                     if (userUsageCount >= couponEntity.UsageLimitPerUser.Value)
-                        throw new BusinessException("شما به سقف مجاز استفاده از این کد تخفیف رسیده‌اید.", "COUPON_LIMIT_REACHED");
+                        throw new UnprocessableEntityException("شما به سقف مجاز استفاده از این کد تخفیف رسیده‌اید.", "COUPON_LIMIT_REACHED");
                 }
 
                 var itemsTotal = cart.Items.Sum(i =>
@@ -599,7 +599,7 @@ namespace BusinessLogic.Services.Implementations
                 });
 
                 if (couponEntity.MinOrderAmount.HasValue && itemsTotal < couponEntity.MinOrderAmount.Value)
-                    throw new BusinessException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {couponEntity.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
+                    throw new UnprocessableEntityException($"حداقل مبلغ سفارش برای اعمال این کد تخفیف {couponEntity.MinOrderAmount.Value:N0} است.", "COUPON_MIN_AMOUNT_NOT_MET");
 
                 discountAmount = Math.Round(itemsTotal * (couponEntity.DiscountPercentage / 100m), 2);
                 if (couponEntity.MaxDiscountAmount.HasValue && discountAmount > couponEntity.MaxDiscountAmount.Value)

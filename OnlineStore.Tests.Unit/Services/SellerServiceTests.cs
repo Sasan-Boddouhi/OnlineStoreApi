@@ -80,7 +80,7 @@ public class SellerServiceTests
         _userRepoMock.Setup(r => r.GetByIdAsync(5, It.IsAny<CancellationToken>()))
             .ReturnsAsync((User?)null);
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.CreateAsync(new CreateSellerDto { UserId = 5, StoreName = "Shop" }));
 
         ex.Code.Should().Be("USER_NOT_FOUND");
@@ -93,7 +93,7 @@ public class SellerServiceTests
             .ReturnsAsync(NewUser(5));
         SetupSellerAny(true); // UserId یکتاست ⇒ رابطه ۱:۱
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             _service.CreateAsync(new CreateSellerDto { UserId = 5, StoreName = "Shop" }));
 
         ex.Code.Should().Be("SELLER_ALREADY_EXISTS");
@@ -106,7 +106,7 @@ public class SellerServiceTests
             .ReturnsAsync(NewUser(5));
         SetupSellerAny(false, true);
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             _service.CreateAsync(new CreateSellerDto { UserId = 5, StoreName = "Shop" }));
 
         ex.Code.Should().Be("SELLER_STORE_NAME_DUPLICATE");
@@ -119,7 +119,7 @@ public class SellerServiceTests
             .ReturnsAsync(NewUser(5));
         SetupSellerAny(false, false, true);
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             _service.CreateAsync(new CreateSellerDto { UserId = 5, StoreName = "Shop", Slug = "shop" }));
 
         ex.Code.Should().Be("SELLER_SLUG_DUPLICATE");
@@ -165,7 +165,7 @@ public class SellerServiceTests
         _sellerRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Seller { SellerId = 1, StoreName = "Shop", Status = SellerStatus.Pending });
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             _service.CreateListingAsync(new CreateSellerProductDto { SellerId = 1, VariantId = 1, Price = 10 }));
 
         ex.Code.Should().Be("SELLER_NOT_APPROVED");
@@ -181,7 +181,7 @@ public class SellerServiceTests
         _listingRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<SellerProduct, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             _service.CreateListingAsync(new CreateSellerProductDto { SellerId = 1, VariantId = 2, Price = 10 }));
 
         ex.Code.Should().Be("LISTING_ALREADY_EXISTS");
@@ -193,7 +193,7 @@ public class SellerServiceTests
         _sellerRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Seller { SellerId = 1, StoreName = "Shop", Status = SellerStatus.Approved, IsActive = true });
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.CreateListingAsync(new CreateSellerProductDto { SellerId = 1, VariantId = 777, Price = 10 }));
 
         ex.Code.Should().Be("VARIANT_NOT_FOUND");
@@ -207,7 +207,7 @@ public class SellerServiceTests
         _variantRepoMock.Setup(r => r.GetByIdAsync(3, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ProductVariant { VariantId = 3, ProductId = 2, IsActive = false });
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
             _service.CreateListingAsync(new CreateSellerProductDto { SellerId = 1, VariantId = 3, Price = 10 }));
 
         ex.Code.Should().Be("VARIANT_INACTIVE");
@@ -249,7 +249,7 @@ public class SellerServiceTests
         _warehouseRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<Warehouse, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var ex = await Assert.ThrowsAsync<BusinessException>(() => _service.DeleteAsync(1));
+        var ex = await Assert.ThrowsAsync<ConflictException>(() => _service.DeleteAsync(1));
 
         ex.Code.Should().Be("SELLER_HAS_DEPENDENCIES");
         _sellerRepoMock.Verify(r => r.Delete(It.IsAny<Seller>()), Times.Never);

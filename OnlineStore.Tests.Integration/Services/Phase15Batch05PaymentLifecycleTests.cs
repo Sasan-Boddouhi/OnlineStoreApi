@@ -220,7 +220,7 @@ public class Phase15Batch05PaymentLifecycleTests : ControllerIntegrationTestBase
 
         var act = () => PaymentService.VerifyAsync(initiation.Authority!);
 
-        (await act.Should().ThrowAsync<BusinessException>()).Which.Code.Should().Be("GATEWAY_REJECTED");
+        (await act.Should().ThrowAsync<ConflictException>()).Which.Code.Should().Be("GATEWAY_REJECTED"); // Batch 54 (API-06): definitive gateway rejection at verify is 409
         (await PaymentStateAsync(initiation.PaymentId)).Should().Be(PaymentState.Failed);
         (await OrderStatusAsync(seeded.OrderId)).Should().Be(OrderStatus.Pending);
     }

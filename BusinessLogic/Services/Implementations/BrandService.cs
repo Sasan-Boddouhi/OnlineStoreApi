@@ -43,7 +43,7 @@ public sealed class BrandService : IBrandService
             .AnyAsync(new Spec<Brand>().Where(b => b.Slug == dto.Slug), cancellationToken);
 
         if (exists)
-            throw new BusinessException("برند با این شناسه (Slug) تکراری است.", "BRAND_SLUG_DUPLICATE");
+            throw new ConflictException("برند با این شناسه (Slug) تکراری است.", "BRAND_SLUG_DUPLICATE");
 
         var entity = _mapper.Map<Brand>(dto);
         await _unitOfWork.Repository<Brand>().AddAsync(entity, cancellationToken);
@@ -62,7 +62,7 @@ public sealed class BrandService : IBrandService
             .AnyAsync(new Spec<Brand>().Where(b => b.Slug == dto.Slug && b.BrandId != id), cancellationToken);
 
         if (exists)
-            throw new BusinessException("برند با این شناسه (Slug) تکراری است.", "BRAND_SLUG_DUPLICATE");
+            throw new ConflictException("برند با این شناسه (Slug) تکراری است.", "BRAND_SLUG_DUPLICATE");
 
         _mapper.Map(dto, entity);
         _unitOfWork.Repository<Brand>().Update(entity);

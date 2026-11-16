@@ -178,7 +178,7 @@ public sealed class WarehouseService : IWarehouseService
             .AnyAsync(i => i.WarehouseId == warehouseId, cancellationToken);
 
         if (hasInventories)
-            throw new BusinessException("این انبار موجودی دارد و قابل حذف نیست.", "WAREHOUSE_HAS_INVENTORIES");
+            throw new ConflictException("این انبار موجودی دارد و قابل حذف نیست.", "WAREHOUSE_HAS_INVENTORIES");
 
         _unitOfWork.Repository<Warehouse>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -201,7 +201,7 @@ public sealed class WarehouseService : IWarehouseService
         if (exists)
             throw new ConflictException(
                 "انبار پلتفرم از قبل وجود دارد؛ فقط یک انبار پلتفرم مجاز است. انبار تازه را به یک فروشنده اختصاص دهید.",
-                "PLATFORM_WAREHOUSE_EXISTS");
+                ErrorCodes.PlatformWarehouseExists.Code);
     }
 
     /// <summary>مدیر یا مدیر ارشد، همان قاعده‌ای که ویرایش و حذف انبار از قبل داشتند.</summary>

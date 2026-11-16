@@ -144,13 +144,18 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
             _logger.LogInformation("Product subcategory created with ID: {Id}", entity.SubcategoryId);
             return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی ایجاد شده", "SUBCATEGORY_RETRIEVAL_ERROR");
+                   ?? throw new InvalidOperationException("رکورد ایجادشده پس از ذخیره قابل بازیابی نبود.");
+        }
+        catch (AppException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create product subcategory: {SubcategoryName}", dto.SubcategoryName);
-            throw new BusinessException("خطا در ایجاد زیردسته‌بندی", "SUBCATEGORY_CREATE_ERROR");
+            throw;
         }
     }
 
@@ -163,7 +168,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         _logger.LogInformation("Updating product subcategory ID: {Id}", dto.SubcategoryId);
         var entity = await _unitOfWork.Repository<ProductSubcategory>().GetByIdAsync(dto.SubcategoryId, cancellationToken);
         if (entity == null || !entity.IsActive)
-            throw new BusinessException("زیردسته‌بندی یافت نشد.", "SUBCATEGORY_NOT_FOUND");
+            throw new NotFoundException("زیردسته‌بندی یافت نشد.", "SUBCATEGORY_NOT_FOUND");
 
         _mapper.Map(dto, entity);
         _unitOfWork.Repository<ProductSubcategory>().Update(entity);
@@ -174,7 +179,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
         _logger.LogInformation("Product subcategory updated: {Id}", dto.SubcategoryId);
         return await GetByIdAsync(entity.SubcategoryId, cancellationToken)
-               ?? throw new BusinessException("خطا در بازیابی زیردسته‌بندی به‌روز شده", "SUBCATEGORY_RETRIEVAL_ERROR");
+               ?? throw new InvalidOperationException("رکورد ایجادشده پس از ذخیره قابل بازیابی نبود.");
     }
 
     #endregion
@@ -190,7 +195,7 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
 
         var productRepo = _unitOfWork.Repository<Product>();
         if (productRepo != null && await productRepo.AnyAsync(p => p.SubcategoryId == id, cancellationToken))
-            throw new BusinessException("این زیردسته‌بندی دارای محصول است و قابل حذف نیست.", "SUBCATEGORY_HAS_PRODUCTS");
+            throw new ConflictException("این زیردسته‌بندی دارای محصول است و قابل حذف نیست.", "SUBCATEGORY_HAS_PRODUCTS");
 
         _unitOfWork.Repository<ProductSubcategory>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -226,12 +231,12 @@ public sealed class ProductSubcategoryService : IProductSubcategoryService
         var exists = await _unitOfWork.Repository<ProductSubcategory>()
             .AnyAsync(ps => ps.SubcategoryName == dto.SubcategoryName, cancellationToken);
         if (exists)
-            throw new BusinessException("زیردسته‌بندی با این نام قبلاً ثبت شده است.", "SUBCATEGORY_NAME_DUPLICATE");
+            throw new ConflictException("زیردسته‌بندی با این نام قبلاً ثبت شده است.", "SUBCATEGORY_NAME_DUPLICATE");
 
         var categoryExists = await _unitOfWork.Repository<ProductCategory>()
             .AnyAsync(pc => pc.CategoryId == dto.CategoryId, cancellationToken);
         if (!categoryExists)
-            throw new BusinessException("دسته‌بندی والد وجود ندارد.", "PARENT_CATEGORY_NOT_FOUND");
+            throw new NotFoundException("دسته‌بندی والد وجود ندارد.", "PARENT_CATEGORY_NOT_FOUND");
     }
 
     #endregion

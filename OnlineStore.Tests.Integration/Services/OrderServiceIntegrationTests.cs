@@ -260,7 +260,7 @@ public class OrderServiceIntegrationTests : BaseIntegrationTest
             .Awaiting(() => OrderService.AddItemToOrderAsync(
                 orderDto.OrderId,
                 new AddOrderItemDto { ListingId = 999_999, Quantity = 1 }))
-            .Should().ThrowAsync<Application.Exceptions.BusinessException>();
+            .Should().ThrowAsync<Application.Exceptions.NotFoundException>(); // Batch 54 (API-06): unknown listing is 404
 
         ex.And.Code.Should().Be("LISTING_NOT_FOUND");
     }

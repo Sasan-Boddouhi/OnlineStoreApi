@@ -324,7 +324,7 @@ public sealed class ProductService : IProductService
             activity?.SetStatus(ActivityStatusCode.Ok);
             return _mapper.Map<ProductDto>(entity);
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             // اگر خطای تجاری است، فقط rollback و دوباره پرتاب کن (بدون تغییر پیام)
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
@@ -336,7 +336,7 @@ public sealed class ProductService : IProductService
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error creating product: {ProductName}", dto.Name);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw new BusinessException("خطا در ایجاد محصول", "PRODUCT_CREATE_ERROR");
+            throw;
         }
     }
 
@@ -360,7 +360,7 @@ public sealed class ProductService : IProductService
                 var exists = await _unitOfWork.Repository<Product>()
                     .AnyAsync(x => x.Name == dto.Name && x.ProductId != dto.ProductId, cancellationToken);
                 if (exists)
-                    throw new BusinessException("محصولی با این نام قبلاً ثبت شده است", "PRODUCT_NAME_DUPLICATE");
+                    throw new ConflictException("محصولی با این نام قبلاً ثبت شده است", "PRODUCT_NAME_DUPLICATE");
             }
 
             // Batch 49 (F-30): فقط برند تازه بررسی می‌شود؛ ذخیرهٔ دوبارهٔ محصولی که برندش بعداً
@@ -461,7 +461,7 @@ public sealed class ProductService : IProductService
             _logger.LogInformation("Product soft deleted successfully: {ProductId}", id);
             return true;
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -494,12 +494,12 @@ public sealed class ProductService : IProductService
         var subcategoryExists = await _unitOfWork.Repository<ProductSubcategory>()
             .AnyAsync(x => x.SubcategoryId == dto.SubcategoryId, cancellationToken);
         if (!subcategoryExists)
-            throw new BusinessException("زیردسته‌بندی انتخاب‌شده وجود ندارد.", "SUBCATEGORY_NOT_FOUND");
+            throw new NotFoundException("زیردسته‌بندی انتخاب‌شده وجود ندارد.", "SUBCATEGORY_NOT_FOUND");
 
         var duplicateName = await _unitOfWork.Repository<Product>()
             .AnyAsync(x => x.Name == dto.Name, cancellationToken);
         if (duplicateName)
-            throw new BusinessException("محصولی با این نام قبلاً ثبت شده است.", "PRODUCT_NAME_DUPLICATE");
+            throw new ConflictException("محصولی با این نام قبلاً ثبت شده است.", "PRODUCT_NAME_DUPLICATE");
     }
 
     /// <summary>
@@ -533,7 +533,7 @@ public sealed class ProductService : IProductService
             var duplicateSku = await _unitOfWork.Repository<ProductVariant>()
                 .AnyAsync(v => v.Sku == sku, cancellationToken);
             if (duplicateSku)
-                throw new BusinessException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
+                throw new ConflictException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
         }
 
         // ویژگی‌ها باید متعلق به همین محصول باشند، وگرنه واریانت به ویژگی محصول دیگری وصل می‌شود.
@@ -618,7 +618,7 @@ public sealed class ProductService : IProductService
         var duplicate = await _unitOfWork.Repository<ProductAttribute>()
             .AnyAsync(a => a.ProductId == dto.ProductId && a.Name == name, cancellationToken);
         if (duplicate)
-            throw new BusinessException("این ویژگی برای محصول ثبت شده است.", "ATTRIBUTE_ALREADY_EXISTS");
+            throw new ConflictException("این ویژگی برای محصول ثبت شده است.", "ATTRIBUTE_ALREADY_EXISTS");
 
         var attribute = new ProductAttribute
         {
@@ -680,7 +680,7 @@ public sealed class ProductService : IProductService
                 var duplicateSku = await _unitOfWork.Repository<ProductVariant>()
                     .AnyAsync(v => v.Sku == sku && v.VariantId != variantId, cancellationToken);
                 if (duplicateSku)
-                    throw new BusinessException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
+                    throw new ConflictException("این SKU قبلاً استفاده شده است.", "SKU_ALREADY_EXISTS");
             }
 
             // Validate attributes belong to the same product
@@ -760,7 +760,7 @@ public sealed class ProductService : IProductService
 
             return await BuildVariantDtoAsync(variant, cancellationToken);
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -769,8 +769,7 @@ public sealed class ProductService : IProductService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error updating variant: {VariantId}", variantId);
-            var msg = ex.InnerException?.Message ?? ex.Message;
-            throw new BusinessException($"خطا در ویرایش واریانت: {msg}", "VARIANT_UPDATE_ERROR");
+            throw;
         }
     }
 
@@ -793,7 +792,7 @@ public sealed class ProductService : IProductService
             {
                 _logger.LogWarning("Cannot delete variant {VariantId} - has active listings", variantId);
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                throw new BusinessException(
+                throw new ConflictException(
                     "این واریانت پیشنهاد فروش فعال دارد و قابل حذف نیست. ابتدا پیشنهادهای فروش را غیرفعال کنید.",
                     "VARIANT_HAS_ACTIVE_LISTINGS");
             }
@@ -813,7 +812,7 @@ public sealed class ProductService : IProductService
                 {
                     _logger.LogWarning("Cannot delete variant {VariantId} - has order items", variantId);
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    throw new BusinessException(
+                    throw new ConflictException(
                         "این واریант دارای سفارش ثبت‌شده است و قابل حذف نیست.",
                         "VARIANT_HAS_ORDERS");
                 }
@@ -837,7 +836,7 @@ public sealed class ProductService : IProductService
 
             return true;
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -846,7 +845,7 @@ public sealed class ProductService : IProductService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Error deleting variant: {VariantId}", variantId);
-            throw new BusinessException("خطا در حذف واریانت", "VARIANT_DELETE_ERROR");
+            throw;
         }
     }
 

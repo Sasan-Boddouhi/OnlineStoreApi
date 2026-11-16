@@ -53,25 +53,25 @@ public sealed class SellerService : ISellerService
 
         var user = await _unitOfWork.Repository<User>().GetByIdAsync(dto.UserId, cancellationToken);
         if (user == null)
-            throw new BusinessException("کاربر یافت نشد.", "USER_NOT_FOUND");
+            throw new NotFoundException("کاربر یافت نشد.", "USER_NOT_FOUND");
 
         // UserId یکتاست ⇒ رابطه ۱:۱ (Design Spec §۵.۱)
         var alreadySeller = await _unitOfWork.Repository<Seller>()
             .AnyAsync(s => s.UserId == dto.UserId, cancellationToken);
         if (alreadySeller)
-            throw new BusinessException("این کاربر از قبل یک فروشگاه دارد.", "SELLER_ALREADY_EXISTS");
+            throw new ConflictException("این کاربر از قبل یک فروشگاه دارد.", "SELLER_ALREADY_EXISTS");
 
         var nameTaken = await _unitOfWork.Repository<Seller>()
             .AnyAsync(s => s.StoreName == dto.StoreName, cancellationToken);
         if (nameTaken)
-            throw new BusinessException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
+            throw new ConflictException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
 
         if (!string.IsNullOrWhiteSpace(dto.Slug))
         {
             var slugTaken = await _unitOfWork.Repository<Seller>()
                 .AnyAsync(s => s.Slug == dto.Slug, cancellationToken);
             if (slugTaken)
-                throw new BusinessException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
+                throw new ConflictException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
         }
 
         var entity = _mapper.Map<Seller>(dto);
@@ -141,14 +141,14 @@ public sealed class SellerService : ISellerService
         var nameTaken = await _unitOfWork.Repository<Seller>()
             .AnyAsync(s => s.StoreName == dto.StoreName && s.SellerId != sellerId, cancellationToken);
         if (nameTaken)
-            throw new BusinessException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
+            throw new ConflictException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
 
         if (!string.IsNullOrWhiteSpace(dto.Slug))
         {
             var slugTaken = await _unitOfWork.Repository<Seller>()
                 .AnyAsync(s => s.Slug == dto.Slug && s.SellerId != sellerId, cancellationToken);
             if (slugTaken)
-                throw new BusinessException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
+                throw new ConflictException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
         }
 
         _mapper.Map(dto, entity);
@@ -170,14 +170,14 @@ public sealed class SellerService : ISellerService
         var nameTaken = await _unitOfWork.Repository<Seller>()
             .AnyAsync(s => s.StoreName == dto.StoreName && s.SellerId != sellerId, cancellationToken);
         if (nameTaken)
-            throw new BusinessException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
+            throw new ConflictException("نام فروشگاه تکراری است.", "SELLER_STORE_NAME_DUPLICATE");
 
         if (!string.IsNullOrWhiteSpace(dto.Slug))
         {
             var slugTaken = await _unitOfWork.Repository<Seller>()
                 .AnyAsync(s => s.Slug == dto.Slug && s.SellerId != sellerId, cancellationToken);
             if (slugTaken)
-                throw new BusinessException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
+                throw new ConflictException("شناسه URL فروشگاه تکراری است.", "SELLER_SLUG_DUPLICATE");
         }
 
         _mapper.Map(dto, entity);
@@ -215,7 +215,7 @@ public sealed class SellerService : ISellerService
             .AnyAsync(w => w.SellerId == sellerId, cancellationToken);
 
         if (hasListings || hasWarehouses)
-            throw new BusinessException(
+            throw new ConflictException(
                 "این فروشنده پیشنهاد فروش یا انبار دارد و قابل حذف نیست؛ ابتدا آن‌ها را غیرفعال کنید.",
                 "SELLER_HAS_DEPENDENCIES");
 
@@ -244,7 +244,7 @@ public sealed class SellerService : ISellerService
             if (!isAdmin)
             {
                 if (!userId.HasValue)
-                    throw new ForbiddenException("کاربر احراز هویت نشده است.", "UNAUTHENTICATED");
+                    throw new UnauthorizedException("کاربر احراز هویت نشده است.", "UNAUTHENTICATED");
 
                 var currentSeller = await _unitOfWork.Repository<Seller>()
                     .FirstOrDefaultAsync(new Spec<Seller>().Where(s => s.UserId == userId.Value), cancellationToken);
@@ -264,20 +264,20 @@ public sealed class SellerService : ISellerService
             throw new NotFoundException("فروشنده یافت نشد.", "SELLER_NOT_FOUND");
 
         if (seller.Status != SellerStatus.Approved || !seller.IsActive)
-            throw new BusinessException("فروشنده تأیید نشده است و نمی‌تواند پیشنهاد فروش بسازد.", "SELLER_NOT_APPROVED");
+            throw new ConflictException("فروشنده تأیید نشده است و نمی‌تواند پیشنهاد فروش بسازد.", "SELLER_NOT_APPROVED");
 
         // Phase 6: پیشنهاد فروش روی یک واریانت مشخص ساخته می‌شود، نه روی محصول کلی.
         var variant = await _unitOfWork.Repository<ProductVariant>().GetByIdAsync(dto.VariantId, cancellationToken);
         if (variant == null)
-            throw new BusinessException("واریانت محصول یافت نشد.", "VARIANT_NOT_FOUND");
+            throw new NotFoundException("واریانت محصول یافت نشد.", "VARIANT_NOT_FOUND");
 
         if (!variant.IsActive)
-            throw new BusinessException("این واریانت غیرفعال است و قابل عرضه نیست.", "VARIANT_INACTIVE");
+            throw new ConflictException("این واریانت غیرفعال است و قابل عرضه نیست.", "VARIANT_INACTIVE");
 
         var duplicate = await _unitOfWork.Repository<SellerProduct>()
             .AnyAsync(l => l.SellerId == dto.SellerId && l.VariantId == dto.VariantId, cancellationToken);
         if (duplicate)
-            throw new BusinessException(
+            throw new ConflictException(
                 "این فروشنده از قبل برای این واریانت پیشنهاد فروش دارد.", "LISTING_ALREADY_EXISTS");
 
         var entity = _mapper.Map<SellerProduct>(dto);
@@ -377,7 +377,7 @@ public sealed class SellerService : ISellerService
 
             // Check ownership
             if (listing.SellerId != sellerId)
-                throw new BusinessException("شما مجاز به حذف این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
+                throw new ForbiddenException("شما مجاز به حذف این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
 
             // Check for active orders (OrderItem referencing this listing)
             var hasActiveOrders = await _unitOfWork.Repository<OrderItem>()
@@ -402,7 +402,7 @@ public sealed class SellerService : ISellerService
 
             return true;
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -411,7 +411,7 @@ public sealed class SellerService : ISellerService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to delete listing {ListingId} for seller {SellerId}", listingId, sellerId);
-            throw new BusinessException("خطا در حذف پیشنهاد فروش", "LISTING_DELETE_ERROR");
+            throw;
         }
     }
 
@@ -431,7 +431,7 @@ public sealed class SellerService : ISellerService
 
             // Check ownership
             if (listing.SellerId != sellerId)
-                throw new BusinessException("شما مجاز به تغییر قیمت این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
+                throw new ForbiddenException("شما مجاز به تغییر قیمت این پیشنهاد فروش نیستید.", "LISTING_FORBIDDEN");
 
             listing.Price = newPrice;
             _unitOfWork.Repository<SellerProduct>().Update(listing);
@@ -447,7 +447,7 @@ public sealed class SellerService : ISellerService
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw new ConflictException("تغییرات هم‌زمان رخ داده است. لطفاً دوباره تلاش کنید.", "CONCURRENCY_CONFLICT");
         }
-        catch (BusinessException)
+        catch (AppException)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
@@ -456,7 +456,7 @@ public sealed class SellerService : ISellerService
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to update price for listing {ListingId} for seller {SellerId}", listingId, sellerId);
-            throw new BusinessException("خطا در تغییر قیمت پیشنهاد فروش", "LISTING_PRICE_UPDATE_ERROR");
+            throw;
         }
     }
 

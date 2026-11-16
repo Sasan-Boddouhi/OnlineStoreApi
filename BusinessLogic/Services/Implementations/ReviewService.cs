@@ -74,7 +74,7 @@ namespace BusinessLogic.Services.Implementations
                 cancellationToken);
 
             if (alreadyReviewed)
-                throw new BusinessException("برای این محصول قبلاً نظر ثبت کرده‌اید.", "REVIEW_ALREADY_EXISTS");
+                throw new ConflictException("برای این محصول قبلاً نظر ثبت کرده‌اید.", "REVIEW_ALREADY_EXISTS");
 
             var review = new ProductReview
             {
@@ -156,7 +156,7 @@ namespace BusinessLogic.Services.Implementations
                 cancellationToken);
 
             if (alreadyReviewed)
-                throw new BusinessException("برای این فروشنده قبلاً نظر ثبت کرده‌اید.", "REVIEW_ALREADY_EXISTS");
+                throw new ConflictException("برای این فروشنده قبلاً نظر ثبت کرده‌اید.", "REVIEW_ALREADY_EXISTS");
 
             var review = new SellerReview
             {
@@ -367,7 +367,7 @@ namespace BusinessLogic.Services.Implementations
                     cancellationToken);
 
             if (customer is null)
-                throw new BusinessException("پروفایل مشتری یافت نشد.", "CUSTOMER_NOT_FOUND");
+                throw new NotFoundException("پروفایل مشتری یافت نشد.", "CUSTOMER_NOT_FOUND");
 
             return customer;
         }

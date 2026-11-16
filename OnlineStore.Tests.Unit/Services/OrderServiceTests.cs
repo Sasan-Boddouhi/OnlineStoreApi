@@ -147,7 +147,7 @@ public class OrderServiceTests
     public async Task CreateEmptyOrderAsync_CustomerNotFound_ThrowsBusinessException()
     {
         _customerRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync((Customer?)null);
-        await Assert.ThrowsAsync<BusinessException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.CreateEmptyOrderAsync(1, "Ali", "Addr", "09121111111"));
     }
 
@@ -271,7 +271,7 @@ public class OrderServiceTests
         SetupOwnedCustomer();
         _orderRepoMock.Setup(r => r.FirstOrDefaultAsync(It.IsAny<Spec<Order>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(order);
-        await Assert.ThrowsAsync<BusinessException>(() =>
+        await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.RemoveItemFromOrderAsync(1, 999));
     }
 

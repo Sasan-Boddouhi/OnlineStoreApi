@@ -116,7 +116,7 @@ public class Phase8PaymentTests : BaseIntegrationTest
 
         var act = () => PaymentService.InitiateAsync(secondOrder.OrderId, key);
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 54 (API-06): reused idempotency key is 409
         ex.And.Code.Should().Be("IDEMPOTENCY_KEY_REUSED");
     }
 
@@ -173,7 +173,7 @@ public class Phase8PaymentTests : BaseIntegrationTest
 
         var failAct = () => PaymentService.VerifyAsync(failedAuthority);
 
-        var ex = await failAct.Should().ThrowAsync<BusinessException>();
+        var ex = await failAct.Should().ThrowAsync<ConflictException>(); // Batch 54 (API-06): gateway rejection at verify is 409
         ex.And.Code.Should().Be("GATEWAY_FAILED");
 
         var reloadedPayment = await DbContext.Payment.AsNoTracking()

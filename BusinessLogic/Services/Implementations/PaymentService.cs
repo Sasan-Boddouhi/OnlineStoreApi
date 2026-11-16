@@ -27,6 +27,12 @@ namespace BusinessLogic.Services.Implementations;
 /// </summary>
 public sealed class PaymentService : IPaymentService
 {
+    /// <summary>کدهای شکست درگاه هنگام شروع پرداخت که به‌معنای قطع یا ناپایداری درگاه‌اند (503، نه 400).</summary>
+    private static readonly HashSet<string> GatewayOutageCodes = new(StringComparer.Ordinal)
+    {
+        "GATEWAY_ERROR", "GATEWAY_UNAVAILABLE", "GATEWAY_TIMEOUT", "GATEWAY_BAD_RESPONSE", "GATEWAY_DISABLED", "GATEWAY_NOT_CONFIGURED"
+    };
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly IPaymentGateway _gateway;
@@ -99,7 +105,7 @@ public sealed class PaymentService : IPaymentService
             {
                 // همان کلید، همان سفارش ⇒ replay بی‌خطر.
                 if (existing.OrderId != orderId)
-                    throw new BusinessException(
+                    throw new ConflictException(
                         "این IdempotencyKey قبلاً برای سفارش دیگری استفاده شده است.",
                         "IDEMPOTENCY_KEY_REUSED");
 
@@ -150,9 +156,14 @@ public sealed class PaymentService : IPaymentService
                 "Gateway initiation failed for order {OrderId}: {Code}", orderId, initiation.ErrorCode);
 
             // هیچ رکورد Pending ساخته نمی‌شود: پرداختی که هرگز شروع نشده، نباید وجود داشته باشد.
-            throw new BusinessException(
-                initiation.ErrorMessage ?? "شروع پرداخت ناموفق بود.",
-                initiation.ErrorCode ?? "PAYMENT_INITIATION_FAILED");
+            // Batch 54 (API-06): قطع یا ناپایداری درگاه 503 با Retry-After است؛ مبلغ نامعتبر 422؛ ردّ صریح درگاه همان 400 می‌ماند.
+            var failureCode = initiation.ErrorCode ?? "PAYMENT_INITIATION_FAILED";
+            var failureMessage = initiation.ErrorMessage ?? "شروع پرداخت ناموفق بود.";
+            if (GatewayOutageCodes.Contains(failureCode))
+                throw new ServiceUnavailableException(failureMessage, failureCode, _settings.VerifyRetryAfterSeconds);
+            if (failureCode == "INVALID_AMOUNT")
+                throw new UnprocessableEntityException(failureMessage, failureCode);
+            throw new BusinessException(failureMessage, failureCode);
         }
 
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -538,7 +549,7 @@ public sealed class PaymentService : IPaymentService
 
         // عمداً موجودی آزاد نمی‌شود: کاربر باید بتواند دوباره تلاش کند.
         // آزادسازی رزرو فقط با لغو صریح سفارش انجام می‌شود.
-        throw new BusinessException(
+        throw new ConflictException(
             verification.ErrorMessage ?? "پرداخت تأیید نشد.",
             verification.ErrorCode ?? "PAYMENT_VERIFICATION_FAILED");
     }

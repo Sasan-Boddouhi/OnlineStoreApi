@@ -137,9 +137,8 @@ public class UsersController : ControllerBase
 
         if (created is null)
         {
-            throw new BusinessException(
-                "خطا در ایجاد کاربر",
-                "USER_CREATION_FAILED");
+            // Batch 54 (BE-01): کاربر تازه‌ساخته باید خوانده شود؛ نشدنش خطای داخلی است (500) نه 400.
+            throw new InvalidOperationException("کاربر ایجادشده پس از ذخیره قابل بازیابی نبود.");
         }
 
         return CreatedAtAction(

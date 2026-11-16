@@ -473,7 +473,7 @@ public sealed class UserService : IUserService
             _currentUserService.GetCurrentUserId(), user.UserId);
         throw new ConflictException(
             "این حساب سیستمی است و قابل فعال‌سازی، ویرایش، حذف یا نقش‌دهی نیست.",
-            "USER_IS_SYSTEM");
+            ErrorCodes.UserIsSystem.Code);
     }
 
     #region GetRolesAsync
@@ -508,7 +508,7 @@ public sealed class UserService : IUserService
         {
             _logger.LogWarning("User {UserId} attempted to assign empty role list to user {TargetUserId}",
                 _currentUserService.GetCurrentUserId(), userId);
-            throw new BusinessException(
+            throw new ConflictException(
                 "USER_MUST_HAVE_AT_LEAST_ONE_ROLE",
                 "USER_MUST_HAVE_AT_LEAST_ONE_ROLE");
         }
@@ -526,7 +526,7 @@ public sealed class UserService : IUserService
         if (superAdminRole is null)
         {
             _logger.LogError("SuperAdmin role not found in the database; cannot evaluate privilege escalation guard");
-            throw new BusinessException("SUPERADMIN_ROLE_NOT_FOUND", "SUPERADMIN_ROLE_NOT_FOUND");
+            throw new NotFoundException("SUPERADMIN_ROLE_NOT_FOUND", "SUPERADMIN_ROLE_NOT_FOUND");
         }
 
         var currentUserId = _currentUserService.GetCurrentUserId();
@@ -553,7 +553,7 @@ public sealed class UserService : IUserService
         if (currentUserId == userId && isCurrentUserSuperAdmin && !roleIds.Contains(superAdminRole.RoleId))
         {
             _logger.LogWarning("User {UserId} attempted to remove their own SuperAdmin role", userId);
-            throw new BusinessException("CANNOT_REVOKE_OWN_SUPERADMIN", "CANNOT_REVOKE_OWN_SUPERADMIN");
+            throw new ConflictException("CANNOT_REVOKE_OWN_SUPERADMIN", "CANNOT_REVOKE_OWN_SUPERADMIN");
         }
 
         // Batch 11 (F-22): نقش‌های یک مدیر ارشد را فقط مدیر ارشد تغییر می‌دهد و آخرین مدیر ارشد فعال تنزل نمی‌یابد.
@@ -592,7 +592,7 @@ public sealed class UserService : IUserService
                 : (IReadOnlyList<Role>)Array.Empty<Role>();
 
             if (newRoleEntities.Count != distinctRoleIds.Count)
-                throw new BusinessException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND");
+                throw new NotFoundException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND");
 
             var newRoleCodes = new List<string>();
             foreach (var role in newRoleEntities)

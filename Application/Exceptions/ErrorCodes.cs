@@ -26,13 +26,18 @@ public static class ErrorCodes
     public static readonly ErrorCodeInfo DuplicateRecord = new("DUPLICATE_RECORD", StatusCodes.Status409Conflict, "رکوردی با همین مشخصات قبلاً ثبت شده است.");
     public static readonly ErrorCodeInfo RateLimitExceeded = new("RATE_LIMIT_EXCEEDED", StatusCodes.Status429TooManyRequests, "تعداد درخواست‌های شما بیش از حد مجاز است.");
     public static readonly ErrorCodeInfo InternalError = new("INTERNAL_ERROR", StatusCodes.Status500InternalServerError, "خطای غیرمنتظره‌ای رخ داد. لطفاً بعداً دوباره تلاش کنید.");
+    public static readonly ErrorCodeInfo PayoutOnHold = new("PAYOUT_ON_HOLD", StatusCodes.Status409Conflict, "این تسویه هنوز در دورهٔ نگه‌داشت است و قابل پرداخت نیست.");
+    public static readonly ErrorCodeInfo PayoutNetChanged = new("PAYOUT_NET_CHANGED", StatusCodes.Status409Conflict, "مبلغ خالص تسویه تغییر کرده است؛ فهرست را تازه کنید.");
+    public static readonly ErrorCodeInfo UserIsSystem = new("USER_IS_SYSTEM", StatusCodes.Status409Conflict, "این حساب سیستمی است و قابل تغییر نیست.");
+    public static readonly ErrorCodeInfo PlatformWarehouseExists = new("PLATFORM_WAREHOUSE_EXISTS", StatusCodes.Status409Conflict, "انبار پلتفرم از قبل وجود دارد.");
 
     /// <summary>همهٔ ورودی‌های ثبت‌شده؛ منبع تولید <c>openapi/error-codes.json</c>.</summary>
     public static IReadOnlyList<ErrorCodeInfo> All { get; } = new[]
     {
         Unauthenticated, TokenExpired, TokenInvalid, SessionRevoked, Forbidden, NotFound, RouteNotFound,
         MethodNotAllowed, UnsupportedMediaType, InvalidQuery, ValidationError, ConcurrencyConflict,
-        DuplicateRecord, RateLimitExceeded, InternalError
+        DuplicateRecord, RateLimitExceeded, InternalError,
+        PayoutOnHold, PayoutNetChanged, UserIsSystem, PlatformWarehouseExists
     };
 
     /// <summary>کد پیش‌فرض یک وضعیت HTTP برای پاسخ‌های بدون کد صریح (MVC)؛ فقط وضعیت‌هایی که دقیقاً یک ورودی عمومی دارند.</summary>

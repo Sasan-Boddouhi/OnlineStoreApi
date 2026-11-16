@@ -51,6 +51,17 @@ public class ErrorCodeRegistryTests
         ex.Message.Should().Be(ErrorCodes.Forbidden.Message);
     }
 
+    [Theory]
+    [InlineData("PAYOUT_NET_CHANGED")]
+    [InlineData("USER_IS_SYSTEM")]
+    [InlineData("PLATFORM_WAREHOUSE_EXISTS")]
+    [InlineData("PAYOUT_ON_HOLD")]
+    public void ServiceConflictCodes_AreRegisteredAs409(string code)
+    {
+        ErrorCodes.Find(code).Should().NotBeNull();
+        ErrorCodes.Find(code)!.Status.Should().Be(409);
+    }
+
     private sealed class RegistryProbeException : AppException
     {
         public RegistryProbeException(ErrorCodeInfo info) : base(info) { }

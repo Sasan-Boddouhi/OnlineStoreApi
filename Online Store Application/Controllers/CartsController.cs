@@ -118,7 +118,7 @@ public class CartsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<CartDto>> Merge(CancellationToken cancellationToken)
     {
-        var userId = UserId ?? throw new BusinessException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+        var userId = UserId ?? throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
         var sessionId = SessionId;
 
         if (sessionId is null)

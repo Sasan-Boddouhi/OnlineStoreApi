@@ -129,13 +129,18 @@ public sealed class CityService : ICityService
 
             _logger.LogInformation("City created with ID: {Id}", entity.CityId);
             return await GetByIdAsync(entity.CityId, cancellationToken)
-                   ?? throw new BusinessException("خطا در بازیابی شهر ایجاد شده", "CITY_RETRIEVAL_ERROR");
+                   ?? throw new InvalidOperationException("رکورد ایجادشده پس از ذخیره قابل بازیابی نبود.");
+        }
+        catch (AppException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
         }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create city: {CityName}", dto.CityName);
-            throw new BusinessException("خطا در ایجاد شهر", "CITY_CREATE_ERROR");
+            throw;
         }
     }
 
@@ -154,7 +159,7 @@ public sealed class CityService : ICityService
             var exists = await _unitOfWork.Repository<City>()
                 .AnyAsync(c => c.CityName == dto.CityName && c.CityId != dto.CityId, cancellationToken);
             if (exists)
-                throw new BusinessException("شهری با این نام قبلاً ثبت شده است.", "CITY_NAME_DUPLICATE");
+                throw new ConflictException("شهری با این نام قبلاً ثبت شده است.", "CITY_NAME_DUPLICATE");
         }
 
         _mapper.Map(dto, entity);
@@ -180,7 +185,7 @@ public sealed class CityService : ICityService
 
         var addressRepo = _unitOfWork.Repository<Address>();
         if (addressRepo != null && await addressRepo.AnyAsync(a => a.CityId == id, cancellationToken))
-            throw new BusinessException("این شهر دارای آدرس است و قابل حذف نیست.", "CITY_HAS_ADDRESSES");
+            throw new ConflictException("این شهر دارای آدرس است و قابل حذف نیست.", "CITY_HAS_ADDRESSES");
 
         _unitOfWork.Repository<City>().Delete(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -206,12 +211,12 @@ public sealed class CityService : ICityService
         var provinceExists = await _unitOfWork.Repository<Province>()
             .AnyAsync(p => p.ProvinceId == dto.ProvinceId, cancellationToken);
         if (!provinceExists)
-            throw new BusinessException("استان انتخاب‌شده وجود ندارد.", "PROVINCE_NOT_FOUND");
+            throw new NotFoundException("استان انتخاب‌شده وجود ندارد.", "PROVINCE_NOT_FOUND");
 
         var cityExists = await _unitOfWork.Repository<City>()
             .AnyAsync(c => c.CityName == dto.CityName, cancellationToken);
         if (cityExists)
-            throw new BusinessException("شهری با این نام قبلاً ثبت شده است.", "CITY_NAME_DUPLICATE");
+            throw new ConflictException("شهری با این نام قبلاً ثبت شده است.", "CITY_NAME_DUPLICATE");
     }
 
     #endregion

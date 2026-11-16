@@ -76,7 +76,7 @@ public class ProductsControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         var response = await Client.PostAsJsonAsync("/api/v1/products", dto);
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound); // Batch 54 (API-06): unknown subcategory is 404
     }
 
     [Fact]

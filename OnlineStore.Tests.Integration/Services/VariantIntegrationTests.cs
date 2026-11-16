@@ -85,7 +85,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
             ProductId = product.ProductId, Name = "B", Sku = sku
         });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<ConflictException>(); // Batch 54 (API-06): duplicate SKU is 409
         ex.And.Code.Should().Be("SKU_ALREADY_EXISTS");
     }
 
@@ -180,7 +180,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
             SellerId = seller.SellerId, VariantId = 999_999, Price = 10
         });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<NotFoundException>(); // Batch 54 (API-06): missing variant is 404
         ex.And.Code.Should().Be("VARIANT_NOT_FOUND");
     }
 
@@ -447,7 +447,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await SellerService.DeleteListingAsync(seller2.SellerId, listing.ListingId);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ForbiddenException>() // Batch 54 (API-06): not the listing owner is 403
             .WithMessage("*مجاز*");
     }
 
@@ -533,7 +533,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await SellerService.UpdateListingPriceAsync(seller2.SellerId, listing.ListingId, 120);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ForbiddenException>() // Batch 54 (API-06): not the listing owner is 403
             .WithMessage("*مجاز*");
     }
 
@@ -631,7 +631,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await ProductService.UpdateVariantAsync(v1.VariantId, updateDto);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ConflictException>() // Batch 54 (API-06): duplicate SKU is 409
             .WithMessage("*SKU*");
     }
 
@@ -721,7 +721,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await ProductService.DeleteVariantAsync(variant.VariantId);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ConflictException>() // Batch 54 (API-06): variant in use is 409
             .WithMessage("*فعال*");
     }
 
@@ -768,7 +768,7 @@ public class VariantIntegrationTests : BaseIntegrationTest
 
         // Act & Assert
         var act = async () => await ProductService.DeleteVariantAsync(variant.VariantId);
-        await act.Should().ThrowAsync<BusinessException>()
+        await act.Should().ThrowAsync<ConflictException>() // Batch 54 (API-06): variant in use is 409
             .WithMessage("*سفارش*");
     }
 }

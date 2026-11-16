@@ -294,7 +294,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var userId = _currentUser.TryGetCurrentUserId();
         if (userId is null)
-            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         Seller? seller = null;
         if (!isAdmin)
@@ -362,7 +362,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var userId = _currentUser.TryGetCurrentUserId();
         if (userId is null)
-            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         Seller? seller = null;
         if (!isAdmin)
@@ -451,7 +451,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
 
         var userId = _currentUser.TryGetCurrentUserId();
         if (userId is null)
-            throw new ForbiddenException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
+            throw new UnauthorizedException("کاربر شناسایی نشد.", "UNAUTHENTICATED");
 
         Seller? seller = null;
         if (!isAdmin)

@@ -194,7 +194,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
 
         // Batch 6: گارد قابل‌خرید بودن تعارض وضعیت است ⇒ ConflictException (409) به‌جای BusinessException (400).
         var ex = await act.Should().ThrowAsync<ConflictException>();
-        ex.And.Code.Should().Be("LISTING_NOT_ACTIVE");
+        ex.And.Code.Should().Be("LISTING_NOT_AVAILABLE");
     }
 
     [Fact]
@@ -374,7 +374,7 @@ public class CartServiceIntegrationTests : BaseIntegrationTest
             ShippingPhoneNumber = "09120000000"
         });
 
-        var ex = await act.Should().ThrowAsync<BusinessException>();
+        var ex = await act.Should().ThrowAsync<UnauthorizedException>(); // Batch 54 (API-06): checkout without login is 401
         ex.And.Code.Should().Be("CHECKOUT_REQUIRES_LOGIN");
     }
 

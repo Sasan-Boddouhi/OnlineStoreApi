@@ -56,11 +56,16 @@ public sealed class AddressService : IAddressService
 
             return _mapper.Map<AddressDto>(address);
         }
+        catch (AppException)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
         catch (Exception ex)
         {
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             _logger.LogError(ex, "Failed to create address for user {UserId}", userId);
-            throw new BusinessException("خطا در ایجاد آدرس", "ADDRESS_CREATE_ERROR");
+            throw;
         }
     }
 

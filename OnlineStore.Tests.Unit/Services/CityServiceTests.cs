@@ -102,7 +102,7 @@ public class CityServiceTests
         var dto = CreateCreateDto("", 1);
         _provinceRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<Province, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         Func<Task> act = () => _service.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("خطا در ایجاد شهر");
+        await act.Should().ThrowAsync<BusinessException>().WithMessage("*نام*");
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class CityServiceTests
         _provinceRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<Province, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         _cityRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<City, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         Func<Task> act = () => _service.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("خطا در ایجاد شهر");
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("شهری با این نام قبلاً ثبت شده است.");
     }
 
     // ------------- UpdateAsync ---------------

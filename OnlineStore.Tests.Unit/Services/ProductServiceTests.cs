@@ -151,7 +151,7 @@ public class ProductServiceTests
         var dto = new CreateProductDto { Name = "Test", Price = 10, SubcategoryId = 999 };
         _subcategoryRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<ProductSubcategory, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
         Func<Task> act = () => _productService.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*زیردسته*");
+        await act.Should().ThrowAsync<NotFoundException>().WithMessage("*زیردسته*");
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class ProductServiceTests
         _subcategoryRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<ProductSubcategory, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         _productRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<Product, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         Func<Task> act = () => _productService.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*نام*ثبت شده*");
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*نام*ثبت شده*");
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public class ProductServiceTests
         _productRepoMock.Setup(r => r.AddAsync(product, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("DB error"));
         Func<Task> act = () => _productService.CreateAsync(dto);
-        await act.Should().ThrowAsync<BusinessException>();
+        await act.Should().ThrowAsync<Exception>().WithMessage("DB error");
         _uowMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -223,7 +223,7 @@ public class ProductServiceTests
         _productRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
         _productRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<Product, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
         Func<Task> act = () => _productService.UpdateAsync(updateDto);
-        await act.Should().ThrowAsync<BusinessException>().WithMessage("*نام*ثبت شده*");
+        await act.Should().ThrowAsync<ConflictException>().WithMessage("*نام*ثبت شده*");
     }
 
     // ==================== DeleteAsync ====================
