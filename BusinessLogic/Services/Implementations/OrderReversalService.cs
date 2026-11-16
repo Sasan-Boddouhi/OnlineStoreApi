@@ -297,7 +297,7 @@ public sealed class OrderReversalService : IOrderReversalService
         };
 
         var cancelled = 0;
-        var debts = 0;
+        var newDebts = new List<(SellerDebt Debt, SellerPayout Payout)>();
 
         foreach (var payout in payouts)
         {
@@ -315,27 +315,37 @@ public sealed class OrderReversalService : IOrderReversalService
             }
             else if (payout.Status == PayoutStatus.Paid)
             {
-                await _unitOfWork.Repository<SellerDebt>().AddAsync(
-                    new SellerDebt
-                    {
-                        SellerId = payout.SellerId,
-                        Amount = payout.Amount,
-                        Reason = $"Clawback for {what} order {order.OrderId} (Payout {payout.SellerPayoutId})",
-                        CreatedAtUtc = now,
-                        IsSettled = false
-                    },
-                    cancellationToken);
-                await _auditService.RecordAsync(
-                    "SellerDebt.Created",
-                    nameof(SellerDebt),
-                    payout.SellerId.ToString(),
-                    $"order={order.OrderId} amount={payout.Amount} payoutId={payout.SellerPayoutId}",
-                    cancellationToken);
-                debts++;
+                var debt = new SellerDebt
+                {
+                    SellerId = payout.SellerId,
+                    OriginalAmount = payout.Amount,
+                    Reason = $"Clawback for {what} order {order.OrderId} (Payout {payout.SellerPayoutId})",
+                    CreatedAtUtc = now
+                };
+                await _unitOfWork.Repository<SellerDebt>().AddAsync(debt, cancellationToken);
+                newDebts.Add((debt, payout));
             }
         }
 
-        return (cancelled, debts);
+        if (newDebts.Count > 0)
+        {
+            // Batch 44 (FIN-13): رکورد حسابرسی بدهی باید شناسهٔ واقعی خودِ بدهی را داشته باشد (پیش‌تر شناسهٔ فروشنده
+            // ثبت می‌شد). شناسه فقط پس از ذخیره معلوم است؛ پس همین‌جا یک بار ذخیره می‌شود. هر مسیری که تسویهٔ Paid را
+            // برمی‌گرداند (لغو/مرجوعی ادمین، برگشت وجه) درون تراکنش فراخوان است، پس شکست بعدی همه را برمی‌گرداند.
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            foreach (var (debt, payout) in newDebts)
+            {
+                await _auditService.RecordAsync(
+                    "SellerDebt.Created",
+                    nameof(SellerDebt),
+                    debt.SellerDebtId.ToString(),
+                    $"seller={debt.SellerId} order={order.OrderId} amount={debt.OriginalAmount} payoutId={payout.SellerPayoutId}",
+                    cancellationToken);
+            }
+        }
+
+        return (cancelled, newDebts.Count);
     }
 
     /// <summary>M7.13: سهمیهٔ کوپن سفارش لغوشده برمی‌گردد؛ پرچم روی سفارش از برگشت دوباره جلوگیری می‌کند.</summary>

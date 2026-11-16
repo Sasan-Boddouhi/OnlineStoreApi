@@ -16,6 +16,9 @@ public class UserDto
 
     public bool IsActive { get; set; }
 
+    /// <summary>Batch 44: حساب سیستمی بی‌اثر (مثلاً مالک نشانی انبار پلتفرم)؛ قابل ورود، فعال‌سازی یا نقش‌دهی نیست.</summary>
+    public bool IsSystem { get; set; }
+
     public DateTime? DateOfBirth { get; set; }
     public string? DateOfBirthPersian { get; set; }
 

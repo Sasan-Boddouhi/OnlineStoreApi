@@ -42,7 +42,10 @@ public class SellerPayoutsController : ControllerBase
         return Ok(payouts);
     }
 
-    /// <summary>ثبت پرداخت و تسویه حساب توسط ادمین.</summary>
+    /// <summary>
+    /// ثبت پرداخت و تسویه حساب توسط ادمین. Batch 44: پیش از availableAtUtc → 409 PAYOUT_ON_HOLD؛ بدهی‌های باز فروشنده
+    /// کسر و netAmount ثبت می‌شود؛ expectedNetAmount (اختیاری) اگر با خالص واقعی نخواند → 409 PAYOUT_NET_CHANGED.
+    /// </summary>
     [HttpPost("{id:int}/pay")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(SellerPayoutDto), StatusCodes.Status200OK)]
@@ -50,12 +53,13 @@ public class SellerPayoutsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<SellerPayoutDto>> Pay(
         int id,
         [FromBody] MarkPayoutPaidRequest? request,
         CancellationToken cancellationToken = default)
     {
-        var payout = await _payoutService.MarkAsPaidAsync(id, request?.Reference, cancellationToken);
+        var payout = await _payoutService.MarkAsPaidAsync(id, request?.Reference, request?.ExpectedNetAmount, cancellationToken);
         return Ok(payout);
     }
 

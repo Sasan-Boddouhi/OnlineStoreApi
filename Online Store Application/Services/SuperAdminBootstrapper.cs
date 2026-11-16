@@ -69,8 +69,9 @@ public sealed class SuperAdminBootstrapper : BackgroundService
                 return;
             }
 
+            // Batch 44: حساب سیستمی (IsSystem، مثلاً مالک نشانی انبار پلتفرم) هرگز نقش نمی‌گیرد.
             var user = await db.User
-                .FirstOrDefaultAsync(u => u.PhoneNumber == phone, stoppingToken);
+                .FirstOrDefaultAsync(u => u.PhoneNumber == phone && !u.IsSystem, stoppingToken);
 
             if (user is null)
             {

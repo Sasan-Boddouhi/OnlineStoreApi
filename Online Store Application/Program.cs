@@ -190,6 +190,11 @@ builder.Services.Configure<InventorySettings>(
     builder.Configuration.GetSection(InventorySettings.SectionName));
 builder.Services.Configure<CommissionSettings>(
     builder.Configuration.GetSection(CommissionSettings.SectionName));
+// Batch 44 (FIN-02): تسویه تا HoldDays روز پس از تحویل (پنجرهٔ مرجوعی) قابل پرداخت نیست؛ مقدار نامعتبر راه‌اندازی را متوقف می‌کند.
+builder.Services.AddOptions<PayoutSettings>()
+    .Bind(builder.Configuration.GetSection(PayoutSettings.SectionName))
+    .Validate(s => s.IsValid(), $"PayoutSettings:HoldDays must be between {PayoutSettings.MinHoldDays} and {PayoutSettings.MaxHoldDays}.")
+    .ValidateOnStart();
 
 builder.Services.Configure<StorageSettings>(
     builder.Configuration.GetSection(StorageSettings.SectionName));

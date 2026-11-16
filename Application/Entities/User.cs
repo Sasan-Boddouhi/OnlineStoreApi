@@ -30,6 +30,20 @@ namespace Application.Entities
 
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// Batch 44 (پاسخ مالک به Batch 49b): حساب سیستمی بی‌اثر — مثلاً مالک نشانی انبار پلتفرم که هنگام راه‌اندازی
+        /// ساخته می‌شود. با هیچ مسیری (رمز، OTP، بازیابی رمز، refresh) وارد نمی‌شود، از هیچ API فعال، ویرایش یا نقش‌دار
+        /// نمی‌شود و در فهرست کاربران ادمین با <c>isSystem</c> مشخص است. فقط سرویس‌های راه‌اندازی آن را می‌سازند.
+        /// </summary>
+        public bool IsSystem { get; set; }
+
+        /// <summary>
+        /// Batch 44: تنها قاعدهٔ «این حساب می‌تواند وارد شود / توکن بگیرد». ورود با رمز و refresh از آن استفاده می‌کنند و
+        /// OTP و بازیابی رمز (Batch 46 و 47) هم باید از همین استفاده کنند.
+        /// </summary>
+        [NotMapped]
+        public bool CanSignIn => IsActive && !IsSystem;
+
         [NotMapped]
         public string FullName => $"{FirstName} {LastName}";
 

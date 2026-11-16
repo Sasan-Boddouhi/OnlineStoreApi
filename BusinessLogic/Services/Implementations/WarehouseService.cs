@@ -59,6 +59,9 @@ public sealed class WarehouseService : IWarehouseService
                 entity.SellerId = seller.SellerId;
         }
 
+        if (entity.SellerId is null)
+            await EnsureNoOtherPlatformWarehouseAsync(null, cancellationToken);
+
         await _unitOfWork.Repository<Warehouse>().AddAsync(entity, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -132,6 +135,7 @@ public sealed class WarehouseService : IWarehouseService
             }
             else
             {
+                await EnsureNoOtherPlatformWarehouseAsync(entity.WarehouseId, cancellationToken);
                 entity.SellerId = null;
             }
         }
@@ -182,6 +186,22 @@ public sealed class WarehouseService : IWarehouseService
         _logger.LogInformation("Warehouse {WarehouseId} deleted", warehouseId);
 
         return true;
+    }
+
+    /// <summary>
+    /// Batch 44: حداکثر یک انبار پلتفرم (SellerId = null) مجاز است (ایندکس یکتای UX_Warehouse_SinglePlatform).
+    /// پیش از ذخیره بررسی می‌شود تا پاسخ 409 با کد روشن باشد؛ ایندکس سد نهایی درخواست‌های هم‌زمان است.
+    /// </summary>
+    private async Task EnsureNoOtherPlatformWarehouseAsync(int? exceptWarehouseId, CancellationToken cancellationToken)
+    {
+        var exists = await _unitOfWork.Repository<Warehouse>().AnyAsync(
+            w => w.SellerId == null && (exceptWarehouseId == null || w.WarehouseId != exceptWarehouseId.Value),
+            cancellationToken);
+
+        if (exists)
+            throw new ConflictException(
+                "انبار پلتفرم از قبل وجود دارد؛ فقط یک انبار پلتفرم مجاز است. انبار تازه را به یک فروشنده اختصاص دهید.",
+                "PLATFORM_WAREHOUSE_EXISTS");
     }
 
     /// <summary>مدیر یا مدیر ارشد، همان قاعده‌ای که ویرایش و حذف انبار از قبل داشتند.</summary>

@@ -1709,9 +1709,6 @@ namespace DataLayer.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SellerDebtId"));
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1730,6 +1727,9 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("ModifiedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("OriginalAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -1743,6 +1743,12 @@ namespace DataLayer.Migrations
 
                     b.Property<int>("SellerId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("SettledAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("SettledAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("SellerDebtId");
 
@@ -1762,17 +1768,26 @@ namespace DataLayer.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime>("AvailableAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("DebtOffsetAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("ModifiedOn")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("OrderSellerGroupId")
                         .HasColumnType("int");
@@ -1999,6 +2014,9 @@ namespace DataLayer.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -2076,6 +2094,11 @@ namespace DataLayer.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsPlatform")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bit")
+                        .HasComputedColumnSql("CASE WHEN [SellerId] IS NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END", true);
+
                     b.Property<int?>("ModifiedById")
                         .HasColumnType("int");
 
@@ -2093,6 +2116,11 @@ namespace DataLayer.Migrations
                     b.HasKey("WarehouseId");
 
                     b.HasIndex("AddressId");
+
+                    b.HasIndex("IsPlatform")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Warehouse_SinglePlatform")
+                        .HasFilter("[SellerId] IS NULL");
 
                     b.HasIndex("Name")
                         .IsUnique()

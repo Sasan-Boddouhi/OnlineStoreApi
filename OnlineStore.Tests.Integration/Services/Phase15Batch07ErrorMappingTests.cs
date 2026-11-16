@@ -217,19 +217,19 @@ public class Phase15Batch07ErrorMappingTests : ControllerIntegrationTestBase
         var act = () => PayoutService.MarkAsPaidAsync(payoutId, "ref");
 
         var ex = await act.Should().ThrowAsync<ConflictException>();
-        ex.Which.Code.Should().Be("PAYOUT_INVALID_STATUS");
+        ex.Which.Code.Should().Be("PAYOUT_INVALID_STATE"); // Batch 44: یک کد برای همهٔ رد شدن‌های وضعیت تسویه (پیش‌تر سرویس PAYOUT_INVALID_STATUS و موجودیت PAYOUT_INVALID_STATE می‌داد)
     }
 
     [Fact]
     public async Task CancelPayout_WhenAlreadyPaid_Returns409PayoutInvalidStatus()
     {
-        var payoutId = await CreatePayoutAsync(p => p.MarkPaid("ref"));
+        var payoutId = await CreatePayoutAsync(p => p.MarkPaid("ref", 0m, p.AvailableAtUtc));
 
         SetCurrentUser(1, "Admin");
         var act = () => PayoutService.CancelPayoutAsync(payoutId);
 
         var ex = await act.Should().ThrowAsync<ConflictException>();
-        ex.Which.Code.Should().Be("PAYOUT_INVALID_STATUS");
+        ex.Which.Code.Should().Be("PAYOUT_INVALID_STATE"); // Batch 44: یک کد برای همهٔ رد شدن‌های وضعیت تسویه (پیش‌تر سرویس PAYOUT_INVALID_STATUS و موجودیت PAYOUT_INVALID_STATE می‌داد)
     }
 
     // ==================== ابزار ====================

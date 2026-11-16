@@ -115,9 +115,9 @@ public class BusinessRuleViolationTests
     public void Payout_MarkPaidTwice_ThrowsRuleViolation()
     {
         var payout = new SellerPayout(1, 1, 100m, DateTime.UtcNow, DateTime.UtcNow);
-        payout.MarkPaid("ref");
+        payout.MarkPaid("ref", 0m, payout.AvailableAtUtc); // Batch 44: پرداخت با کسر بدهی و زمان صریح
 
-        var act = () => payout.MarkPaid("ref");
+        var act = () => payout.MarkPaid("ref", 0m, payout.AvailableAtUtc); // Batch 44: پرداخت با کسر بدهی و زمان صریح
 
         act.Should().Throw<BusinessRuleViolationException>().Which.Code.Should().Be("PAYOUT_INVALID_STATE");
     }
@@ -126,7 +126,7 @@ public class BusinessRuleViolationTests
     public void Payout_CancelPaid_ThrowsRuleViolation()
     {
         var payout = new SellerPayout(1, 1, 100m, DateTime.UtcNow, DateTime.UtcNow);
-        payout.MarkPaid("ref");
+        payout.MarkPaid("ref", 0m, payout.AvailableAtUtc); // Batch 44: پرداخت با کسر بدهی و زمان صریح
 
         var act = () => payout.Cancel();
 

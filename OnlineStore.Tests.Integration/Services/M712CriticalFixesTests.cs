@@ -341,7 +341,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
 
         // Mark payout as Paid
         var payout = await DbContext.SellerPayout.FirstAsync(p => p.SellerId == seller.SellerId);
-        payout.MarkPaid("BANK-REF-123");
+        payout.MarkPaid("BANK-REF-123", 0m, payout.AvailableAtUtc); // Batch 44: پس از دورهٔ نگه‌داشت
         await DbContext.SaveChangesAsync();
 
         // Now Admin marks order as Returned
@@ -352,7 +352,7 @@ public class M712CriticalFixesTests : BaseIntegrationTest
             .FirstOrDefaultAsync(d => d.SellerId == seller.SellerId);
 
         debt.Should().NotBeNull();
-        debt!.Amount.Should().Be(payout.Amount);
+        debt!.OriginalAmount.Should().Be(payout.Amount); // Batch 44: ستون Amount به OriginalAmount تغییر نام داد
         debt.IsSettled.Should().BeFalse();
         debt.Reason.Should().Contain("Clawback");
     }
@@ -601,21 +601,33 @@ public class M712CriticalFixesTests : BaseIntegrationTest
         var debt = new SellerDebt
         {
             SellerId = seller.SellerId,
-            Amount = 300m,
-            Reason = "Clawback test",
-            IsSettled = false
+            OriginalAmount = 300m, // Batch 44: Amount → OriginalAmount؛ IsSettled فقط با ApplySettlement تغییر می‌کند
+            Reason = "Clawback test"
         };
         DbContext.SellerDebt.Add(debt);
         await DbContext.SaveChangesAsync();
 
-        var payout = new SellerPayout(seller.SellerId, null, 800m, DateTime.UtcNow.AddDays(-2), DateTime.UtcNow);
+        // Batch 44 (FIN-02): تسویه از AvailableAtUtc (برای تسویهٔ دستی = PeriodEnd) قابل پرداخت است و سرویس ساعت تست را
+        // می‌خواند؛ پس دوره باید پیش از «اکنون»ِ ساعت تست بسته شده باشد (DateTime.UtcNow از ساعت ثابت تست جلوتر است).
+        var clockNow = Factory.Clock.GetUtcNow().UtcDateTime;
+        var payout = new SellerPayout(seller.SellerId, null, 800m, clockNow.AddDays(-3), clockNow.AddDays(-1));
         DbContext.SellerPayout.Add(payout);
         await DbContext.SaveChangesAsync();
 
         var payoutService = GetService<ISellerPayoutService>();
         await payoutService.MarkAsPaidAsync(payout.SellerPayoutId, "BANK-SETTLE-001");
 
+        DbContext.ChangeTracker.Clear();
         var reloadedDebt = await DbContext.SellerDebt.FirstAsync(d => d.SellerDebtId == debt.SellerDebtId);
         reloadedDebt.IsSettled.Should().BeTrue();
+
+        // Batch 44 (F-09): مبلغ اصلی بدهی حفظ می‌شود و کسر روی خودِ تسویه ثبت می‌شود (پیش‌تر فقط IsSettled سنجیده می‌شد
+        // و ادمین ۸۰۰ را واریز می‌کرد در حالی که ۳۰۰ بدهی «تسویه‌شده» علامت می‌خورد).
+        reloadedDebt.OriginalAmount.Should().Be(300m);
+        reloadedDebt.SettledAmount.Should().Be(300m);
+        reloadedDebt.SettledAtUtc.Should().NotBeNull();
+        var reloadedPayout = await DbContext.SellerPayout.AsNoTracking().FirstAsync(p => p.SellerPayoutId == payout.SellerPayoutId);
+        reloadedPayout.DebtOffsetAmount.Should().Be(300m);
+        reloadedPayout.NetAmount.Should().Be(500m);
     }
 }

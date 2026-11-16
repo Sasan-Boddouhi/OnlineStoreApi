@@ -81,6 +81,7 @@ internal static class OrderFulfilmentGuard
     /// برای گروه تحویل‌شده، اگر تسویه‌ای ندارد، یک SellerPayout می‌سازد (یک تسویه به‌ازای هر گروه).
     /// فراخواننده باید پیش‌تر <see cref="EnsureOrderIsPaidAsync"/> را گذرانده باشد.
     /// ایندکس یکتای SellerPayout.OrderSellerGroupId آخرین سد در برابر درخواست‌های هم‌زمان است.
+    /// Batch 44 (FIN-02): تسویه از <c>DeliveredAt + holdDays</c> قابل پرداخت است (پنجرهٔ مرجوعی، PayoutSettings:HoldDays).
     /// </summary>
     /// <returns><c>true</c> اگر تسویهٔ تازه‌ای اضافه شد.</returns>
     public static async Task<bool> AddPayoutIfMissingAsync(
@@ -88,6 +89,7 @@ internal static class OrderFulfilmentGuard
         OrderSellerGroup group,
         DateTime periodStart,
         DateTime now,
+        int holdDays,
         CancellationToken cancellationToken)
     {
         if (group.Status != SellerGroupStatus.Delivered)
@@ -104,7 +106,8 @@ internal static class OrderFulfilmentGuard
             group.OrderSellerGroupId,
             group.SellerPayable,
             periodStart,
-            now);
+            now,
+            (group.DeliveredAt ?? now).AddDays(holdDays));
 
         await unitOfWork.Repository<SellerPayout>().AddAsync(payout, cancellationToken);
         return true;

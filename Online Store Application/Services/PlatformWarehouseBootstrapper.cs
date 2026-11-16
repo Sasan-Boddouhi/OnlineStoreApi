@@ -5,6 +5,7 @@ using Application.Options;
 using DataLayer.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Online_Store_Application.Middleware;
 
 namespace Online_Store_Application.Services;
 
@@ -18,7 +19,13 @@ public enum PlatformWarehouseBootstrapOutcome
     Created,
 
     /// <summary>بیرون از Production: انباری نبود و پیکربندی ناقص بود؛ فقط هشدار ثبت شد.</summary>
-    NotConfigured
+    NotConfigured,
+
+    /// <summary>
+    /// Batch 44: نمونهٔ دیگری از برنامه هم‌زمان انبار پلتفرم (یا حساب سیستمی همان شماره) را ساخت؛ ساخت این نمونه با نقض
+    /// ایندکس یکتا رد و برگردانده شد و انبار موجود دوباره خوانده شد. هیچ انبار تکراری ساخته نمی‌شود.
+    /// </summary>
+    CreatedByAnotherInstance
 }
 
 /// <summary>
@@ -122,8 +129,30 @@ public sealed class PlatformWarehouseBootstrapper : IHostedService
             return PlatformWarehouseBootstrapOutcome.NotConfigured;
         }
 
-        await CreateAsync(db, scope.ServiceProvider, options, cancellationToken);
-        return PlatformWarehouseBootstrapOutcome.Created;
+        try
+        {
+            await CreateAsync(db, scope.ServiceProvider, options, cancellationToken);
+            return PlatformWarehouseBootstrapOutcome.Created;
+        }
+        catch (DbUpdateException ex) when (DatabaseErrorClassifier.IsUniqueViolation(ex))
+        {
+            // Batch 44: دو نمونه هم‌زمان بالا آمده‌اند. ایندکس یکتای UX_Warehouse_SinglePlatform (یا یکتایی شمارهٔ کاربر)
+            // دومی را رد کرد و تراکنش آن برگشت. انبار برنده با زمینهٔ تازه خوانده می‌شود؛ اگر نباشد خطا واقعی است.
+            await using var reloadScope = _scopeFactory.CreateAsyncScope();
+            var fresh = reloadScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var existingId = await fresh.Warehouse.AsNoTracking()
+                .Where(w => w.SellerId == null)
+                .Select(w => (int?)w.WarehouseId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (existingId is null)
+                throw;
+
+            _logger.LogInformation(
+                "Platform warehouse {WarehouseId} was created concurrently by another instance; this instance rolled back its own attempt and reuses it.",
+                existingId);
+            return PlatformWarehouseBootstrapOutcome.CreatedByAnotherInstance;
+        }
     }
 
     private async Task CreateAsync(
@@ -159,7 +188,8 @@ public sealed class PlatformWarehouseBootstrapper : IHostedService
         var createdSystemAccount = false;
         if (owner is null)
         {
-            // رمز تصادفی که هیچ‌جا ذخیره یا نمایش داده نمی‌شود؛ IsActive=false ورود را هم می‌بندد.
+            // رمز تصادفی که هیچ‌جا ذخیره یا نمایش داده نمی‌شود؛ IsActive=false و IsSystem=true (Batch 44) هر مسیر ورود،
+            // فعال‌سازی و نقش‌دهی را می‌بندند.
             var unusablePassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
             owner = new User
             {
@@ -168,7 +198,8 @@ public sealed class PlatformWarehouseBootstrapper : IHostedService
                 PhoneNumber = phone,
                 PasswordHash = services.GetRequiredService<IPasswordHasher>().Hash(unusablePassword),
                 UserType = UserType.Employee,
-                IsActive = false
+                IsActive = false,
+                IsSystem = true
             };
             db.User.Add(owner);
             await db.SaveChangesAsync(cancellationToken);

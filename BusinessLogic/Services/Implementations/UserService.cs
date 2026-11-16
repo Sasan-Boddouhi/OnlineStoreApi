@@ -212,6 +212,8 @@ public sealed class UserService : IUserService
             return null;
         }
 
+        EnsureNotSystemAccount(user);
+
         // Batch 48b: مقایسه، بررسی تکرار و ذخیره فقط با شکل استاندارد 09….
         var phone = IranianPhoneNumber.NormalizeOrThrow(dto.PhoneNumber);
 
@@ -300,6 +302,8 @@ public sealed class UserService : IUserService
             return false;
         }
 
+        EnsureNotSystemAccount(user);
+
         await EnsureCanChangeAccountAsync(user, removesAccess: true, cancellationToken);
         await DeactivateAndRevokeSessionsAsync(user, cancellationToken);
 
@@ -321,6 +325,8 @@ public sealed class UserService : IUserService
             _logger.LogWarning("User not found for status update with ID: {UserId}", id);
             return false;
         }
+
+        EnsureNotSystemAccount(user);
 
         await EnsureCanChangeAccountAsync(user, removesAccess: !isActive, cancellationToken);
 
@@ -453,6 +459,23 @@ public sealed class UserService : IUserService
 
     #endregion
 
+    /// <summary>
+    /// Batch 44 (پاسخ مالک به Batch 49b): حساب سیستمی (مثلاً مالک نشانی انبار پلتفرم) از هیچ API فعال، ویرایش، حذف یا
+    /// نقش‌دار نمی‌شود → 409 USER_IS_SYSTEM. فقط سرویس‌های راه‌اندازی آن را می‌سازند و نگه می‌دارند.
+    /// </summary>
+    private void EnsureNotSystemAccount(User user)
+    {
+        if (!user.IsSystem)
+            return;
+
+        _logger.LogWarning(
+            "User {CurrentUserId} attempted to change system account {TargetUserId}",
+            _currentUserService.GetCurrentUserId(), user.UserId);
+        throw new ConflictException(
+            "این حساب سیستمی است و قابل فعال‌سازی، ویرایش، حذف یا نقش‌دهی نیست.",
+            "USER_IS_SYSTEM");
+    }
+
     #region GetRolesAsync
 
     public async Task<IEnumerable<string>> GetRolesAsync(string? userType = null, CancellationToken cancellationToken = default)
@@ -493,6 +516,8 @@ public sealed class UserService : IUserService
         var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId, cancellationToken);
         if (user is null)
             throw new NotFoundException("USER_NOT_FOUND", "USER_NOT_FOUND");
+
+        EnsureNotSystemAccount(user);
 
         // --- Privilege escalation guard (Q1 fix) ---
         // Resolve the SuperAdmin role record once so we can check its RoleId.

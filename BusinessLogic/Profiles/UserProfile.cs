@@ -47,6 +47,8 @@ public class UserProfile : Profile
             .ForMember(d => d.SecurityStamp, opt => opt.Ignore())
             .ForMember(d => d.FailedLoginAttempts, opt => opt.Ignore())
             .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
+            // Batch 44: حساب سیستمی فقط در راه‌اندازی ساخته می‌شود؛ هرگز از ورودی API.
+            .ForMember(d => d.IsSystem, opt => opt.Ignore())
 
             // computed
             .ForMember(d => d.FullName, opt => opt.Ignore())
@@ -68,6 +70,8 @@ public class UserProfile : Profile
             .ForMember(d => d.SecurityStamp, opt => opt.Ignore())
             .ForMember(d => d.FailedLoginAttempts, opt => opt.Ignore())
             .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
+            // Batch 44: حساب سیستمی فقط در راه‌اندازی ساخته می‌شود؛ هرگز از ورودی API.
+            .ForMember(d => d.IsSystem, opt => opt.Ignore())
             .ForMember(d => d.IsActive, opt => opt.Ignore())
 
             // computed

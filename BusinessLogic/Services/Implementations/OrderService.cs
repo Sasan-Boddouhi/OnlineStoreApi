@@ -25,6 +25,7 @@ public sealed class OrderService : IOrderService
     private readonly IInventoryService _inventoryService;
     private readonly IOrderReversalService _orderReversalService;
     private readonly CommissionSettings _commissionSettings;
+    private readonly PayoutSettings _payoutSettings;
 
     private static readonly Expression<Func<Order, OrderDto>> OrderProjection = o => new OrderDto
     {
@@ -76,12 +77,14 @@ public sealed class OrderService : IOrderService
         ICurrentUserService currentUserService,
         IInventoryService inventoryService,
         IOrderReversalService orderReversalService,
-        IOptions<CommissionSettings> commissionSettings)
+        IOptions<CommissionSettings> commissionSettings,
+        IOptions<PayoutSettings>? payoutSettings = null)
     {
         _unitOfWork = unitOfWork;
         _inventoryService = inventoryService;
         _orderReversalService = orderReversalService;
         _commissionSettings = commissionSettings.Value;
+        _payoutSettings = payoutSettings?.Value ?? new PayoutSettings();
         _mapper = mapper;
         _logger = logger;
         _currentUserService = currentUserService;
@@ -517,7 +520,7 @@ public sealed class OrderService : IOrderService
 
         foreach (var group in order.SellerGroups.Where(g => g.Status == SellerGroupStatus.Delivered))
         {
-            if (await OrderFulfilmentGuard.AddPayoutIfMissingAsync(_unitOfWork, group, order.OrderDate, now, cancellationToken))
+            if (await OrderFulfilmentGuard.AddPayoutIfMissingAsync(_unitOfWork, group, order.OrderDate, now, _payoutSettings.HoldDays, cancellationToken))
                 payoutGroupIds.Add(group.OrderSellerGroupId);
         }
 

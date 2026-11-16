@@ -161,7 +161,8 @@ public sealed class AuthService : IAuthService
                 .FirstOrDefaultAsync(
                     new Spec<User>()
                         .Where(u => u.PhoneNumber == phone)
-                        .Where(u => u.IsActive)
+                        // Batch 44: حساب سیستمی (IsSystem) مثل حساب غیرفعال هرگز وارد نمی‌شود (همان 401، بدون نشانهٔ وجود حساب).
+                        .Where(u => u.IsActive && !u.IsSystem)
                         .Include(u => u.Employee!)
                         .Include(u => u.Employee!.EmployeeType)
                         .AsTracking(),
@@ -284,7 +285,7 @@ public sealed class AuthService : IAuthService
         }
 
         // M7.11: Validate user active status. Deactivated/suspended users must not refresh tokens.
-        if (token.User is null || !token.User.IsActive)
+        if (token.User is null || !token.User.CanSignIn)
         {
             if (token.Session != null)
             {

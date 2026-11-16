@@ -3,11 +3,13 @@ using Application.Common.Specifications;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
+using Application.Options;
 using BusinessLogic.DTOs.Dashboard;
 using BusinessLogic.DTOs.Shared;
 using BusinessLogic.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BusinessLogic.Services.Implementations;
 
@@ -27,15 +29,18 @@ public sealed class SellerDashboardService : ISellerDashboardService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<SellerDashboardService> _logger;
+    private readonly PayoutSettings _payoutSettings;
 
     public SellerDashboardService(
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUser,
-        ILogger<SellerDashboardService> logger)
+        ILogger<SellerDashboardService> logger,
+        IOptions<PayoutSettings>? payoutSettings = null)
     {
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _logger = logger;
+        _payoutSettings = payoutSettings?.Value ?? new PayoutSettings();
     }
 
     public async Task<SellerSalesSummaryDto> GetSalesSummaryAsync(
@@ -92,6 +97,15 @@ public sealed class SellerDashboardService : ISellerDashboardService
             .Select(p => new { p.Status, p.Amount })
             .ToListAsync(cancellationToken);
 
+        // Batch 44 (F-09): بدهی باز از تسویه‌های بعدی کسر می‌شود؛ داشبورد خالص قابل واریز را هم نشان می‌دهد.
+        var openDebts = await _unitOfWork.Repository<SellerDebt>()
+            .Query()
+            .Where(d => d.SellerId == sellerId && !d.IsSettled)
+            .Select(d => new { d.OriginalAmount, d.SettledAmount })
+            .ToListAsync(cancellationToken);
+        var outstandingDebt = openDebts.Sum(d => d.OriginalAmount - d.SettledAmount);
+        var pendingGross = payoutStats.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount);
+
         var summary = new SellerSalesSummaryDto
         {
             SellerId = sellerId,
@@ -102,7 +116,9 @@ public sealed class SellerDashboardService : ISellerDashboardService
             CommissionPaid = groupStats.Sum(g => g.CommissionAmount),
             NetEarnings = groupStats.Sum(g => g.SellerPayable),
             PaidEarnings = payoutStats.Where(p => p.Status == PayoutStatus.Paid).Sum(p => p.Amount),
-            PendingPayouts = payoutStats.Where(p => p.Status == PayoutStatus.Pending).Sum(p => p.Amount)
+            PendingPayouts = pendingGross,
+            PendingPayoutsNet = Math.Max(0m, pendingGross - outstandingDebt),
+            OutstandingDebt = outstandingDebt
         };
 
         _logger.LogInformation(
@@ -477,7 +493,7 @@ public sealed class SellerDashboardService : ISellerDashboardService
         _unitOfWork.Repository<OrderSellerGroup>().Update(group);
 
         var payoutAdded = await OrderFulfilmentGuard.AddPayoutIfMissingAsync(
-            _unitOfWork, group, group.Order.OrderDate, now, cancellationToken);
+            _unitOfWork, group, group.Order.OrderDate, now, _payoutSettings.HoldDays, cancellationToken);
 
         var orderSpec = new Spec<Order>()
             .Where(o => o.OrderId == orderId)

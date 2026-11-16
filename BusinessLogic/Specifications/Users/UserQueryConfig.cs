@@ -16,7 +16,9 @@ public static class UserQueryConfig
         "lastname",
         "phonenumber",
         "email",
-        "isactive"
+        "isactive",
+        // Batch 44: ادمین می‌تواند حساب‌های سیستمی را جدا یا پنهان کند (isSystem eq false).
+        "issystem"
     ];
 
     public static Expression<Func<User, UserDto>> Projection =>
@@ -28,6 +30,7 @@ public static class UserQueryConfig
             PhoneNumber = u.PhoneNumber,
             Email = u.Email,
             IsActive = u.IsActive,
+            IsSystem = u.IsSystem,
             DateOfBirth = u.DateOfBirth,
             UserType = u.UserType,
 

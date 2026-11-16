@@ -332,7 +332,7 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         await DeliverAsync(seeded, 0);
 
         var payout = await DbContext.SellerPayout.AsTracking().SingleAsync(p => p.OrderSellerGroupId == seeded.Groups[0].GroupId);
-        payout.MarkPaid("BANK-41");
+        payout.MarkPaid("BANK-41", 0m, payout.AvailableAtUtc); // Batch 44: پس از دورهٔ نگه‌داشت
         await DbContext.SaveChangesAsync();
         DbContext.ChangeTracker.Clear();
 
@@ -342,7 +342,7 @@ public class Phase15Batch41RefundWorkflowTests : ControllerIntegrationTestBase
         DbContext.ChangeTracker.Clear();
         var debts = await DbContext.SellerDebt.AsNoTracking().Where(d => d.SellerId == seeded.Groups[0].Seller.SellerId).ToListAsync();
         debts.Should().ContainSingle();
-        debts[0].Amount.Should().Be(payout.Amount);
+        debts[0].OriginalAmount.Should().Be(payout.Amount); // Batch 44: Amount → OriginalAmount
         debts[0].IsSettled.Should().BeFalse();
         debts[0].CreatedAtUtc.Should().Be(ClockNow);
     }
