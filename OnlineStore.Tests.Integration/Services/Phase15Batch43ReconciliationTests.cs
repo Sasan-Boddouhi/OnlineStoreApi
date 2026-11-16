@@ -427,10 +427,15 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
         Gateway.InquiryCalls.Should().BeEmpty();
     }
 
-    // ==================== N2: استعلام خاموش (جایگزین امن) ====================
+    // ==================== N2: استعلام خاموش ====================
+    //
+    // Batch 43b (صف مالک ۲۰۲۶-۱۱-۱۶): زرین‌پال فقط با Verify خودِ ما پول برداشت می‌کند. پرداخت کهنه‌ای که Verify آن هرگز
+    // آغاز نشده (VerifyStartedAtUtc = null) نمی‌تواند برداشت شده باشد؛ با استعلام خاموش مثل پیش از Batch 43 لغو می‌شود
+    // (پول تأییدنشده را درگاه به خریدار برمی‌گرداند). فقط پرداختی که Verify آن آغاز شده و نتیجه‌اش نامعلوم است به صف
+    // بررسی می‌رود. با استعلام روشن رفتار Batch 43 عوض نمی‌شود.
 
     [Fact]
-    public async Task Sweep_WithGatewayInquiryTurnedOff_FlagsEveryStalePaymentOnce_AndNeitherVerifiesNorCancels()
+    public async Task Sweep_WithInquiryOff_CancelsEveryStalePaymentWhoseVerifyNeverStarted_WithoutQueueingOrVerifying()
     {
         var stale = new List<OpenPayment>();
         for (var i = 0; i < 6; i++)
@@ -440,46 +445,129 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
         var first = await Sweeper.SweepAsync();
         var second = await Sweeper.SweepAsync();
 
-        (first + second).Should().Be(0, "without an inquiry nobody knows whether the payer paid; nothing is cancelled silently");
+        first.Should().Be(6, "Zarinpal captures only on our Verify, so a never-verified payment holds no money of ours; " +
+                             "every one is cancelled, not only the first five (an inquiry that is off is not a gateway outage)");
+        second.Should().Be(0);
         Gateway.VerifyCalls.Should().BeEmpty("the job never verifies (captures) on its own without an inquiry");
         DbContext.ChangeTracker.Clear();
         foreach (var open in stale)
         {
             var payment = await PaymentAsync(open.PaymentId);
-            payment.State.Should().Be(PaymentState.Pending);
-            payment.IsReviewOpen.Should().BeTrue("every stale payment goes to the manual review queue, not only the first five");
-            payment.ReviewNote.Should().Contain("EnableInquiry=false").And.Contain("verify-by-authority");
-            (await AuditDetailsAsync(open.PaymentId, "Payment.ReviewRequired")).Should().ContainSingle()
-                .Which.Should().Contain("gatewayError=INQUIRY_DISABLED");
+            payment.State.Should().Be(PaymentState.Cancelled);
+            payment.ReviewRequiredAtUtc.Should().BeNull("a never-verified stale payment does not belong in the manual review queue");
+            (await AuditDetailsAsync(open.PaymentId, "Payment.ReviewRequired")).Should().BeEmpty();
+            (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Should().ContainSingle()
+                .Which.Should().Contain("abandoned").And.Contain("gatewayError=INQUIRY_DISABLED")
+                .And.Contain("verification never started");
+            (await OrderStatusAsync(open.OrderId)).Should().Be(OrderStatus.Pending, "the order stays so the buyer can pay again (rule unchanged)");
         }
     }
 
     [Fact]
-    public async Task Sweep_WithInquiryOff_AfterAnAdminClosesTheReviewWithoutVerifying_CancelsThePaymentAsAbandoned()
+    public async Task Sweep_WithInquiryOff_QueuesOnlyTheStalePaymentWhoseVerifyStarted_AndNeverCancelsIt()
     {
-        var open = await CreateStalePendingPaymentAsync();
+        var neverVerified = await CreateStalePendingPaymentAsync();
+        var verifyStarted = await CreateStalePendingPaymentAsync(verifyStarted: true);
         Gateway.InquiryTurnedOff = true;
-        await Sweeper.SweepAsync();
-        SetCurrentUser(1, "Admin");
-        await PaymentService.ResolveReviewAsync(open.PaymentId, "checked the gateway panel: not paid");
+
+        var first = await Sweeper.SweepAsync();
+        var second = await Sweeper.SweepAsync();
+
+        (first + second).Should().Be(1, "only the never-verified payment is cancelled");
+        Gateway.VerifyCalls.Should().BeEmpty();
         DbContext.ChangeTracker.Clear();
+
+        var started = await PaymentAsync(verifyStarted.PaymentId);
+        started.State.Should().Be(PaymentState.Pending, "a verify that started may have captured the money; it is never cancelled blindly");
+        started.IsReviewOpen.Should().BeTrue();
+        started.ReviewNote.Should().Contain("verification outcome is unknown");
+        (await AuditDetailsAsync(verifyStarted.PaymentId, "Payment.ReviewRequired")).Should().ContainSingle("it is queued once")
+            .Which.Should().Contain("gatewayError=INQUIRY_DISABLED");
+        (await AuditDetailsAsync(verifyStarted.PaymentId, "Payment.Cancelled")).Should().BeEmpty();
+
+        var never = await PaymentAsync(neverVerified.PaymentId);
+        never.State.Should().Be(PaymentState.Cancelled);
+        never.ReviewRequiredAtUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Sweep_WithInquiryOn_NeverVerifiedStalePayments_StillFollowTheGatewayAnswer_AsInBatch43()
+    {
+        var unknown = await CreateStalePendingPaymentAsync();
+        var notPaid = await CreateStalePendingPaymentAsync();
+        var paid = await CreateStalePendingPaymentAsync();
+        Gateway.SetInquiryResult(unknown.Authority, PaymentInquiryResult.Unknown("GATEWAY_UNAVAILABLE", "down"));
+        Gateway.SetInquiryResult(notPaid.Authority, PaymentInquiryResult.NotPaid("FAILED"));
+        Gateway.SetInquiryResult(paid.Authority, PaymentInquiryResult.PaidNotVerified("PAID"));
+        Gateway.EnqueueVerifyResult(PaymentVerificationResult.Verified("REF-43B1"));
 
         var cancelled = await Sweeper.SweepAsync();
 
-        cancelled.Should().Be(1, "a human looked and did not verify; the payment must not stay Pending for ever");
+        cancelled.Should().Be(1);
+        Gateway.InquiryCalls.Should().Contain(new[] { unknown.Authority, notPaid.Authority, paid.Authority });
+        Gateway.VerifyCalls.Select(c => c.Authority).Should().Equal(paid.Authority);
         DbContext.ChangeTracker.Clear();
-        (await PaymentAsync(open.PaymentId)).State.Should().Be(PaymentState.Cancelled);
+
+        var waiting = await PaymentAsync(unknown.PaymentId);
+        waiting.State.Should().Be(PaymentState.Pending, "with the inquiry on, an unknown answer is still not 'not paid'");
+        waiting.IsReviewOpen.Should().BeTrue();
+        waiting.ReviewNote.Should().Contain("no definitive answer");
+
+        var unpaid = await PaymentAsync(notPaid.PaymentId);
+        unpaid.State.Should().Be(PaymentState.Cancelled);
+        unpaid.ReviewRequiredAtUtc.Should().BeNull();
+        (await AuditDetailsAsync(notPaid.PaymentId, "Payment.Cancelled")).Should().ContainSingle()
+            .Which.Should().Contain("gateway=NotPaid").And.NotContain("verification never started");
+
+        (await PaymentAsync(paid.PaymentId)).State.Should().Be(PaymentState.Succeeded);
+        (await OrderStatusAsync(paid.OrderId)).Should().Be(OrderStatus.Processing);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sweep_WithInquiryOff_NeverVerifiedPaymentAlreadyWaitingForReview_IsCancelled_AndTheReviewIsClosed(
+        bool adminClosedTheReviewFirst)
+    {
+        // پرداختی که جاب سفارش‌های رهاشده (یا جاب پرداخت‌ها پیش از 43b) با «استعلام خاموش» علامت زده و بعد کهنه شده است.
+        var open = await CreatePendingPaymentAsync();
+        await AgeOrderAsync(open.OrderId);
+        Gateway.InquiryTurnedOff = true;
+        await NewOrderCleanup().RunCleanupAsync();
+        DbContext.ChangeTracker.Clear();
+        (await PaymentAsync(open.PaymentId)).ReviewNote.Should().Contain("EnableInquiry=false");
+        if (adminClosedTheReviewFirst)
+        {
+            SetCurrentUser(1, "Admin");
+            await PaymentService.ResolveReviewAsync(open.PaymentId, "checked the gateway panel: not paid");
+            DbContext.ChangeTracker.Clear();
+        }
+        await AgePaymentAsync(open.PaymentId);
+
+        var cancelled = await Sweeper.SweepAsync();
+
+        cancelled.Should().Be(1, "the payment must not stay Pending for ever");
+        DbContext.ChangeTracker.Clear();
+        var payment = await PaymentAsync(open.PaymentId);
+        payment.State.Should().Be(PaymentState.Cancelled);
+        payment.IsReviewOpen.Should().BeFalse();
+        if (!adminClosedTheReviewFirst)
+            payment.ReviewNote.Should().Contain("closed automatically by reconciliation",
+                "the 'inquiry is off' waiting flag answered itself: nothing was captured");
         Gateway.VerifyCalls.Should().BeEmpty();
         (await AuditDetailsAsync(open.PaymentId, "Payment.Cancelled")).Should().ContainSingle()
-            .Which.Should().Contain("treated as abandoned");
+            .Which.Should().Contain("abandoned");
     }
 
     [Fact]
     public async Task VerifyByAuthority_WithInquiryOff_RunsVerify_CapturesAPaidPayment_AndClosesTheWaitingFlag()
     {
-        var open = await CreateStalePendingPaymentAsync();
+        // Batch 43b: با استعلام خاموش فقط پرداختِ «Verify آغازشده با نتیجهٔ نامعلوم» در صف بررسی است.
+        var open = await CreateStalePendingPaymentAsync(verifyStarted: true);
         Gateway.InquiryTurnedOff = true;
         await Sweeper.SweepAsync();
+        DbContext.ChangeTracker.Clear();
+        (await PaymentAsync(open.PaymentId)).IsReviewOpen.Should().BeTrue();
         Gateway.EnqueueVerifyResult(PaymentVerificationResult.Verified("REF-4330"));
         var admin = await AdminClientAsync();
 
@@ -749,15 +837,19 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
     private async Task<OpenPayment> CreateStalePendingPaymentAsync(bool verifyStarted = false)
     {
         var open = await CreatePendingPaymentAsync();
+        await AgePaymentAsync(open.PaymentId, verifyStarted);
+        return open;
+    }
 
-        var payment = await DbContext.Payment.AsTracking().SingleAsync(p => p.PaymentId == open.PaymentId);
+    /// <summary>پرداخت را دو ساعت پیش Pending می‌کند (از مهلت ۳۰ دقیقه‌ای جاب گذشته)؛ در صورت خواست، Verify آغازشده.</summary>
+    private async Task AgePaymentAsync(int paymentId, bool verifyStarted = false)
+    {
+        var payment = await DbContext.Payment.AsTracking().SingleAsync(p => p.PaymentId == paymentId);
         payment.LastStateChangedAtUtc = DateTime.UtcNow.AddHours(-2);
         if (verifyStarted)
             payment.VerifyStartedAtUtc = DateTime.UtcNow.AddHours(-2);
         await DbContext.SaveChangesAsync();
         DbContext.ChangeTracker.Clear();
-
-        return open;
     }
 
     private Online_Store_Application.Services.AbandonedOrderCleanupService NewOrderCleanup()
@@ -984,8 +1076,9 @@ public class Phase15Batch43InquiryDisabledTests
 
 /// <summary>
 /// Batch 43 (تصمیم باز N2) — درگاه واقعی زرین‌پال با تنظیم پیش‌فرض <c>PaymentGatewaySettings:EnableInquiry = false</c>:
-/// جاب هیچ تماسی با زرین‌پال نمی‌گیرد (نه استعلام، نه Verify)، پرداخت کهنه را لغو نمی‌کند و آن را یک بار به صف بررسی
-/// می‌فرستد. با <c>EnableInquiry = true</c> همان جاب از زرین‌پال استعلام می‌کند و پرداختِ انجام‌شده را برداشت می‌کند.
+/// جاب هیچ تماسی با زرین‌پال نمی‌گیرد (نه استعلام، نه Verify). Batch 43b: پرداخت کهنه‌ای که Verify آن هرگز آغاز نشده
+/// لغو می‌شود و به صف بررسی نمی‌رود (زرین‌پال فقط با Verify ما برداشت می‌کند). با <c>EnableInquiry = true</c> همان جاب
+/// از زرین‌پال استعلام می‌کند و پرداختِ انجام‌شده را برداشت می‌کند.
 /// </summary>
 public class Phase15Batch43ZarinpalInquirySwitchTests
 {
@@ -1049,7 +1142,7 @@ public class Phase15Batch43ZarinpalInquirySwitchTests
     [Theory]
     [InlineData(null)]
     [InlineData(false)]
-    public async Task Sweep_WithZarinpalInquiryOff_ByDefault_CallsNothing_LeavesThePaymentPending_AndFlagsItOnce(bool? enableInquiry)
+    public async Task Sweep_WithZarinpalInquiryOff_ByDefault_CallsNothing_AndCancelsTheNeverVerifiedPayment_WithoutQueueingIt(bool? enableInquiry)
     {
         using var factory = new ZarinpalFactory(enableInquiry);
         var paymentId = await SeedStalePendingPaymentAsync(factory);
@@ -1059,15 +1152,17 @@ public class Phase15Batch43ZarinpalInquirySwitchTests
         var first = await sweeper.SweepAsync();
         var second = await sweeper.SweepAsync();
 
-        (first + second).Should().Be(0);
+        first.Should().Be(1, "Zarinpal captures only on our Verify; a payment never verified holds no money and is cancelled (Batch 43b)");
+        second.Should().Be(0);
         factory.Handler.Urls.Should().BeEmpty("with the inquiry off the job must not call Zarinpal at all — neither inquiry nor verify");
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.ChangeTracker.Clear();
         var payment = await db.Payment.AsNoTracking().SingleAsync(p => p.PaymentId == paymentId);
-        payment.State.Should().Be(PaymentState.Pending);
-        payment.IsReviewOpen.Should().BeTrue();
-        payment.ReviewNote.Should().Contain("EnableInquiry=false");
+        payment.State.Should().Be(PaymentState.Cancelled);
+        payment.ReviewRequiredAtUtc.Should().BeNull();
         (await db.AuditLog.AsNoTracking().CountAsync(a => a.Action == "Payment.ReviewRequired" && a.EntityId == paymentId.ToString()))
+            .Should().Be(0);
+        (await db.AuditLog.AsNoTracking().CountAsync(a => a.Action == "Payment.Cancelled" && a.EntityId == paymentId.ToString()))
             .Should().Be(1);
     }
 

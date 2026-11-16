@@ -1435,9 +1435,11 @@ public sealed class PaymentService : IPaymentService
     //                                                    عمداً refundNeeded=true ندارد: پولی نزد ما نیست که دستی برگردد.
     //   • NotPaid                                     ⇒ جاب: لغو (مثل قبل). ادمین: دست نمی‌زند (شاید خریدار هنوز در بانک است).
     //   • Unknown                                     ⇒ Pending می‌ماند؛ جاب یک بار به صف بررسی می‌فرستد و در اجرای بعد دوباره می‌پرسد.
-    //   • استعلام خاموش (EnableInquiry=false، پیش‌فرض تا پاسخ N2) ⇒ جایگزین امن: جاب نه Verify می‌کند و نه لغو؛ پرداخت
-    //     Pending می‌ماند و یک بار به صف بررسی می‌رود. ادمین با verify-by-authority همان مسیر Verify را اجرا می‌کند
-    //     (پرداخت‌شده ⇒ برداشت؛ پرداخت‌نشده ⇒ Failed). اگر ادمین بررسی را بدون Verify ببندد، جاب پرداخت را رهاشده لغو می‌کند.
+    //   • استعلام خاموش (EnableInquiry=false، پیش‌فرض تا پاسخ N2) ⇒ جاب هرگز Verify نمی‌کند. Batch 43b: زرین‌پال فقط با
+    //     Verify خودِ ما برداشت می‌کند، پس پرداخت کهنه‌ای که Verify آن هرگز آغاز نشده مثل قبل لغو می‌شود (بدون صف بررسی؛
+    //     پول تأییدنشده را درگاه برمی‌گرداند). Verify آغازشده با نتیجهٔ نامعلوم Pending می‌ماند و یک بار به صف بررسی
+    //     می‌رود. جاب سفارش‌های رهاشده (CancelWhenNotPaid=false) لغو نمی‌کند و علامت می‌زند. ادمین با verify-by-authority
+    //     همان مسیر Verify را اجرا می‌کند (پرداخت‌شده ⇒ برداشت؛ پرداخت‌نشده ⇒ Failed).
     //   • پرداختی که Verify آن قبلاً آغاز شده (VerifyStartedAtUtc) هرگز اینجا لغو نمی‌شود: Verified / PaidNotVerified با
     //     سفارش قابل پرداخت ⇒ مسیر Verify؛ بقیه ⇒ Pending می‌ماند و یک بار علامت می‌خورد (رفتار Batch 5/41).
     //   • پرداخت بسته (Cancelled/Failed) که درگاه آن را Verified می‌گوید ⇒ وضعیت عوض نمی‌شود (ماشین حالت اجازه نمی‌دهد)،
@@ -1582,10 +1584,10 @@ public sealed class PaymentService : IPaymentService
                 if (rules.VerifyWhenInquiryDisabled)
                     return await ReconcilePaidPaymentAsync(payment, inquiry, rules, verifyStarted);
 
-                // ادمین بررسی دستی را بسته و پرداخت را Verify نکرده است: یعنی پرداختی در کار نبوده. از این پس مثل پرداخت
-                // رهاشده لغو می‌شود تا برای همیشه Pending نماند (پول تأییدنشده را در هر حال درگاه برمی‌گرداند).
-                if (!verifyStarted && rules.CancelWhenNotPaid
-                    && payment.ReviewRequiredAtUtc is not null && payment.ReviewResolvedAtUtc is not null)
+                // Batch 43b (صف مالک ۲۰۲۶-۱۱-۱۶): زرین‌پال فقط با Verify خودِ ما پول برداشت می‌کند. پرداخت کهنه‌ای که
+                // Verify آن هرگز آغاز نشده نمی‌تواند برداشت شده باشد؛ جاب آن را مثل پیش از Batch 43 لغو می‌کند (پول
+                // تأییدنشده را درگاه برمی‌گرداند) و به صف بررسی نمی‌فرستد. فقط Verify آغازشده با نتیجهٔ نامعلوم می‌ماند.
+                if (!verifyStarted && rules.CancelWhenNotPaid)
                     return await CancelAbandonedPaymentAsync(payment, inquiry, rules);
 
                 return await LeavePendingAsync(
@@ -1747,8 +1749,15 @@ public sealed class PaymentService : IPaymentService
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
+        var inquiryDisabled = inquiry?.IsInquiryDisabled == true;
+
         payment.TransitionTo(PaymentState.Cancelled, "abandoned: no gateway confirmation", now);
-        var reviewClosed = ApplySweeperHoldResolution(payment, now, "the gateway reports the payment as not paid; it was cancelled");
+        var reviewClosed = ApplySweeperHoldResolution(
+            payment,
+            now,
+            inquiryDisabled
+                ? "the gateway inquiry is off and verification never started, so nothing was captured; it was cancelled as abandoned"
+                : "the gateway reports the payment as not paid; it was cancelled");
         _unitOfWork.Repository<Payment>().Update(payment);
 
         await AuditAsync(
@@ -1756,8 +1765,9 @@ public sealed class PaymentService : IPaymentService
             payment.PaymentId,
             $"abandoned after {rules.AbandonedAfterMinutes} minutes | source={rules.Source} | {GatewayText(inquiry)}" +
             (reviewClosed ? " | the open 'waiting for the gateway' review was closed automatically" : string.Empty) +
-            (inquiry?.IsInquiryDisabled == true
-                ? " | gateway inquiry is off; an admin closed the manual review without verifying, so the payment is treated as abandoned"
+            (inquiryDisabled
+                ? " | gateway inquiry is off; verification never started and the gateway captures only on our Verify, " +
+                  "so nothing was captured — the payment is treated as abandoned (the gateway returns any unverified payment)"
                 : string.Empty),
             CancellationToken.None);
 

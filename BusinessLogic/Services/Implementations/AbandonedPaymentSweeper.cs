@@ -18,6 +18,10 @@ namespace BusinessLogic.Services.Implementations;
 /// پرداخت‌های کهنه را انتخاب می‌کند؛ تصمیم پول برای هر پرداخت در
 /// <see cref="IPaymentService.ReconcileStalePaymentAsync"/> است (همان قواعد اقدام ادمین).
 ///
+/// Batch 43b: با استعلام خاموش (<c>PaymentGatewaySettings:EnableInquiry = false</c>) پرداخت کهنه‌ای که Verify آن هرگز
+/// آغاز نشده (<c>VerifyStartedAtUtc = null</c>) مثل پیش از Batch 43 لغو می‌شود — زرین‌پال فقط با Verify خودِ ما برداشت
+/// می‌کند؛ فقط Verify آغازشده با نتیجهٔ نامعلوم به صف بررسی می‌رود.
+///
 /// هر پرداخت جدا پردازش و ذخیره می‌شود: خطای یک پرداخت بقیه را متوقف نمی‌کند.
 /// سفارش دست‌نخورده می‌ماند تا کاربر دوباره تلاش کند (تصمیم فاز ۸).
 /// </summary>

@@ -438,13 +438,16 @@ decision for each payment is in `IPaymentService.ReconcileStalePaymentAsync`:
 | already verified (money captured) | recorded `Succeeded`; if the order is no longer payable it goes to the review queue with `refundNeeded=true` |
 | paid, not verified, order no longer payable | **not** verified, cancelled, flagged for review (the gateway returns unverified money) |
 | not paid | cancelled |
-| unknown, or inquiry turned off | left `Pending`, flagged for review once |
+| unknown | left `Pending`, flagged for review once |
+| inquiry turned off, verify never started | cancelled, not flagged (Batch 43b: Zarinpal captures only on our Verify, so nothing was captured) |
+| inquiry turned off, verify started, outcome unknown | left `Pending`, flagged for review once |
 
 `AbandonedOrderCleanupService` asks the same question for the open payments of an
 order before it cancels the order. `PaymentGatewaySettings:EnableInquiry` is
 `false` by default (the Zarinpal inquiry method is documented but not yet
-confirmed for the merchant); while it is off no payment is verified or cancelled
-automatically, and an admin settles each flagged payment with
+confirmed for the merchant); while it is off the jobs never verify a payment,
+the payment job cancels stale payments whose verify never started (the order job
+flags them instead of cancelling), and an admin settles each flagged payment with
 `POST /api/v1/payments/verify-by-authority`. `AbandonedPaymentSettings:InquireGatewayBeforeCancel=false`
 restores the old behaviour (cancel after the timeout without asking).
 The clock is injected as `TimeProvider` so the behaviour is testable without waiting.
