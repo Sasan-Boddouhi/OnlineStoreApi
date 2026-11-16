@@ -118,6 +118,40 @@ jobs:
           retention-days: 1
 
 
+
+  # ═══════════════════════════════════════════════════════════
+  # Job: OpenAPI contract (Batch 67, API-05)
+  # openapi/v1.json بخشی از مخزن است؛ اگر با خروجی تازهٔ برنامه فرق داشته باشد job شکست می‌خورد.
+  # بدون پایگاه داده: برنامه در محیط Testing فقط ساخته می‌شود. ابزار CLI روی net8 اجرا می‌شود
+  # ولی وابستگی‌های برنامه System.Runtime 9 می‌خواهند؛ پس runtime 9 هم نصب می‌شود.
+  # ═══════════════════════════════════════════════════════════
+  openapi-contract:
+    name: OpenAPI contract is up to date
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Check openapi/v1.json
+        shell: pwsh
+        run: ./scripts/generate-openapi.ps1 -Check
+
+      - name: Upload generated document
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-v1
+          path: openapi/v1.json
+          retention-days: 7
+
   # ═══════════════════════════════════════════════════════════
   # Job 2: HTML Coverage Report
   # Not on the critical deployment path

@@ -500,12 +500,12 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false
-}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().ExcludeFromDescription().CacheOutput(policy => policy.NoCache());
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
-}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().ExcludeFromDescription().CacheOutput(policy => policy.NoCache());
 
 app.UseCors("ReactFrontend");
 
@@ -532,7 +532,7 @@ app.MapGet("/version", () => new
     version = "v2",
     commit = Environment.GetEnvironmentVariable("GIT_COMMIT") ?? "unknown",
     deployedAt = DateTime.UtcNow
-}).AllowAnonymous().CacheOutput(policy => policy.NoCache());
+}).AllowAnonymous().ExcludeFromDescription().CacheOutput(policy => policy.NoCache());
 
 
 Log.Information("Online Store API started successfully");

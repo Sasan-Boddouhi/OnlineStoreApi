@@ -39,11 +39,13 @@ public class ProductImagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ProductImageDto>> Upload(
         int productId,
-        [FromForm] IFormFile file,
-        [FromForm] string? alt,
-        [FromForm] bool isPrimary,
+        [FromForm] UploadProductImageForm form,
         CancellationToken cancellationToken)
     {
+        var file = form.File;
+        var alt = form.Alt;
+        var isPrimary = form.IsPrimary;
+
         if (file is null || file.Length == 0)
         {
             var problem = new ProblemDetails
@@ -125,6 +127,17 @@ public class AddProductImageUrlRequest : System.ComponentModel.DataAnnotations.I
     }
 
     public string Url { get; set; } = null!;
+    public string? Alt { get; set; }
+    public bool IsPrimary { get; set; }
+}
+/// <summary>
+/// Batch 67 (API-05): فیلدهای فرم آپلود تصویر. Swashbuckle ترکیب <c>IFormFile</c> با چند پارامتر
+/// <c>[FromForm]</c> جدا را نمی‌پذیرد و تولید سند OpenAPI را می‌شکست؛ نام فیلدهای فرم (file، alt، isPrimary) تغییر نکرده‌اند.
+/// <c>File</c> عمداً nullable است تا نبود فایل همچنان پاسخ <c>FILE_REQUIRED</c> بدهد.
+/// </summary>
+public sealed class UploadProductImageForm
+{
+    public IFormFile? File { get; set; }
     public string? Alt { get; set; }
     public bool IsPrimary { get; set; }
 }

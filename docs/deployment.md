@@ -221,6 +221,7 @@ ForwardedHeaders__ForwardLimit
 | `Refresh` | `POST /api/v1/auth/refresh` | client IP | 60 / 60 s (raised from 20 in Batch 11b: 15-minute access tokens, many mobile users share one carrier IP) |
 | `Checkout` | `POST /api/v1/carts/checkout` | user id, else IP | 5 / 60 s |
 | `PaymentInitiate` | `POST /api/v1/payments/initiate` | user id, else IP | 10 / 60 s |
+| `PaymentVerify` | `POST /api/v1/payments/verify` | user id, else IP | 10 / 60 s |
 
 A rejected request gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a ProblemDetails body with `code = RATE_LIMIT_EXCEEDED` and `retryAfterSeconds`. Counters are kept in memory per API instance. Users behind one carrier NAT share the per-IP login/register quota; raise those limits if that becomes a problem.
 
@@ -635,6 +636,10 @@ row to `Pending`.
 | `AbandonedPaymentSettings__ScanIntervalMinutes` | no (default 15) | Cleanup job cadence. |
 | `AbandonedPaymentSettings__TimeoutMinutes` | no (default 30) | Age after which a `Pending` payment is cancelled. |
 | `AbandonedPaymentSettings__Enabled` | no (default true) | Turn the cleanup job off. |
+| `AbandonedPaymentSettings__InquireGatewayBeforeCancel` | no (default true) | Ask the gateway for the payment state before the cleanup job cancels an old `Pending` payment. Has an effect only when `PaymentGatewaySettings__EnableInquiry=true`; otherwise the payment stays `Pending`. |
+| `AbandonedPaymentSettings__MaxPaymentsPerSweep` | no (default 200, clamped 1-5000) | Maximum number of payments the cleanup job handles in one run. |
+| `PaymentGatewaySettings__EnableInquiry` | no (default `false`) | Allows the gateway inquiry call used to learn the real state of a `Pending` payment. Flip to `true` once Zarinpal support confirms inquiry is available for our merchant. While `false`, no inquiry call is made and an unknown payment stays `Pending` instead of being cancelled. |
+| `RateLimiting__PaymentVerify__PermitLimit` / `__WindowSeconds` | no (default 10 / 60 s) | Limit on `POST /payments/verify` (each call reaches the gateway), per user id, else IP. |
 | `ForwardedHeaders__KnownNetworks__0` / `ForwardedHeaders__KnownProxies__0` | **yes behind a proxy** | Trusted reverse proxy (CIDR or single IP). Without it every client has the proxy's IP; a start-up warning is logged in Production. See §7. |
 | `ForwardedHeaders__ForwardLimit` | no (default 1) | Number of proxies in front of the API. |
 | `RateLimiting__<Policy>__PermitLimit` / `__WindowSeconds` | no | Per-client limits for `Login`, `Register`, `Refresh`, `Checkout`, `PaymentInitiate`. See §7. |
