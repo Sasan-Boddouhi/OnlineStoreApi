@@ -25,7 +25,10 @@ public class ProductionStartupValidationTests
         ["PaymentGatewaySettings:WebhookSecret"] = "prod-webhook-secret-for-tests",
         // Batch 40 (SEC-09): در Production آدرس بازگشت باید https و غیر loopback باشد.
         ["PaymentGatewaySettings:CallbackUrl"] = "https://shop.example.com/payment/callback",
-        ["CorsOrigins:0"] = "https://shop.example.com"
+        ["CorsOrigins:0"] = "https://shop.example.com",
+        // Batch 46: Production needs an HMAC key (the base test factory sets one) and a resend cooldown of at least 60 s
+        // (the base test factory sets 0 for ordinary tests).
+        ["Otp:ResendCooldownSeconds"] = "120"
     };
 
     /// <summary>همان factory تست با محیط و تنظیمات دلخواه (پیش‌فرض Production).</summary>
@@ -39,14 +42,20 @@ public class ProductionStartupValidationTests
         /// Batch 49b: اگر داده شود، اسکیمای پایگاه داده پیش از همهٔ hosted serviceها ساخته و این تابع اجرا می‌شود
         /// تا بوت‌استرپ انبار پلتفرم وضعیت واقعی پایگاه داده را ببیند.
         /// </param>
+        /// <param name="realSmsProvider">
+        /// Batch 46: Production refuses to start with the logging SMS sender (N9). Until the real adapter exists (Batch 46b)
+        /// these tests stand in for it with the capturing sender marked as a real provider.
+        /// </param>
         public EnvironmentFactory(
             string environment,
             Dictionary<string, string?> settings,
-            Func<AppDbContext, Task>? prepareDatabase = null)
+            Func<AppDbContext, Task>? prepareDatabase = null,
+            bool realSmsProvider = true)
         {
             _environment = environment;
             _settings = settings;
             _prepareDatabase = prepareDatabase;
+            Sms.IsRealProvider = realSmsProvider;
         }
 
         // Batch 5: این تست‌ها درگاهی را می‌سنجند که خودِ برنامه از روی تنظیمات می‌سازد.
@@ -252,6 +261,98 @@ public class ProductionStartupValidationTests
 
         var platform = await db.Warehouse.AsNoTracking().Where(w => w.SellerId == null).ToListAsync();
         platform.Should().ContainSingle().Which.Name.Should().Be("انبار مرکزی");
+    }
+
+    // ==================== Batch 46: OTP / SMS ====================
+
+    [Fact]
+    public void Batch46_Production_WithOnlyTheLoggingSmsSender_FailsToStart()
+    {
+        using var factory = new EnvironmentFactory("Production", With(), realSmsProvider: false);
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*Sms:Provider*");
+    }
+
+    [Fact]
+    public void Batch46_Production_WithTheRealLoggingSenderRegistration_FailsToStart()
+    {
+        // no test stand-in: the application's own registration (LoggingSmsSender) must stop Production.
+        using var factory = new LoggingSenderFactory("Production", With());
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*Sms:Provider*");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("too-short-key")]
+    public void Batch46_Production_WithoutAStrongOtpHmacKey_FailsToStart(string key)
+    {
+        using var factory = new EnvironmentFactory("Production", With(("Otp:HmacKey", key)));
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*Otp:HmacKey*");
+    }
+
+    [Fact]
+    public void Batch46_Production_WithAResendCooldownBelow60Seconds_FailsToStart()
+    {
+        using var factory = new EnvironmentFactory("Production", With(("Otp:ResendCooldownSeconds", "10")));
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*Otp:ResendCooldownSeconds*");
+    }
+
+    [Fact]
+    public void Batch46_AnSmsProviderWithoutAnAdapter_FailsToStart_InEveryEnvironment()
+    {
+        using var factory = new EnvironmentFactory("Testing", new Dictionary<string, string?> { ["Sms:Provider"] = "Kavenegar" });
+
+        var act = () => factory.CreateClient();
+
+        act.Should().Throw<OptionsValidationException>().WithMessage("*Sms:Provider*");
+    }
+
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Development")]
+    public void Batch46_DevelopmentAndTesting_StartWithTheLoggingSender_AndWithoutAnHmacKey(string environment)
+    {
+        using var factory = new LoggingSenderFactory(environment, new Dictionary<string, string?> { ["Otp:HmacKey"] = "" });
+
+        using var client = factory.CreateClient();
+
+        factory.Services.GetRequiredService<Application.Interfaces.ISmsSender>()
+            .Should().BeOfType<LoggingSmsSender>();
+    }
+
+    /// <summary>Batch 46: keeps the application's own ISmsSender registration (no capturing stand-in).</summary>
+    private sealed class LoggingSenderFactory : IntegrationTestFactory<Program>
+    {
+        private readonly string _environment;
+        private readonly Dictionary<string, string?> _settings;
+
+        public LoggingSenderFactory(string environment, Dictionary<string, string?> settings)
+        {
+            _environment = environment;
+            _settings = settings;
+        }
+
+        protected override bool UseScriptedPaymentGateway => false;
+
+        protected override bool UseCapturingSmsSender => false;
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.UseEnvironment(_environment);
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(_settings));
+        }
     }
 
     [Fact]

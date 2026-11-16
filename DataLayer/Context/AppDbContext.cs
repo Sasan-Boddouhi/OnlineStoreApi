@@ -79,6 +79,9 @@ namespace DataLayer.Context
         // M7.12 — بدهی و مطالبات فروشنده
         public DbSet<SellerDebt> SellerDebt { get; set; }
 
+        // Batch 46 — کدهای یک‌بار مصرف پیامکی
+        public DbSet<OtpCode> OtpCode { get; set; }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             foreach (var interceptor in _interceptors)
@@ -758,6 +761,20 @@ namespace DataLayer.Context
                 entity.HasIndex(o => new { o.CustomerId, o.IdempotencyKey })
                     .IsUnique()
                     .HasFilter("[IdempotencyKey] IS NOT NULL");
+            });
+
+            // Batch 46 — OTP: جست‌وجوی کد فعال هر (شماره، هدف)، سقف‌های هر شماره و بودجهٔ روزانه، پاک‌سازی منقضی‌ها.
+            modelBuilder.Entity<OtpCode>(entity =>
+            {
+                entity.Property(o => o.Purpose).HasConversion<int>();
+                entity.Property(o => o.CodeHash).IsUnicode(false);
+                entity.Property(o => o.VerificationTokenHash).IsUnicode(false);
+                entity.Property(o => o.PhoneNumber).IsUnicode(false);
+
+                entity.HasIndex(o => new { o.PhoneNumber, o.Purpose });
+                entity.HasIndex(o => new { o.PhoneNumber, o.CreatedAtUtc });
+                entity.HasIndex(o => o.CreatedAtUtc);
+                entity.HasIndex(o => o.ExpiresAtUtc);
             });
         }
     }

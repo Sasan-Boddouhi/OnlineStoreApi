@@ -166,6 +166,11 @@ services:
       PaymentGatewaySettings__CallbackUrl: ${PAYMENT_CALLBACK_URL}
       CorsOrigins__0: ${CORS_ORIGIN_0}
 
+      # Batch 46 (N9): کلید HMAC کدهای OTP (حداقل ۳۲ کاراکتر تصادفی) و ارائه‌دهندهٔ پیامک. بدون ارائه‌دهندهٔ واقعی
+      # (آداپتور Batch 46b) راه‌اندازی در Production متوقف می‌شود (docs/deployment.md §7).
+      Otp__HmacKey: ${OTP_HMAC_KEY}
+      Sms__Provider: ${SMS_PROVIDER:-Logging}
+
       # Batch 49b: اگر هیچ انبار پلتفرمی (SellerId = null) نباشد، API هنگام راه‌اندازی آن را از این مقادیر می‌سازد؛
       # بدون انبار و بدون این مقادیر، راه‌اندازی در Production متوقف می‌شود (docs/deployment.md §8).
       # پس از ساخته شدن انبار، این مقادیر دیگر خوانده نمی‌شوند (ولی اگر تنظیم شوند باید معتبر باشند).

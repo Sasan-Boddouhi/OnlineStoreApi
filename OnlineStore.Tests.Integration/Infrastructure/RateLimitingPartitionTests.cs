@@ -28,6 +28,7 @@ public class RateLimitingPartitionTests : IClassFixture<RateLimitingTestFactory>
     private const string LoginUrl = "/api/v1/auth/login";
     private const string RegisterUrl = "/api/v1/auth/register";
     private const string CheckoutUrl = "/api/v1/carts/checkout";
+    private const string OtpSendUrl = "/api/v1/auth/otp/send";
 
     private readonly RateLimitingTestFactory _factory;
     private readonly HttpClient _client;
@@ -165,6 +166,26 @@ public class RateLimitingPartitionTests : IClassFixture<RateLimitingTestFactory>
         session.UserAgent.Should().Be("RateLimitTests/1.0");
     }
 
+    [Fact]
+    public async Task Batch46_OtpSend_IsLimitedPerClientIp_AcrossDifferentPhones()
+    {
+        const string clientA = "203.0.113.51";
+        const string clientB = "203.0.113.52";
+
+        // a different phone each time: the per-phone limit never applies, only the per-IP one.
+        for (var i = 0; i < RateLimitingTestFactory.OtpSendLimit; i++)
+            (await PostAsync(OtpSendUrl, new { phoneNumber = $"0913510{i:D4}" }, clientA)).StatusCode
+                .Should().Be(HttpStatusCode.OK, $"send {i + 1} is still inside the quota of A");
+
+        var aOverLimit = await PostAsync(OtpSendUrl, new { phoneNumber = "09135109999" }, clientA);
+        aOverLimit.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        aOverLimit.Headers.RetryAfter.Should().NotBeNull();
+        _factory.Sms.MessagesTo("09135109999").Should().BeEmpty("a rejected request sends no SMS");
+
+        (await PostAsync(OtpSendUrl, new { phoneNumber = "09135108888" }, clientB)).StatusCode
+            .Should().Be(HttpStatusCode.OK, "client A's quota must not block client B");
+    }
+
     // ---------------- helpers ----------------
 
     private static void ShouldNotBeRateLimited(HttpResponseMessage response, string because) =>
@@ -180,14 +201,15 @@ public class RateLimitingPartitionTests : IClassFixture<RateLimitingTestFactory>
 
     private async Task<string> RegisterAsync(string phone, string peerIp)
     {
-        var response = await PostAsync(RegisterUrl, new
+        // Batch 46: registration needs a verified phone (two-step flow); the helper adds the verification token.
+        var response = await _client.PostRegisterWithVerifiedPhoneAsync(_factory, new
         {
             PhoneNumber = phone,
             Password = "Test@123",
             FirstName = "کاربر",
             LastName = "آزمون",
             DeviceId = "rate-limit-test"
-        }, peerIp);
+        }, request => request.Headers.Add(RateLimitingTestFactory.PeerIpHeader, peerIp));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var auth = await response.Content.ReadFromJsonAsync<AuthResultDto>();

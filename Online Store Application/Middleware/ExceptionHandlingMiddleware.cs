@@ -62,6 +62,13 @@ public sealed class ExceptionHandlingMiddleware
                 problem.Extensions["retryAfterSeconds"] = unavailable.RetryAfterSeconds;
             }
 
+            // Batch 46: 429 لایهٔ سرویس (سقف OTP) همان شکل پاسخ limiter را دارد.
+            if (ex is TooManyRequestsException tooMany && !context.Response.HasStarted)
+            {
+                context.Response.Headers.RetryAfter = tooMany.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                problem.Extensions["retryAfterSeconds"] = tooMany.RetryAfterSeconds;
+            }
+
             if (!context.Response.HasStarted)
             {
                 await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
@@ -173,6 +180,7 @@ public sealed class ExceptionHandlingMiddleware
         404 => "Not Found",
         409 => "Conflict",
         422 => "Unprocessable Entity",
+        429 => "Too Many Requests",
         500 => "Internal Server Error",
         503 => "Service Unavailable",
         _ => "Error"

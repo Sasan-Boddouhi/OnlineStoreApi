@@ -692,7 +692,7 @@ public class Phase15Batch43ReconciliationTests : ControllerIntegrationTestBase
 
     private async Task<HttpClient> CustomerClientAsync()
     {
-        var register = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var register = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = $"0912{Random.Shared.Next(0, 10_000_000):D7}",
             Password = "Customer@123",
@@ -1191,20 +1191,15 @@ public class Phase15Batch43VerifyRateLimitTests : IClassFixture<RateLimitingTest
 
     private async Task<string> RegisterAsync(string phone, string peerIp)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/register")
+        // Batch 46: registration needs a verified phone (two-step flow); the helper adds the verification token.
+        var response = await _client.PostRegisterWithVerifiedPhoneAsync(_factory, new
         {
-            Content = JsonContent.Create(new
-            {
-                PhoneNumber = phone,
-                Password = "Test@123",
-                FirstName = "کاربر",
-                LastName = "آزمون",
-                DeviceId = "b43-rate-limit"
-            })
-        };
-        request.Headers.Add(RateLimitingTestFactory.PeerIpHeader, peerIp);
-
-        var response = await _client.SendAsync(request);
+            PhoneNumber = phone,
+            Password = "Test@123",
+            FirstName = "کاربر",
+            LastName = "آزمون",
+            DeviceId = "b43-rate-limit"
+        }, request => request.Headers.Add(RateLimitingTestFactory.PeerIpHeader, peerIp));
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<AuthResultDto>())!.AccessToken;
     }

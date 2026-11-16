@@ -162,6 +162,9 @@ public sealed class EndpointAuthorizationInventoryTests : IClassFixture<Integrat
         ["POST api/v{version:apiVersion}/Warehouses"] = Authenticated,
         ["POST api/v{version:apiVersion}/auth/login"] = Anonymous,
         ["POST api/v{version:apiVersion}/auth/logout"] = Authenticated,
+        // Batch 46: OTP send/verify are the first steps of registration, so they are public (rate-limited per IP and phone).
+        ["POST api/v{version:apiVersion}/auth/otp/send"] = Anonymous,
+        ["POST api/v{version:apiVersion}/auth/otp/verify"] = Anonymous,
         ["POST api/v{version:apiVersion}/auth/refresh"] = Anonymous,
         ["POST api/v{version:apiVersion}/auth/register"] = Anonymous,
         ["POST api/v{version:apiVersion}/brands"] = AdminOnly,

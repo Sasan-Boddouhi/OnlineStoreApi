@@ -25,6 +25,12 @@ public sealed class RateLimitingOptions
     // یک بازگشت عادی از درگاه یک یا دو تأیید می‌فرستد. کلاینتی که 503 PAYMENT_VERIFY_RETRY را هر ۵ ثانیه تکرار کند پس از
     // حدود ۵۰ ثانیه 429 با Retry-After می‌گیرد؛ پرداختِ بی‌نتیجه را جاب تطبیق (AbandonedPaymentSweeper) قطعی می‌کند.
     public FixedWindowLimitOptions PaymentVerify { get; set; } = new() { PermitLimit = 10, WindowSeconds = 60 };
+
+    // Batch 46 (review §9.3 قاعدهٔ ۲ و ۳): سقف هر IP برای ارسال کد (هر پیامک هزینه دارد) و برای تأیید کد.
+    // سقف هر شماره و بودجهٔ روزانهٔ کل در OtpService (Otp:*) است.
+    public FixedWindowLimitOptions OtpSend { get; set; } = new() { PermitLimit = 10, WindowSeconds = 3600 };
+
+    public FixedWindowLimitOptions OtpVerify { get; set; } = new() { PermitLimit = 30, WindowSeconds = 600 };
 }
 
 /// <summary>یک پنجرهٔ ثابت: حداکثر <see cref="PermitLimit"/> درخواست در هر <see cref="WindowSeconds"/> ثانیه.</summary>

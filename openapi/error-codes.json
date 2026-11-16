@@ -42,6 +42,30 @@
     "type": "urn:onlinestore:error:not-found"
   },
   {
+    "code": "OTP_EXPIRED",
+    "status": 422,
+    "message": "کد تأیید منقضی شده است. کد تازه درخواست کنید.",
+    "type": "urn:onlinestore:error:otp-expired"
+  },
+  {
+    "code": "OTP_INVALID",
+    "status": 422,
+    "message": "کد تأیید نادرست است یا دیگر معتبر نیست.",
+    "type": "urn:onlinestore:error:otp-invalid"
+  },
+  {
+    "code": "OTP_SEND_UNAVAILABLE",
+    "status": 503,
+    "message": "ارسال پیامک تأیید در حال حاضر ممکن نیست. لطفاً بعداً تلاش کنید.",
+    "type": "urn:onlinestore:error:otp-send-unavailable"
+  },
+  {
+    "code": "OTP_TOO_MANY_ATTEMPTS",
+    "status": 429,
+    "message": "تعداد تلاش‌های نادرست بیش از حد مجاز است. کد تازه درخواست کنید.",
+    "type": "urn:onlinestore:error:otp-too-many-attempts"
+  },
+  {
     "code": "PAYOUT_NET_CHANGED",
     "status": 409,
     "message": "مبلغ خالص تسویه تغییر کرده است؛ فهرست را تازه کنید.",
@@ -52,6 +76,12 @@
     "status": 409,
     "message": "این تسویه هنوز در دورهٔ نگه‌داشت است و قابل پرداخت نیست.",
     "type": "urn:onlinestore:error:payout-on-hold"
+  },
+  {
+    "code": "PHONE_NOT_VERIFIED",
+    "status": 422,
+    "message": "شماره موبایل تأیید نشده است. ابتدا کد تأیید را وارد کنید.",
+    "type": "urn:onlinestore:error:phone-not-verified"
   },
   {
     "code": "PLATFORM_WAREHOUSE_EXISTS",

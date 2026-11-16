@@ -14,6 +14,7 @@ public sealed class CreateUserMappingProfile : Profile
             .ForMember(d => d.FailedLoginAttempts, opt => opt.Ignore())
             .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
             .ForMember(d => d.IsSystem, opt => opt.Ignore())
+            .ForMember(d => d.PhoneNumberConfirmed, opt => opt.Ignore())
             .ForMember(d => d.FullName, opt => opt.Ignore())
             .ForMember(d => d.DateOfBirth, opt => opt.Ignore())
             .ForMember(d => d.Addresses, opt => opt.Ignore())

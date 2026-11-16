@@ -29,6 +29,7 @@ public sealed class AuthService : IAuthService
     private readonly ILogger<AuthService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly UserSessionOptions _sessionOptions;
+    private readonly IOtpService _otpService;
 
     private static readonly ActivitySource ActivitySource = new("OnlineStore.Auth");
 
@@ -43,7 +44,8 @@ public sealed class AuthService : IAuthService
         IMapper mapper,
         ILogger<AuthService> logger,
         TimeProvider timeProvider,
-        IOptions<UserSessionOptions> sessionOptions)
+        IOptions<UserSessionOptions> sessionOptions,
+        IOtpService otpService)
     {
         _unitOfWork = unitOfWork;
         _jwtTokenService = jwtTokenService;
@@ -52,6 +54,7 @@ public sealed class AuthService : IAuthService
         _logger = logger;
         _timeProvider = timeProvider;
         _sessionOptions = sessionOptions.Value;
+        _otpService = otpService;
     }
 
     // ================= REGISTER =================
@@ -66,6 +69,11 @@ public sealed class AuthService : IAuthService
 
         try
         {
+            // Batch 46 (N9): ثبت‌نام فقط با کد تأییدشدهٔ همین شماره کامل می‌شود. این بررسی پیش از جست‌وجوی حساب است، پس
+            // بدون دریافت پیامک نمی‌توان فهمید شماره‌ای حساب دارد (ضد شمارش). توکن یک‌بار مصرف است و اگر ثبت‌نام
+            // به هر دلیل شکست بخورد، با rollback تراکنش دوباره قابل استفاده می‌شود.
+            await _otpService.ConsumeVerificationAsync(phone, OtpPurpose.Register, dto.PhoneVerificationToken, ct);
+
             var exists = await _unitOfWork.Repository<User>()
                 .AnyAsync(x => x.PhoneNumber == phone, ct);
 
@@ -90,6 +98,7 @@ public sealed class AuthService : IAuthService
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 PhoneNumber = phone,
+                PhoneNumberConfirmed = true,
                 Email = email,
                 DateOfBirth = !string.IsNullOrWhiteSpace(dto.DateOfBirth)
                     ? PersianDateHelper.ToGregorian(dto.DateOfBirth)

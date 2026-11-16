@@ -49,6 +49,8 @@ public class UserProfile : Profile
             .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
             // Batch 44: حساب سیستمی فقط در راه‌اندازی ساخته می‌شود؛ هرگز از ورودی API.
             .ForMember(d => d.IsSystem, opt => opt.Ignore())
+            // Batch 46: فقط ثبت‌نام با OTP شماره را تأیید می‌کند؛ کاربری که ادمین می‌سازد تأییدنشده است.
+            .ForMember(d => d.PhoneNumberConfirmed, opt => opt.Ignore())
 
             // computed
             .ForMember(d => d.FullName, opt => opt.Ignore())
@@ -72,6 +74,8 @@ public class UserProfile : Profile
             .ForMember(d => d.LockoutEnd, opt => opt.Ignore())
             // Batch 44: حساب سیستمی فقط در راه‌اندازی ساخته می‌شود؛ هرگز از ورودی API.
             .ForMember(d => d.IsSystem, opt => opt.Ignore())
+            // Batch 46: تأیید شماره فقط با OTP؛ ویرایش ادمین آن را تغییر نمی‌دهد.
+            .ForMember(d => d.PhoneNumberConfirmed, opt => opt.Ignore())
             .ForMember(d => d.IsActive, opt => opt.Ignore())
 
             // computed

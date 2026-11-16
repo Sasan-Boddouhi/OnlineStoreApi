@@ -33,6 +33,7 @@ public sealed class ExpiredTokenCleanupService : BackgroundService
         do
         {
             await RunCleanupAsync(stoppingToken);
+            await RunOtpCleanupAsync(stoppingToken);
         }
         while (await WaitForNextTickAsync(timer, stoppingToken));
     }
@@ -46,6 +47,41 @@ public sealed class ExpiredTokenCleanupService : BackgroundService
         catch (OperationCanceledException)
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Batch 46: کدهای OTP پس از ۲ روز دیگر برای هیچ سقفی (ساعتی، روزانه) لازم نیستند و حذف می‌شوند (فقط هش بودند).
+    /// </summary>
+    public async Task<int> RunOtpCleanupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var repository = unitOfWork.Repository<OtpCode>();
+
+            var threshold = DateTime.UtcNow.AddDays(-2);
+            var staleCodes = await repository.ListAsync(
+                new Spec<OtpCode>().Where(o => o.CreatedAtUtc < threshold).AsTracking(), cancellationToken);
+
+            if (staleCodes.Count == 0)
+                return 0;
+
+            repository.DeleteRange(staleCodes);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("ExpiredTokenCleanupService purged {Count} old OTP codes.", staleCodes.Count);
+            return staleCodes.Count;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while purging old OTP codes.");
+            return 0;
         }
     }
 

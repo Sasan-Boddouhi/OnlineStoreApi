@@ -301,7 +301,7 @@ public class Phase15Batch42RefundQueueTests : ControllerIntegrationTestBase
 
     private async Task<HttpClient> CustomerClientAsync()
     {
-        var register = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var register = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = $"0912{Random.Shared.Next(0, 10_000_000):D7}",
             Password = "Customer@123",

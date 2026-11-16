@@ -28,8 +28,14 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
     /// <summary>Batch 5: درگاه پرداخت قابل برنامه‌ریزی؛ پیش‌فرض همان FakePaymentGateway. در هر تست بازنشانی می‌شود.</summary>
     public ScriptedPaymentGateway PaymentGateway { get; } = new();
 
+    /// <summary>Batch 46: پیامک‌های OTP اینجا ضبط می‌شوند (جای فرستندهٔ لاگ‌کننده).</summary>
+    public CapturingSmsSender Sms { get; } = new();
+
     /// <summary>تست‌هایی که انتخاب درگاه توسط خودِ برنامه را می‌سنجند، جایگزینی را خاموش می‌کنند.</summary>
     protected virtual bool UseScriptedPaymentGateway => true;
+
+    /// <summary>Batch 46: تست‌هایی که فرستندهٔ پیامکِ خودِ برنامه (LoggingSmsSender) را می‌سنجند، جایگزینی را خاموش می‌کنند.</summary>
+    protected virtual bool UseCapturingSmsSender => true;
 
     private static SqliteConnection CreateInMemoryConnection()
     {
@@ -66,7 +72,16 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 ["RateLimiting:Refresh:PermitLimit"] = "10000",
                 ["RateLimiting:Checkout:PermitLimit"] = "10000",
                 ["RateLimiting:PaymentInitiate:PermitLimit"] = "10000",
-                ["RateLimiting:PaymentVerify:PermitLimit"] = "10000"
+                ["RateLimiting:PaymentVerify:PermitLimit"] = "10000",
+                ["RateLimiting:OtpSend:PermitLimit"] = "10000",
+                ["RateLimiting:OtpVerify:PermitLimit"] = "10000",
+                // Batch 46: سقف‌های OTP هر شماره برای تست‌های عادی باز است (یک شماره چند بار در یک تست ثبت‌نام می‌کند)؛
+                // سقف‌های واقعی در OtpTestFactory (AuthOtpIntegrationTests) سنجیده می‌شوند.
+                ["Otp:HmacKey"] = "integration-tests-otp-hmac-key-0123456789abcdef",
+                ["Otp:ResendCooldownSeconds"] = "0",
+                ["Otp:MaxSendsPerPhonePerHour"] = "1000",
+                ["Otp:MaxSendsPerPhonePerDay"] = "1000",
+                ["Otp:GlobalDailySendLimit"] = "1000000"
             });
         });
 
@@ -110,6 +125,13 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
                 services.AddScoped<IPaymentGateway>(_ => PaymentGateway);
             }
 
+            // Batch 46: پیامک‌ها ضبط می‌شوند تا تست کد را بخواند.
+            if (UseCapturingSmsSender)
+            {
+                services.RemoveAll<ISmsSender>();
+                services.AddSingleton<ISmsSender>(Sms);
+            }
+
             services.Configure<MvcOptions>(options => options.SuppressAsyncSuffixInActionNames = false);
         });
     }
@@ -117,6 +139,7 @@ public class IntegrationTestFactory<TProgram> : WebApplicationFactory<TProgram>
     public async Task InitializeDatabaseAsync()
     {
         PaymentGateway.Reset();
+        Sms.Reset();
 
         var cache = Services.GetService<ICacheService>() as FakeCacheService;
         cache?.Clear();

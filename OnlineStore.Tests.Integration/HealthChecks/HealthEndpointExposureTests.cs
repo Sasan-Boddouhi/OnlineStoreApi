@@ -109,7 +109,7 @@ public sealed class HealthEndpointExposureTests : ControllerIntegrationTestBase
             DateOfBirth = "1370/01/01"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerData);
         response.EnsureSuccessStatusCode();
 
         return (await response.Content.ReadFromJsonAsync<AuthResultDto>())!.AccessToken;
@@ -122,7 +122,9 @@ public sealed class HealthEndpointExposureTests : ControllerIntegrationTestBase
         ["PaymentGatewaySettings:MerchantId"] = "00000000-0000-0000-0000-000000000000",
         ["PaymentGatewaySettings:WebhookSecret"] = "prod-webhook-secret-for-tests",
         ["PaymentGatewaySettings:CallbackUrl"] = "https://shop.example.com/payment/callback",
-        ["CorsOrigins:0"] = "https://shop.example.com"
+        ["CorsOrigins:0"] = "https://shop.example.com",
+        // Batch 46: Production needs a resend cooldown of at least 60 s (the base test factory sets 0).
+        ["Otp:ResendCooldownSeconds"] = "120"
     };
 
     /// <summary>همان factory تست با محیط و تنظیمات دلخواه.</summary>
@@ -135,6 +137,9 @@ public sealed class HealthEndpointExposureTests : ControllerIntegrationTestBase
         {
             _environment = environment;
             _settings = settings;
+            // Batch 46: Production refuses the logging SMS sender (N9); the capturing sender stands in for the
+            // real provider adapter (Batch 46b) so this test can start a Production host.
+            Sms.IsRealProvider = true;
         }
 
         protected override bool UseScriptedPaymentGateway => false;

@@ -31,13 +31,21 @@ public static class ErrorCodes
     public static readonly ErrorCodeInfo UserIsSystem = new("USER_IS_SYSTEM", StatusCodes.Status409Conflict, "این حساب سیستمی است و قابل تغییر نیست.");
     public static readonly ErrorCodeInfo PlatformWarehouseExists = new("PLATFORM_WAREHOUSE_EXISTS", StatusCodes.Status409Conflict, "انبار پلتفرم از قبل وجود دارد.");
 
+    // Batch 46 (N9): تأیید شماره با OTP.
+    public static readonly ErrorCodeInfo OtpInvalid = new("OTP_INVALID", StatusCodes.Status422UnprocessableEntity, "کد تأیید نادرست است یا دیگر معتبر نیست.");
+    public static readonly ErrorCodeInfo OtpExpired = new("OTP_EXPIRED", StatusCodes.Status422UnprocessableEntity, "کد تأیید منقضی شده است. کد تازه درخواست کنید.");
+    public static readonly ErrorCodeInfo OtpTooManyAttempts = new("OTP_TOO_MANY_ATTEMPTS", StatusCodes.Status429TooManyRequests, "تعداد تلاش‌های نادرست بیش از حد مجاز است. کد تازه درخواست کنید.");
+    public static readonly ErrorCodeInfo PhoneNotVerified = new("PHONE_NOT_VERIFIED", StatusCodes.Status422UnprocessableEntity, "شماره موبایل تأیید نشده است. ابتدا کد تأیید را وارد کنید.");
+    public static readonly ErrorCodeInfo OtpSendUnavailable = new("OTP_SEND_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable, "ارسال پیامک تأیید در حال حاضر ممکن نیست. لطفاً بعداً تلاش کنید.");
+
     /// <summary>همهٔ ورودی‌های ثبت‌شده؛ منبع تولید <c>openapi/error-codes.json</c>.</summary>
     public static IReadOnlyList<ErrorCodeInfo> All { get; } = new[]
     {
         Unauthenticated, TokenExpired, TokenInvalid, SessionRevoked, Forbidden, NotFound, RouteNotFound,
         MethodNotAllowed, UnsupportedMediaType, InvalidQuery, ValidationError, ConcurrencyConflict,
         DuplicateRecord, RateLimitExceeded, InternalError,
-        PayoutOnHold, PayoutNetChanged, UserIsSystem, PlatformWarehouseExists
+        PayoutOnHold, PayoutNetChanged, UserIsSystem, PlatformWarehouseExists,
+        OtpInvalid, OtpExpired, OtpTooManyAttempts, PhoneNotVerified, OtpSendUnavailable
     };
 
     /// <summary>کد پیش‌فرض یک وضعیت HTTP برای پاسخ‌های بدون کد صریح (MVC)؛ فقط وضعیت‌هایی که دقیقاً یک ورودی عمومی دارند.</summary>

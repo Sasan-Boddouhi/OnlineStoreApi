@@ -161,7 +161,7 @@ public class Phase15Batch11AdminGuardTests : ControllerIntegrationTestBase
     // ==================== helpers ====================
 
     private Task<HttpResponseMessage> RegisterAsync(string phone, string? email, string? dateOfBirth = null)
-        => Client.PostAsJsonAsync("/api/v1/auth/register", new
+        => Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = phone,
             Password = "Customer@123",

@@ -16,6 +16,12 @@ namespace BusinessLogic.DTOs.Auth
         public string? Email { get; set; }
         public string? DateOfBirth { get; set; }
 
+        /// <summary>
+        /// Batch 46 (N9): توکنی که <c>auth/otp/verify</c> برای همین شماره و هدف ثبت‌نام داده است. بدون آن (یا با توکن
+        /// نادرست، منقضی یا مصرف‌شده) ثبت‌نام 422 <c>PHONE_NOT_VERIFIED</c> می‌گیرد.
+        /// </summary>
+        public string? PhoneVerificationToken { get; set; }
+
         public string? DeviceId { get; set; }
         public string? DeviceName { get; set; }
 

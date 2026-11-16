@@ -667,6 +667,63 @@ INSERT INTO [SellerDebt] (SellerId,Amount,Reason,CreatedAtUtc,IsSettled,CreatedO
         (await db.ScalarAsync<decimal>("SELECT [RemainingAmount] FROM [SellerDebt] WHERE [Reason] = 'B45-PARTLY'")).Should().Be(300m);
     }
 
+    // ==================== Batch 46 ====================
+
+    private const string Batch46Migration = "20261116071003_Phase15_Batch46_PhoneVerification";
+
+    /// <summary>
+    /// Batch 46 — <c>Phase15_Batch46_PhoneVerification</c>. Up: <c>User.PhoneNumberConfirmed bit NOT NULL DEFAULT 0</c>; every existing
+    /// non-system user is grandfathered as confirmed (N9), the inert system account stays unconfirmed; table <c>OtpCode</c> with its
+    /// indexes. A user inserted after the migration without the column is unconfirmed (default 0). Down: column and table are dropped,
+    /// no user is lost. Up again is clean.
+    /// </summary>
+    [Fact]
+    public async Task Batch46_PhoneVerification_GrandfathersExistingUsers_AndRollsBack()
+    {
+        await using var db = await MigrationTestDatabase.CreateAsync(_server.MasterConnectionString);
+
+        await db.MigrateToAsync(Batch43Migration);
+        await db.ExecuteAsync(Batch44SeedSql);
+        await db.MigrateToAsync(Batch44Migration);
+        await db.ExecuteAsync("UPDATE [User] SET [IsSystem] = 1 WHERE [PhoneNumber] = '09124400003'");
+        await db.MigrateToAsync(Batch45Migration);
+
+        await db.MigrateToAsync(Batch46Migration);
+
+        (await db.ScalarAsync<string>(
+                "SELECT STRING_AGG(CONCAT([PhoneNumber], '=', CAST([PhoneNumberConfirmed] AS int)), ',') WITHIN GROUP (ORDER BY [PhoneNumber]) FROM [User]"))
+            .Should().Be("09124400001=1,09124400002=1,09124400003=0,09124400004=1",
+                "existing users are grandfathered as confirmed; the system account is not");
+
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name = 'OtpCode'")).Should().Be(1);
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('OtpCode') AND name IN " +
+                "('IX_OtpCode_PhoneNumber_Purpose','IX_OtpCode_PhoneNumber_CreatedAtUtc','IX_OtpCode_CreatedAtUtc','IX_OtpCode_ExpiresAtUtc')"))
+            .Should().Be(4);
+
+        await db.ExecuteAsync(
+            "INSERT INTO [User] (FirstName,LastName,PasswordHash,UserType,IsActive,IsSystem,PhoneNumber,SecurityStamp,FailedLoginAttempts,CreatedOn,ModifiedOn) " +
+            "VALUES ('New','B46','h',1,1,0,'09124600099','s',0,SYSUTCDATETIME(),SYSUTCDATETIME())");
+        (await db.ScalarAsync<bool>("SELECT [PhoneNumberConfirmed] FROM [User] WHERE [PhoneNumber] = '09124600099'"))
+            .Should().BeFalse("new users start unconfirmed; only OTP registration confirms them");
+
+        await db.ExecuteAsync(
+            "INSERT INTO [OtpCode] (PhoneNumber,Purpose,CodeHash,CreatedAtUtc,ExpiresAtUtc,AttemptCount,Version) " +
+            "VALUES ('09124600099',1,REPLICATE('A',64),SYSUTCDATETIME(),DATEADD(minute,2,SYSUTCDATETIME()),0,0)");
+
+        await db.MigrateToAsync(Batch45Migration);
+
+        (await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('User') AND name = 'PhoneNumberConfirmed'"))
+            .Should().Be(0, "Down drops the column");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name = 'OtpCode'")).Should().Be(0, "Down drops the table");
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [User]")).Should().Be(5, "rollback must not delete users");
+
+        await db.MigrateToAsync(Batch46Migration);
+        (await db.ScalarAsync<int>("SELECT COUNT(*) FROM [User] WHERE [PhoneNumberConfirmed] = 1")).Should().Be(4,
+            "re-applying grandfathers every non-system user again");
+    }
+
     /// <summary>
     /// اسکیمای Batch 44 (پس از <see cref="Batch44SeedSql"/>): یک کوپن، بدهی ۵۰۰ که ۲۰۰ آن با کد Batch 44 تسویه شده، و سفارش
     /// پرداخت‌نشده با گروه Pending (اقلام ۱۰۰۰، سهم کوپن ۱۰۰، سهم ارسال ۵۰، سهم قدیمی ۸۵۰).

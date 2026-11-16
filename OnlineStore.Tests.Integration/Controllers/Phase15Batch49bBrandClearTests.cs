@@ -109,7 +109,7 @@ public class Phase15Batch49bBrandClearTests : ControllerIntegrationTestBase
     private async Task<string> RegisterUserAsync(string? roleCode)
     {
         var phone = $"0913{Random.Shared.Next(1000000, 9999999):D7}";
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = phone,
             Password = "User@1234",

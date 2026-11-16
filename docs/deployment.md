@@ -195,6 +195,8 @@ AllowedHosts
 ForwardedHeaders__KnownNetworks__0
 ForwardedHeaders__KnownProxies__0
 ForwardedHeaders__ForwardLimit
+Otp__HmacKey
+Sms__Provider
 ```
 
 **Client IP behind a reverse proxy (F-20).** The API trusts `X-Forwarded-For` and `X-Forwarded-Proto` **only** from the addresses listed in `ForwardedHeaders__KnownProxies__N` (single IPs) or `ForwardedHeaders__KnownNetworks__N` (CIDR). From any other peer the headers are ignored, so a client cannot spoof its IP. Per-IP rate limits, `UserSession.IpAddress` and the rate-limit log lines all use this resolved IP.
@@ -222,10 +224,28 @@ ForwardedHeaders__ForwardLimit
 | `Checkout` | `POST /api/v1/carts/checkout` | user id, else IP | 5 / 60 s |
 | `PaymentInitiate` | `POST /api/v1/payments/initiate` | user id, else IP | 10 / 60 s |
 | `PaymentVerify` | `POST /api/v1/payments/verify` | user id, else IP | 10 / 60 s |
+| `OtpSend` | `POST /api/v1/auth/otp/send` | client IP | 10 / 3600 s (Batch 46; every request may cost one SMS) |
+| `OtpVerify` | `POST /api/v1/auth/otp/verify` | client IP | 30 / 600 s (Batch 46) |
 
 A rejected request gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a ProblemDetails body with `code = RATE_LIMIT_EXCEEDED` and `retryAfterSeconds`. Counters are kept in memory per API instance. Users behind one carrier NAT share the per-IP login/register quota; raise those limits if that becomes a problem.
 
 **Start-up validation (Production).** The API refuses to start unless `PaymentGatewaySettings__Provider=Zarinpal`, `PaymentGatewaySettings__EnableRealGateway=true`, `PaymentGatewaySettings__MerchantId` and `PaymentGatewaySettings__WebhookSecret` are set, `PaymentGatewaySettings__CallbackUrl` is an absolute `https` address that is not `localhost`/loopback (Batch 40), and `CorsOrigins__0` (and further indexes) lists the real front-end origin (no `localhost`). In any environment other than Development and Testing the `Manual`/fake payment gateway is never created; `Provider` must be `Zarinpal`. `Jwt__Issuer` and `Jwt__Audience` are required in every environment (empty values stop start-up, Batch 40). `Jwt__ExpireMinutes` is optional and defaults to 15.
+
+**Phone verification by OTP (Batch 46, decision N9).** Registration is a two-step flow (`auth/otp/send` → `auth/otp/verify` → `auth/register` with `phoneVerificationToken`). Codes are 6 digits from a cryptographic generator; only an HMAC-SHA-256 of each code and of each verification token is stored (table `OtpCode`); codes are never logged in Production. Settings (defaults in `appsettings.json`, override with `Otp__<Key>` / `Sms__<Key>`):
+
+| Setting | Default | Production rule |
+|---|---|---|
+| `Otp:HmacKey` | empty (outside Production a random per-process key is generated, so codes die on restart) | **required**, at least 32 random characters; secret (compose: `OTP_HMAC_KEY`). Rotating it invalidates open codes and verification tokens only. |
+| `Otp:CodeLifetimeSeconds` | 120 | 30–600 |
+| `Otp:MaxVerifyAttempts` | 5 | 1–10; after that the code is dead (`OTP_TOO_MANY_ATTEMPTS`) |
+| `Otp:ResendCooldownSeconds` | 120 | at least 60 in Production (0–3600 elsewhere) |
+| `Otp:MaxSendsPerPhonePerHour` | 5 | ≥ 1 |
+| `Otp:MaxSendsPerPhonePerDay` | 10 | ≥ the hourly limit |
+| `Otp:GlobalDailySendLimit` | 5000 | ≥ 1; when reached, sends answer 503 `OTP_SEND_UNAVAILABLE` until 00:00 UTC and an **Error** log line `OTP global daily SMS budget reached` is written — alert on it |
+| `Otp:VerificationTokenLifetimeSeconds` | 900 | 60–3600 (time to fill in the registration form after the code) |
+| `Sms:Provider` | `Logging` | `Logging` only writes the SMS to the log (Development/Testing/Staging). **Production refuses to start with it**; a real provider adapter is a follow-up (Batch 46b), so Production cannot start until that adapter is merged and selected here (compose: `SMS_PROVIDER`). Any other name without an adapter stops start-up in every environment. |
+
+`BOOTSTRAP_SUPERADMIN_PHONE` now only promotes a user whose phone is confirmed (registered through OTP, or existing before Batch 46; the migration marks those as confirmed). On a fresh server: register the owner's phone with the OTP flow first, then set the variable and restart.
 
 The compose file reads these from the deployment environment: `ZARINPAL_MERCHANT_ID`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_CALLBACK_URL`, `CORS_ORIGIN_0`, `ALLOWED_HOSTS`, and `TRUSTED_PROXY_NETWORK` or `TRUSTED_PROXY_IP` (see below).
 

@@ -130,7 +130,7 @@ public class Phase15Batch53ErrorBodyTests : ControllerIntegrationTestBase
     public async Task InvalidInput_Returns422WithValidationErrorCodeAndPersianDetail()
     {
         // FluentValidation → ExceptionHandlingMiddleware.
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = "123",
             Password,
@@ -198,7 +198,7 @@ public class Phase15Batch53ErrorBodyTests : ControllerIntegrationTestBase
 
     private async Task<AuthResultDto> RegisterAsync()
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = $"0914{Random.Shared.Next(1000000, 9999999):D7}",
             Password,

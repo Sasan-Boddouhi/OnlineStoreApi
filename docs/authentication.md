@@ -56,7 +56,9 @@ Base route:
 
 | Method | Endpoint | Authentication | Purpose |
 |---|---|---|---|
-| POST | `/api/auth/register` | Public | Register a user and create an initial session |
+| POST | `/api/auth/otp/send` | Public | Batch 46: send a 6-digit SMS code (same answer for every valid phone) |
+| POST | `/api/auth/otp/verify` | Public | Batch 46: check the code; returns a single-use `verificationToken` |
+| POST | `/api/auth/register` | Public | Register a user and create an initial session; since Batch 46 requires `phoneVerificationToken` (otherwise 422 `PHONE_NOT_VERIFIED`). See `docs/api-contract.md` |
 | POST | `/api/auth/login` | Public | Authenticate a user and issue access/refresh tokens |
 | GET | `/api/auth/me` | Required | Return the current user's profile from claims |
 | POST | `/api/auth/refresh` | Public | Rotate the refresh token and issue new tokens |

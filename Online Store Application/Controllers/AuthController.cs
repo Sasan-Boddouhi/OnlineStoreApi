@@ -19,13 +19,52 @@ namespace WebApi.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IOtpService _otpService;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IOtpService otpService)
         {
             _authService = authService;
+            _otpService = otpService;
         }
 
-        /// <summary>ثبت‌نام کاربر جدید.</summary>
+        /// <summary>
+        /// Batch 46: ارسال کد تأیید ۶ رقمی با پیامک (مرحلهٔ ۱ ثبت‌نام). پاسخ برای هر شمارهٔ معتبر یکسان است، حساب داشته باشد یا نه.
+        /// سقف هر شماره → 429 RATE_LIMIT_EXCEEDED با Retry-After؛ سقف هر IP → 429 RATE_LIMIT_EXCEEDED؛ بودجهٔ روزانه یا خطای
+        /// ارائه‌دهنده → 503 OTP_SEND_UNAVAILABLE با Retry-After؛ شمارهٔ غیرموبایل ایران → 422 VALIDATION_ERROR.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("otp/send")]
+        [EnableRateLimiting(RateLimitPolicies.OtpSend)]
+        [ProducesResponseType(typeof(OtpSendResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> SendOtp([FromBody] OtpSendDto dto)
+        {
+            var result = await _otpService.SendAsync(dto, HttpContext.GetClientRequestInfo().IpAddress);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Batch 46: تأیید کد (مرحلهٔ ۲). موفق → <c>verificationToken</c> یک‌بار مصرف برای <c>auth/register</c>.
+        /// کد نادرست → 422 OTP_INVALID؛ منقضی → 422 OTP_EXPIRED؛ پس از ۵ تلاش نادرست کد مرده است → 429 OTP_TOO_MANY_ATTEMPTS.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("otp/verify")]
+        [EnableRateLimiting(RateLimitPolicies.OtpVerify)]
+        [ProducesResponseType(typeof(OtpVerifyResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+        public async Task<IActionResult> VerifyOtp([FromBody] OtpVerifyDto dto)
+        {
+            var result = await _otpService.VerifyAsync(dto);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// ثبت‌نام کاربر جدید (مرحلهٔ ۳). Batch 46 (N9): فقط با <c>phoneVerificationToken</c> از <c>auth/otp/verify</c> برای همین شماره؛
+        /// بدون آن 422 PHONE_NOT_VERIFIED. شمارهٔ تکراری (فقط پس از تأیید کد) 409 USER_PHONE_EXISTS.
+        /// </summary>
         [AllowAnonymous]
         [HttpPost("register")]
         [EnableRateLimiting(RateLimitPolicies.Register)]

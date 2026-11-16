@@ -72,4 +72,26 @@ public class CleanupServicesTests
         tokenRepoMock.Verify(r => r.DeleteRange(staleTokens), Times.Once);
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
+
+    [Fact]
+    public async Task Batch46_ExpiredTokenCleanupService_PurgesOtpCodesOlderThanTwoDays()
+    {
+        var otpRepoMock = new Mock<IGenericRepository<OtpCode>>();
+        _uowMock.Setup(u => u.Repository<OtpCode>()).Returns(otpRepoMock.Object);
+
+        var stale = new List<OtpCode> { new() { OtpCodeId = 1, PhoneNumber = "09120000001", CreatedAtUtc = DateTime.UtcNow.AddDays(-3) } };
+        Spec<OtpCode>? captured = null;
+        otpRepoMock.Setup(r => r.ListAsync(It.IsAny<Spec<OtpCode>>(), It.IsAny<CancellationToken>()))
+            .Callback<Spec<OtpCode>, CancellationToken>((spec, _) => captured = spec)
+            .ReturnsAsync(stale);
+
+        var service = new ExpiredTokenCleanupService(_scopeFactoryMock.Object, Mock.Of<ILogger<ExpiredTokenCleanupService>>());
+        var deleted = await service.RunOtpCleanupAsync(CancellationToken.None);
+
+        deleted.Should().Be(1);
+        otpRepoMock.Verify(r => r.DeleteRange(stale), Times.Once);
+        var predicate = captured!.Criteria!.Compile();
+        predicate(new OtpCode { CreatedAtUtc = DateTime.UtcNow.AddDays(-3) }).Should().BeTrue();
+        predicate(new OtpCode { CreatedAtUtc = DateTime.UtcNow.AddDays(-1) }).Should().BeFalse("still needed for the daily limit");
+    }
 }

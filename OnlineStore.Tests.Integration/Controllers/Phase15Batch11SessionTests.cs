@@ -191,7 +191,7 @@ public class Phase15Batch11SessionTests : ControllerIntegrationTestBase
 
     private async Task<AuthResultDto> RegisterAsync(string phone)
     {
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = phone,
             Password,

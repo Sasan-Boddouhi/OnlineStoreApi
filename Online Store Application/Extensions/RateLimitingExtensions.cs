@@ -19,6 +19,8 @@ public static class RateLimitPolicies
     public const string Checkout = "CheckoutLimiter";
     public const string PaymentInitiate = "PaymentInitiateLimiter";
     public const string PaymentVerify = "PaymentVerifyLimiter";
+    public const string OtpSend = "OtpSendLimiter";
+    public const string OtpVerify = "OtpVerifyLimiter";
 }
 
 /// <summary>F-03: سقف‌ها باید مثبت باشند؛ در غیر این صورت راه‌اندازی شکست می‌خورد (ValidateOnStart).</summary>
@@ -34,6 +36,8 @@ public sealed class RateLimitingOptionsValidator : IValidateOptions<RateLimiting
         Check(nameof(options.Checkout), options.Checkout, errors);
         Check(nameof(options.PaymentInitiate), options.PaymentInitiate, errors);
         Check(nameof(options.PaymentVerify), options.PaymentVerify, errors);
+        Check(nameof(options.OtpSend), options.OtpSend, errors);
+        Check(nameof(options.OtpVerify), options.OtpVerify, errors);
 
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
@@ -97,6 +101,9 @@ public static class RateLimitingExtensions
                 options.AddPolicy(RateLimitPolicies.Checkout, ctx => ByUserOrClientIp(ctx, limits.Checkout));
                 options.AddPolicy(RateLimitPolicies.PaymentInitiate, ctx => ByUserOrClientIp(ctx, limits.PaymentInitiate));
                 options.AddPolicy(RateLimitPolicies.PaymentVerify, ctx => ByUserOrClientIp(ctx, limits.PaymentVerify));
+                // Batch 46: ارسال و تأیید OTP ناشناس‌اند؛ سقف هر IP (سقف هر شماره در OtpService).
+                options.AddPolicy(RateLimitPolicies.OtpSend, ctx => ByClientIp(ctx, limits.OtpSend));
+                options.AddPolicy(RateLimitPolicies.OtpVerify, ctx => ByClientIp(ctx, limits.OtpVerify));
             });
 
         return services;
@@ -178,6 +185,8 @@ public static class RateLimitingExtensions
         RateLimitPolicies.Checkout => limits.Checkout.WindowSeconds,
         RateLimitPolicies.PaymentInitiate => limits.PaymentInitiate.WindowSeconds,
         RateLimitPolicies.PaymentVerify => limits.PaymentVerify.WindowSeconds,
+        RateLimitPolicies.OtpSend => limits.OtpSend.WindowSeconds,
+        RateLimitPolicies.OtpVerify => limits.OtpVerify.WindowSeconds,
         _ => 60
     };
 }

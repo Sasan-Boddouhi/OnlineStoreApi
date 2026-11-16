@@ -215,6 +215,47 @@ public class UserServiceTests
         result!.PhoneNumber.Should().Be("09120000001");
     }
 
+    // Batch 46: شمارهٔ تازه‌ای که ادمین ثبت می‌کند را مالکش با OTP تأیید نکرده است.
+    [Fact]
+    public async Task UpdateAsync_AdminChangesPhone_ResetsPhoneVerification()
+    {
+        var user = CreateValidUser(1, "09120000000");
+        user.PhoneNumberConfirmed = true;
+        var oldStamp = user.SecurityStamp;
+        SetupUpdate(user);
+
+        await _service.UpdateAsync(new UpdateUserDto { UserId = 1, PhoneNumber = "09120000001", FirstName = "Test", LastName = "User" });
+
+        user.PhoneNumber.Should().Be("09120000001");
+        user.PhoneNumberConfirmed.Should().BeFalse("the new number was never verified by OTP");
+        user.SecurityStamp.Should().NotBe(oldStamp);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SamePhoneInAnotherFormat_KeepsPhoneVerification()
+    {
+        var user = CreateValidUser(1, "09120000000");
+        user.PhoneNumberConfirmed = true;
+        SetupUpdate(user);
+
+        await _service.UpdateAsync(new UpdateUserDto { UserId = 1, PhoneNumber = "+98 912 000 0000", FirstName = "Test", LastName = "User" });
+
+        user.PhoneNumber.Should().Be("09120000000");
+        user.PhoneNumberConfirmed.Should().BeTrue("the canonical number did not change");
+    }
+
+    private void SetupUpdate(User user)
+    {
+        _userRepoMock.Setup(r => r.GetByIdAsync(user.UserId, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        _userRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                It.IsAny<Spec<User>>(),
+                It.IsAny<Expression<Func<User, UserDto>>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserDto { UserId = user.UserId, PhoneNumber = user.PhoneNumber });
+    }
+
     [Fact]
     public async Task UpdateAsync_UserNotFound_ReturnsNull()
     {

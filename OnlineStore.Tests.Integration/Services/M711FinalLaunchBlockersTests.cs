@@ -149,6 +149,8 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
             LastName = "Customer",
             PhoneNumber = phone,
             Password = "Password123!",
+            // Batch 46 (N9): registration completes only with a verified phone.
+            PhoneVerificationToken = await Factory.IssueRegisterVerificationTokenAsync(phone),
             DeviceId = "device1"
         }, new ClientRequestInfo(null, null));
 
@@ -286,6 +288,8 @@ public class M711FinalLaunchBlockersTests : BaseIntegrationTest
             LastName = "User",
             PhoneNumber = phone,
             Password = "Password123!",
+            // Batch 46 (N9): registration completes only with a verified phone.
+            PhoneVerificationToken = await Factory.IssueRegisterVerificationTokenAsync(phone),
             DeviceId = "dev-inactive"
         }, new ClientRequestInfo(null, null));
 

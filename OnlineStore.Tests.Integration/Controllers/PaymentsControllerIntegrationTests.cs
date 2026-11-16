@@ -92,7 +92,7 @@ public class PaymentsControllerIntegrationTests : ControllerIntegrationTestBase
             DeviceId = "device-other-customer",
             DateOfBirth = "1370/01/01"
         };
-        var regRes = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        var regRes = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerData);
         regRes.EnsureSuccessStatusCode();
         var auth = await regRes.Content.ReadFromJsonAsync<BusinessLogic.DTOs.Auth.AuthResultDto>();
 

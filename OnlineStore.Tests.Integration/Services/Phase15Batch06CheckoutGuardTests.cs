@@ -303,7 +303,7 @@ public class Phase15Batch06CheckoutGuardTests : ControllerIntegrationTestBase
     private async Task<(string Token, int UserId)> RegisterCustomerAsync()
     {
         var phone = $"0912{Random.Shared.Next(1000000, 9999999):D7}";
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, new
         {
             PhoneNumber = phone,
             Password = "Customer@123",

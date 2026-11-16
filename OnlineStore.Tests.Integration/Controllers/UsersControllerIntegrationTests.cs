@@ -26,7 +26,7 @@ public class UsersControllerIntegrationTests : ControllerIntegrationTestBase
             DateOfBirth = "1370/01/01"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerData);
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerData);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<AuthResultDto>();

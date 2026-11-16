@@ -83,7 +83,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             DateOfBirth = "1370/01/01"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerDto);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var result = await response.Content.ReadFromJsonAsync<AuthResultDto>();
@@ -105,10 +105,10 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
         };
 
         // ثبت اول
-        await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
+        await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerDto);
 
         // تلاش دوباره با همان شماره
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerDto);
         // Batch 11b: duplicate phone is a conflict (409), same as duplicate email; it was 400.
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
@@ -126,7 +126,7 @@ public class AuthControllerIntegrationTests : ControllerIntegrationTestBase
             DeviceId = "test-device"
         };
 
-        var response = await Client.PostAsJsonAsync("/api/v1/auth/register", registerDto);
+        var response = await Client.PostRegisterWithVerifiedPhoneAsync(Factory, registerDto);
         // FluentValidation -> 422 UnprocessableEntity
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }

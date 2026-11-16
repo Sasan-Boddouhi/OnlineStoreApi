@@ -917,6 +917,76 @@ namespace DataLayer.Migrations
                     b.ToTable("OrderSellerGroup");
                 });
 
+            modelBuilder.Entity("Application.Entities.OtpCode", b =>
+                {
+                    b.Property<long>("OtpCodeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("OtpCodeId"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("ConsumedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(11)");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<DateTime?>("VerificationExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VerificationTokenHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("VerificationUsedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("VerifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("OtpCodeId");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("PhoneNumber", "CreatedAtUtc");
+
+                    b.HasIndex("PhoneNumber", "Purpose");
+
+                    b.ToTable("OtpCode");
+                });
+
             modelBuilder.Entity("Application.Entities.Payment", b =>
                 {
                     b.Property<int>("PaymentId")
@@ -2051,6 +2121,9 @@ namespace DataLayer.Migrations
                         .IsRequired()
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()

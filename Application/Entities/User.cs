@@ -57,6 +57,13 @@ namespace Application.Entities
         [StringLength(11)]
         public string PhoneNumber { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Batch 46 (N9): مالک شماره با کد OTP ثابت کرده که شماره مال اوست. ثبت‌نام فقط با کد تأییدشده کامل می‌شود و
+        /// همیشه true می‌گذارد؛ کاربرانی که پیش از Batch 46 بودند در migration تأییدشده علامت خوردند (به‌جز حساب سیستمی).
+        /// کاربری که ادمین می‌سازد تأییدنشده است. بوت‌استرپ SuperAdmin فقط شمارهٔ تأییدشده را می‌پذیرد.
+        /// </summary>
+        public bool PhoneNumberConfirmed { get; set; }
+
         // Navigation properties برای Customer و Employee و Seller و Cart
         public virtual Customer? Customer { get; set; }
         public virtual Employee? Employee { get; set; }

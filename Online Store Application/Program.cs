@@ -212,6 +212,9 @@ builder.Services.AddScoped<IStorageService, LocalStorageService>();
 // و CorsOrigins با دامنهٔ واقعی فرانت‌اند مشخص شده باشد.
 builder.Services.AddProductionSafeConfiguration(builder.Configuration);
 
+// Batch 46 (N9): OTP و پیامک؛ در Production بدون کلید HMAC و فرستندهٔ واقعی پیامک راه‌اندازی متوقف می‌شود.
+builder.Services.AddPhoneVerification(builder.Configuration);
+
 builder.Services.AddHttpClient();
 
 // انتخاب درگاه در زمان اجرا از روی تنظیمات؛ FakePaymentGateway فقط در Development/Testing

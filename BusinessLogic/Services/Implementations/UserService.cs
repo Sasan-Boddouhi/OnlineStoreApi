@@ -232,6 +232,8 @@ public sealed class UserService : IUserService
             if (exists)
                 throw new ConflictException("شماره موبایل قبلاً ثبت شده است.", "USER_PHONE_EXISTS");
             user.SecurityStamp = Guid.NewGuid().ToString();
+            // Batch 46: شمارهٔ تازه را مالکش با OTP تأیید نکرده است.
+            user.PhoneNumberConfirmed = false;
         }
 
         // Batch 11 (F-41): ایمیل در دیتابیس یکتاست؛ تکرار آن پیش‌تر به خطای ذخیره‌سازی می‌رسید.

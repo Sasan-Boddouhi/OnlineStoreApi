@@ -78,8 +78,14 @@ public class AuthServiceTests
             _mapperMock.Object,
             _loggerMock.Object,
             TimeProvider.System,
-            Microsoft.Extensions.Options.Options.Create(new Application.Options.UserSessionOptions()));
+            Microsoft.Extensions.Options.Options.Create(new Application.Options.UserSessionOptions()),
+            // Batch 46 (N9): AuthService now needs IOtpService for the verified-phone check at registration.
+            // These tests are about roles, conflicts and tokens, so the verification is accepted here;
+            // the check itself is covered by OtpServiceTests and AuthOtpIntegrationTests.
+            _otpMock.Object);
     }
+
+    private readonly Mock<IOtpService> _otpMock = new();
 
     // ---------------------------------------------------------------
     // REGISTER - SUCCESS
@@ -138,6 +144,44 @@ public class AuthServiceTests
                  .WithMessage("*شماره تماس تکراری*");
 
         _uowMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ---------------------------------------------------------------
+    // REGISTER - PHONE VERIFICATION (Batch 46)
+    // ---------------------------------------------------------------
+    [Fact]
+    public async Task RegisterAsync_WithoutVerifiedPhone_ThrowsPhoneNotVerified_BeforeLookingUpTheAccount()
+    {
+        var dto = new RegisterDto { PhoneNumber = "+98 912 111 1111", FirstName = "A", LastName = "B", Password = "Strong@123" };
+        _otpMock.Setup(o => o.ConsumeVerificationAsync("09121111111", OtpPurpose.Register, null, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new UnprocessableEntityException(ErrorCodes.PhoneNotVerified.Message, ErrorCodes.PhoneNotVerified.Code));
+
+        var act = () => _service.RegisterAsync(dto, Client);
+
+        (await act.Should().ThrowAsync<UnprocessableEntityException>()).Which.Code.Should().Be("PHONE_NOT_VERIFIED");
+        _userRepoMock.Verify(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>()), Times.Never,
+            "no account lookup without a verified phone (no enumeration through register)");
+        _userRepoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+        _uowMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithVerifiedPhone_CreatesAConfirmedUser()
+    {
+        var dto = new RegisterDto { PhoneNumber = "09121111112", FirstName = "A", LastName = "B", Password = "Strong@123", PhoneVerificationToken = "tok" };
+        _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _hasherMock.Setup(h => h.Hash(It.IsAny<string>())).Returns("hashed");
+        _jwtMock.Setup(j => j.GenerateRefreshToken()).Returns("refresh_raw");
+        _jwtMock.Setup(j => j.GenerateToken(It.IsAny<List<Claim>>())).Returns("access");
+        _mapperMock.Setup(m => m.Map<UserDto>(It.IsAny<User>())).Returns(new UserDto());
+        User? added = null;
+        _userRepoMock.Setup(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .Callback<User, CancellationToken>((u, _) => added = u).Returns(Task.CompletedTask);
+
+        await _service.RegisterAsync(dto, Client);
+
+        _otpMock.Verify(o => o.ConsumeVerificationAsync("09121111112", OtpPurpose.Register, "tok", It.IsAny<CancellationToken>()), Times.Once);
+        added!.PhoneNumberConfirmed.Should().BeTrue();
     }
 
     // ---------------------------------------------------------------
