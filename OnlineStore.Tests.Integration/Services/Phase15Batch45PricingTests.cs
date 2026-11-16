@@ -147,7 +147,8 @@ public class Phase15Batch45PricingTests : ControllerIntegrationTestBase
         var shipping = await AddShippingMethodAsync(25_000m);
         var coupon = await AddCouponAsync(7m);
 
-        var seeded = await CreateOrderAsync(new[] { 24_691m }, coupon.Code, shipping.ShippingMethodId, quantity: 1.5m);
+        // Batch 45c: مقدار کسری فقط برای کالای غیرعددی مجاز است، پس این کالا کیلویی است.
+        var seeded = await CreateOrderAsync(new[] { 24_691m }, coupon.Code, shipping.ShippingMethodId, quantity: 1.5m, unit: UnitOfMeasurement.Kilogram);
 
         var item = await DbContext.OrderItem.AsNoTracking().SingleAsync(i => i.OrderId == seeded.OrderId);
         item.TotalPrice.Should().Be(37_037m);
@@ -273,13 +274,14 @@ public class Phase15Batch45PricingTests : ControllerIntegrationTestBase
         }
     }
 
-    private async Task<SeededOrder> CreateOrderAsync(decimal[] prices, string? couponCode, int? shippingMethodId, decimal quantity = 1m)
+    private async Task<SeededOrder> CreateOrderAsync(
+        decimal[] prices, string? couponCode, int? shippingMethodId, decimal quantity = 1m, UnitOfMeasurement unit = UnitOfMeasurement.Piece)
     {
         var listings = new List<(Seller Seller, int ListingId)>();
         foreach (var price in prices)
         {
             var (seller, _) = await CreateSellerAsync();
-            listings.Add((seller, await CreateListingAsync(seller, price)));
+            listings.Add((seller, await CreateListingAsync(seller, price, unit)));
         }
 
         var (buyerUser, _) = await CreateUserAsync();
@@ -341,14 +343,14 @@ public class Phase15Batch45PricingTests : ControllerIntegrationTestBase
         return (seller, sellerUser.UserId);
     }
 
-    private async Task<int> CreateListingAsync(Seller seller, decimal price)
+    private async Task<int> CreateListingAsync(Seller seller, decimal price, UnitOfMeasurement unit = UnitOfMeasurement.Piece)
     {
         var product = new Product
         {
             Name = $"B45-{Guid.NewGuid():N}",
             Price = price,
             SubcategoryId = 1,
-            Unit = UnitOfMeasurement.Piece,
+            Unit = unit,
             IsActive = true
         };
         DbContext.Product.Add(product);

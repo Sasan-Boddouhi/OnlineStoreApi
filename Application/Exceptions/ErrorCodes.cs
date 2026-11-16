@@ -38,6 +38,9 @@ public static class ErrorCodes
     public static readonly ErrorCodeInfo PhoneNotVerified = new("PHONE_NOT_VERIFIED", StatusCodes.Status422UnprocessableEntity, "شماره موبایل تأیید نشده است. ابتدا کد تأیید را وارد کنید.");
     public static readonly ErrorCodeInfo OtpSendUnavailable = new("OTP_SEND_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable, "ارسال پیامک تأیید در حال حاضر ممکن نیست. لطفاً بعداً تلاش کنید.");
 
+    // Batch 45c: مقدار هر قلم تابع واحد کالاست (Application.Common.Helpers.OrderQuantity).
+    public static readonly ErrorCodeInfo QuantityInvalidForUnit = new("QUANTITY_INVALID_FOR_UNIT", StatusCodes.Status422UnprocessableEntity, "مقدار برای واحد این کالا مجاز نیست: کالای عددی فقط عدد صحیح ۱ یا بیشتر، کالای وزنی و حجمی حداکثر دو رقم اعشار.");
+
     /// <summary>همهٔ ورودی‌های ثبت‌شده؛ منبع تولید <c>openapi/error-codes.json</c>.</summary>
     public static IReadOnlyList<ErrorCodeInfo> All { get; } = new[]
     {
@@ -45,7 +48,8 @@ public static class ErrorCodes
         MethodNotAllowed, UnsupportedMediaType, InvalidQuery, ValidationError, ConcurrencyConflict,
         DuplicateRecord, RateLimitExceeded, InternalError,
         PayoutOnHold, PayoutNetChanged, UserIsSystem, PlatformWarehouseExists,
-        OtpInvalid, OtpExpired, OtpTooManyAttempts, PhoneNotVerified, OtpSendUnavailable
+        OtpInvalid, OtpExpired, OtpTooManyAttempts, PhoneNotVerified, OtpSendUnavailable,
+        QuantityInvalidForUnit
     };
 
     /// <summary>کد پیش‌فرض یک وضعیت HTTP برای پاسخ‌های بدون کد صریح (MVC)؛ فقط وضعیت‌هایی که دقیقاً یک ورودی عمومی دارند.</summary>

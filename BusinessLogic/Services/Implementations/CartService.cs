@@ -306,10 +306,17 @@ namespace BusinessLogic.Services.Implementations
                 throw new BusinessException("تعداد باید بزرگ‌تر از صفر باشد.", "INVALID_QUANTITY");
 
             var listing = await LoadActiveListingAsync(dto.ListingId, cancellationToken);
+
+            // Batch 45c: مقدار تابع واحد کالاست (نیم گوشی ممکن نیست؛ بیش از دو رقم اعشار رد می‌شود، گرد نمی‌شود).
+            await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listing.ListingId, dto.Quantity, cancellationToken);
+
             var cart = await GetOrCreateCartAsync(userId, sessionId, cancellationToken);
 
             var existing = cart.Items.FirstOrDefault(i => i.ListingId == dto.ListingId);
             var newQuantity = (existing?.Quantity ?? 0) + dto.Quantity;
+
+            if (existing is not null)
+                await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listing.ListingId, newQuantity, cancellationToken);
 
             if (newQuantity > MaxLineQuantity)
                 throw new BusinessException($"حداکثر تعداد هر قلم {MaxLineQuantity} است.", "QUANTITY_LIMIT_EXCEEDED");
@@ -366,6 +373,7 @@ namespace BusinessLogic.Services.Implementations
             if (cart is null || item is null)
                 throw new NotFoundException("این قلم در سبد خرید نیست.", "CART_ITEM_NOT_FOUND");
 
+            await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listingId, quantity, cancellationToken);
             await EnsureStockAsync(listingId, quantity, cancellationToken);
 
             item.Quantity = quantity;
@@ -438,6 +446,9 @@ namespace BusinessLogic.Services.Implementations
 
             foreach (var entry in planned)
             {
+                // Batch 45c: سبد مهمانِ پیش از 45c ممکن است مقدار کسری برای کالای عددی داشته باشد؛ ادغام آن را منتقل نمی‌کند.
+                await ListingQuantityRule.EnsureValidAsync(_unitOfWork, entry.ListingId, entry.Quantity, cancellationToken);
+
                 if (entry.Quantity > MaxLineQuantity)
                     throw new BusinessException($"حداکثر تعداد هر قلم {MaxLineQuantity} است.", "QUANTITY_LIMIT_EXCEEDED");
 
@@ -553,6 +564,8 @@ namespace BusinessLogic.Services.Implementations
                     $"«{listing.Variant?.Name ?? listing.VariantId.ToString()}» دیگر قابل خرید نیست.",
                     cancellationToken);
 
+                // Batch 45c: قلمی که پیش از 45c با مقدار نامعتبر در سبد مانده، به سفارش نمی‌رسد.
+                await ListingQuantityRule.EnsureValidAsync(_unitOfWork, item.ListingId, item.Quantity, cancellationToken);
                 await EnsureStockAsync(item.ListingId, item.Quantity, cancellationToken);
             }
 

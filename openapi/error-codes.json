@@ -90,6 +90,12 @@
     "type": "urn:onlinestore:error:platform-warehouse-exists"
   },
   {
+    "code": "QUANTITY_INVALID_FOR_UNIT",
+    "status": 422,
+    "message": "مقدار برای واحد این کالا مجاز نیست: کالای عددی فقط عدد صحیح ۱ یا بیشتر، کالای وزنی و حجمی حداکثر دو رقم اعشار.",
+    "type": "urn:onlinestore:error:quantity-invalid-for-unit"
+  },
+  {
     "code": "RATE_LIMIT_EXCEEDED",
     "status": 429,
     "message": "تعداد درخواست‌های شما بیش از حد مجاز است.",

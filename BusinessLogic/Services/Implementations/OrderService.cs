@@ -1,4 +1,5 @@
 using Application.Common.Constants;
+using Application.Common.Helpers;
 using Application.Entities;
 using Application.Exceptions;
 using Application.Interfaces;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Application.Common.Specifications;
 using Application.Options;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
 namespace BusinessLogic.Services.Implementations;
@@ -243,6 +245,9 @@ public sealed class OrderService : IOrderService
         if (listing.Status != SellerProductStatus.Active || !IsCatalogEntryActive(listing, product))
             throw new ConflictException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
 
+        // Batch 45c: مقدار تابع واحد کالاست (نیم گوشی ممکن نیست؛ بیش از دو رقم اعشار رد می‌شود).
+        OrderQuantity.EnsureValid(product.Unit, itemDto.Quantity);
+
         await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
         // Phase 6 & M7.9: ProductId از مسیر واریانت گرفته می‌شود و مشخصات هم snapshot می‌شود.
@@ -350,6 +355,9 @@ public sealed class OrderService : IOrderService
                 !IsCatalogEntryActive(listing, product))
                 throw new ConflictException("این پیشنهاد فروش در حال حاضر قابل خرید نیست.", "LISTING_NOT_AVAILABLE");
 
+            // Batch 45c: همان قاعدهٔ مقدار افزودن تک‌قلم و سبد.
+            OrderQuantity.EnsureValid(product.Unit, itemDto.Quantity);
+
             await _inventoryService.ReserveAsync(listing.ListingId, itemDto.Quantity, cancellationToken);
 
             var item = new OrderItem(
@@ -404,7 +412,7 @@ public sealed class OrderService : IOrderService
     /// Batch 6 (F-15): واریانت و محصولِ پیشنهاد فروش باید فعال باشند.
     /// واریانت یا محصولِ لودنشده (null) هم قابل خرید شمرده نمی‌شود.
     /// </summary>
-    private static bool IsCatalogEntryActive(SellerProduct listing, Product? product)
+    private static bool IsCatalogEntryActive(SellerProduct listing, [NotNullWhen(true)] Product? product)
         => listing.Variant is { IsActive: true } && product is { IsActive: true };
 
     #endregion

@@ -59,6 +59,9 @@ public sealed class InventoryService : IInventoryService
         if (quantity <= 0)
             throw new BusinessException("مقدار درخواستی باید بزرگ‌تر از صفر باشد.", "INVALID_QUANTITY");
 
+        // Batch 45c: همان قاعدهٔ مقدار سبد و سفارش (کالای عددی فقط عدد صحیح، بقیه حداکثر دو رقم اعشار).
+        await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listingId, quantity, cancellationToken);
+
         var rows = await GetActiveRowsAsync(listingId, cancellationToken);
 
         // تصمیم ناظر (گزینهٔ C): در بازهٔ مهاجرت، محصول بدون هیچ ردیف موجودی «نامحدود» تلقی می‌شود.
@@ -100,6 +103,9 @@ public sealed class InventoryService : IInventoryService
     {
         if (quantity <= 0)
             return;
+
+        // Batch 45c: آزادسازی هم همان قاعدهٔ رزرو را دارد؛ مقدار نامعتبر بی‌صدا گرد یا به موجودی افزوده نمی‌شود.
+        await ListingQuantityRule.EnsureValidAsync(_unitOfWork, listingId, quantity, cancellationToken);
 
         var rows = await GetActiveRowsAsync(listingId, cancellationToken);
 
