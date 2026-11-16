@@ -41,6 +41,11 @@ $text = ([IO.File]::ReadAllText($out)).Replace("`r`n", "`n").Replace('\r\n', '\n
 if ($Check) {
     $committed = ([IO.File]::ReadAllText($target)).Replace("`r`n", "`n")
     if ($committed -ne $text) {
+        $a = $committed -split "`n"; $b = $text -split "`n"
+        $shown = 0
+        for ($i = 0; $i -lt [Math]::Max($a.Length, $b.Length) -and $shown -lt 10; $i++) {
+            if ($a[$i] -ne $b[$i]) { Write-Host "line $($i + 1)`n  committed: $($a[$i])`n  generated: $($b[$i])"; $shown++ }
+        }
         Write-Error 'openapi/v1.json is out of date. Run scripts/generate-openapi.ps1 and commit the result.'
         exit 1
     }
